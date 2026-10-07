@@ -1,0 +1,21 @@
+{
+  "name": "@flowforge/workflow",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared workflow types, schemas and graph utilities (used by server, engine, nodes and editor)",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "luxon": "^3.7.2",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/luxon": "^3.7.1"
+  }
+}

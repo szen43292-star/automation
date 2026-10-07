@@ -1,0 +1,126 @@
+// FlowForge database schema (PostgreSQL)
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  owner
+  admin
+  member
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         Role     @default(member)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workflows  Workflow[]
+  versions   WorkflowVersion[]
+  executions Execution[]
+}
+
+model Workflow {
+  id          String   @id @default(cuid())
+  name        String
+  active      Boolean  @default(false)
+  /// INode[]
+  nodes       Json     @default("[]")
+  /// IConnection[]
+  connections Json     @default("[]")
+  /// IWorkflowSettings
+  settings    Json     @default("{}")
+  /// IPinData
+  pinData     Json?
+  /// Changes on every save; used for optimistic concurrency + history.
+  versionId   String
+  ownerId     String
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  executions Execution[]
+  versions   WorkflowVersion[]
+
+  @@index([ownerId])
+  @@index([updatedAt])
+}
+
+model WorkflowVersion {
+  id          String    @id @default(cuid())
+  versionId   String    @unique
+  workflowId  String
+  workflow    Workflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  name        String
+  nodes       Json
+  connections Json
+  settings    Json
+  authorId    String?
+  author      User?     @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+
+  @@index([workflowId, createdAt])
+}
+
+enum ExecutionStatus {
+  new
+  running
+  success
+  error
+  canceled
+  crashed
+  waiting
+}
+
+enum ExecutionMode {
+  manual
+  trigger
+  webhook
+  retry
+  internal
+  error
+}
+
+model Execution {
+  id               String          @id @default(cuid())
+  workflowId       String
+  workflow         Workflow        @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  status           ExecutionStatus @default(new)
+  mode             ExecutionMode
+  startedAt        DateTime?
+  stoppedAt        DateTime?
+  createdAt        DateTime        @default(now())
+  /// Execution this one retried.
+  retryOfId        String?
+  /// Successful retry of this execution.
+  retrySuccessId   String?
+  lastNodeExecuted String?
+  errorMessage     String?
+  triggeredById    String?
+  triggeredBy      User?           @relation(fields: [triggeredById], references: [id], onDelete: SetNull)
+  data             ExecutionData?
+
+  @@index([workflowId, createdAt(sort: Desc)])
+  @@index([status])
+  @@index([createdAt(sort: Desc)])
+}
+
+/// Large payloads kept apart so execution lists stay fast.
+model ExecutionData {
+  executionId  String    @id
+  execution    Execution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  /// Snapshot of the workflow as it was executed.
+  workflowData Json
+  /// IRunExecutionData
+  data         Json
+}

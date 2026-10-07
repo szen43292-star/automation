@@ -1,0 +1,22 @@
+{
+  "name": "@flowforge/nodes",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "FlowForge node library - every node implements INodeType",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@flowforge/workflow": "workspace:*",
+    "luxon": "^3.7.2"
+  },
+  "devDependencies": {
+    "@types/luxon": "^3.7.1",
+    "@flowforge/engine": "workspace:*"
+  }
+}
