@@ -64,7 +64,10 @@ export class WorkflowService {
     return row;
   }
 
-  async list(user: AuthUser, query: { search?: string; active?: boolean; limit: number; offset: number }) {
+  async list(
+    user: AuthUser,
+    query: { search?: string; active?: boolean; limit: number; offset: number },
+  ) {
     const where: Prisma.WorkflowWhereInput = {
       ...this.scope(user),
       ...(query.search ? { name: { contains: query.search, mode: 'insensitive' } } : {}),
@@ -201,7 +204,9 @@ export class WorkflowService {
   }
 
   assertActivatable(nodes: INode[]) {
-    const triggers = nodes.filter((n) => !n.disabled && isActivatableTrigger(this.nodeTypes, n.type));
+    const triggers = nodes.filter(
+      (n) => !n.disabled && isActivatableTrigger(this.nodeTypes, n.type),
+    );
     if (triggers.length === 0) {
       throw badRequest(
         'This workflow has no trigger that can start it automatically. "Manual Trigger" only runs from the editor - ' +
@@ -222,14 +227,21 @@ export class WorkflowService {
       where: { workflowId: id },
       orderBy: { createdAt: 'desc' },
       take: 100,
-      select: { versionId: true, name: true, createdAt: true, author: { select: { id: true, name: true } } },
+      select: {
+        versionId: true,
+        name: true,
+        createdAt: true,
+        author: { select: { id: true, name: true } },
+      },
     });
     return rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() }));
   }
 
   async version(user: AuthUser, id: string, versionId: string) {
     await this.get(user, id);
-    const row = await this.prisma.workflowVersion.findFirst({ where: { workflowId: id, versionId } });
+    const row = await this.prisma.workflowVersion.findFirst({
+      where: { workflowId: id, versionId },
+    });
     if (!row) throw notFound('Version');
     return {
       versionId: row.versionId,

@@ -72,9 +72,15 @@ export interface NodeApiErrorOptions extends NodeErrorOptions {
 export class NodeApiError extends NodeError {
   readonly httpCode?: number;
 
-  constructor(node: INode | string | undefined, message: string | undefined, options: NodeApiErrorOptions = {}) {
+  constructor(
+    node: INode | string | undefined,
+    message: string | undefined,
+    options: NodeApiErrorOptions = {},
+  ) {
     const code = options.httpCode;
-    const friendly = code ? (HTTP_MESSAGES[code] ?? `Request failed with status code ${code}`) : undefined;
+    const friendly = code
+      ? (HTTP_MESSAGES[code] ?? `Request failed with status code ${code}`)
+      : undefined;
     super(node, message ?? friendly ?? 'The service returned an error', {
       ...options,
       description: options.description ?? describeBody(options.responseBody),

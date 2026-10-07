@@ -20,9 +20,16 @@ export interface Assignment {
   type: AssignmentType;
 }
 
-function convert(value: unknown, type: AssignmentType, field: string, ignoreErrors: boolean): unknown {
+function convert(
+  value: unknown,
+  type: AssignmentType,
+  field: string,
+  ignoreErrors: boolean,
+): unknown {
   const fail = (): never => {
-    throw new Error(`Value for field "${field}" (${JSON.stringify(value)}) cannot be converted to ${type}`);
+    throw new Error(
+      `Value for field "${field}" (${JSON.stringify(value)}) cannot be converted to ${type}`,
+    );
   };
   try {
     switch (type) {
@@ -38,7 +45,8 @@ function convert(value: unknown, type: AssignmentType, field: string, ignoreErro
       case 'boolean':
         if (typeof value === 'boolean') return value;
         if (value === 'true' || value === '1' || value === 1) return true;
-        if (value === 'false' || value === '0' || value === 0 || value === '' || value == null) return false;
+        if (value === 'false' || value === '0' || value === 0 || value === '' || value == null)
+          return false;
         return fail();
       case 'array':
         if (Array.isArray(value)) return value;
@@ -58,7 +66,9 @@ function convert(value: unknown, type: AssignmentType, field: string, ignoreErro
   } catch (error) {
     if (ignoreErrors) return value;
     if (error instanceof SyntaxError) {
-      throw new Error(`Value for field "${field}" is not valid JSON for type ${type}: ${error.message}`);
+      throw new Error(
+        `Value for field "${field}" is not valid JSON for type ${type}: ${error.message}`,
+      );
     }
     throw error;
   }
@@ -124,7 +134,8 @@ export const EditFields: INodeType = {
             name: 'dotNotation',
             type: 'boolean',
             default: true,
-            description: 'Treat "a.b" as nested field b inside a, instead of a field literally named "a.b"',
+            description:
+              'Treat "a.b" as nested field b inside a, instead of a field literally named "a.b"',
           },
           {
             displayName: 'Ignore Type Conversion Errors',
@@ -147,7 +158,11 @@ export const EditFields: INodeType = {
       try {
         const includeOther = this.getNodeParameter<boolean>('includeOtherFields', i, false);
         const dotNotation = this.getNodeParameter<boolean>('options.dotNotation', i, true);
-        const ignoreErrors = this.getNodeParameter<boolean>('options.ignoreConversionErrors', i, false);
+        const ignoreErrors = this.getNodeParameter<boolean>(
+          'options.ignoreConversionErrors',
+          i,
+          false,
+        );
         const json: IDataObject = includeOther ? deepClone(item.json) : {};
 
         if (mode === 'raw') {
@@ -157,23 +172,40 @@ export const EditFields: INodeType = {
             try {
               parsed = JSON.parse(raw);
             } catch (error) {
-              throw new NodeOperationError(this.getNode(), "'JSON Output' does not contain a valid JSON object", {
-                itemIndex: i,
-                description: (error as Error).message,
-              });
+              throw new NodeOperationError(
+                this.getNode(),
+                "'JSON Output' does not contain a valid JSON object",
+                {
+                  itemIndex: i,
+                  description: (error as Error).message,
+                },
+              );
             }
           }
           if (!isObject(parsed)) {
-            throw new NodeOperationError(this.getNode(), `'JSON Output' must be an object, got ${typeOf(parsed)}`, {
-              itemIndex: i,
-            });
+            throw new NodeOperationError(
+              this.getNode(),
+              `'JSON Output' must be an object, got ${typeOf(parsed)}`,
+              {
+                itemIndex: i,
+              },
+            );
           }
           Object.assign(json, parsed);
         } else {
-          const { assignments = [] } = this.getNodeParameter<{ assignments?: Assignment[] }>('assignments', i, {});
+          const { assignments = [] } = this.getNodeParameter<{ assignments?: Assignment[] }>(
+            'assignments',
+            i,
+            {},
+          );
           for (const assignment of assignments) {
             if (!assignment.name) continue;
-            const value = convert(assignment.value, assignment.type ?? 'string', assignment.name, ignoreErrors);
+            const value = convert(
+              assignment.value,
+              assignment.type ?? 'string',
+              assignment.name,
+              ignoreErrors,
+            );
             if (dotNotation) setPath(json, assignment.name, value);
             else json[assignment.name] = value;
           }

@@ -82,7 +82,13 @@ export const DateTimeNode: INodeType = {
         type: 'string',
         default: '',
         placeholder: '={{ $json.createdAt }}',
-        displayOptions: show('addToDate', 'subtractFromDate', 'formatDate', 'extractDate', 'roundDate'),
+        displayOptions: show(
+          'addToDate',
+          'subtractFromDate',
+          'formatDate',
+          'extractDate',
+          'roundDate',
+        ),
       },
       {
         displayName: 'Time Unit',
@@ -115,8 +121,20 @@ export const DateTimeNode: INodeType = {
         hint: 'Luxon tokens, e.g. dd LLL yyyy → 31 Jan 2025',
         displayOptions: { show: { operation: ['formatDate'], format: ['custom'] } },
       },
-      { displayName: 'Start Date', name: 'startDate', type: 'string', default: '', displayOptions: show('getTimeBetweenDates') },
-      { displayName: 'End Date', name: 'endDate', type: 'string', default: '', displayOptions: show('getTimeBetweenDates') },
+      {
+        displayName: 'Start Date',
+        name: 'startDate',
+        type: 'string',
+        default: '',
+        displayOptions: show('getTimeBetweenDates'),
+      },
+      {
+        displayName: 'End Date',
+        name: 'endDate',
+        type: 'string',
+        default: '',
+        displayOptions: show('getTimeBetweenDates'),
+      },
       {
         displayName: 'Units',
         name: 'units',
@@ -173,7 +191,12 @@ export const DateTimeNode: INodeType = {
             placeholder: 'Asia/Kolkata',
             description: 'Defaults to the workflow timezone',
           },
-          { displayName: 'Include Input Fields', name: 'includeInputFields', type: 'boolean', default: true },
+          {
+            displayName: 'Include Input Fields',
+            name: 'includeInputFields',
+            type: 'boolean',
+            default: true,
+          },
         ],
       },
     ],
@@ -189,7 +212,9 @@ export const DateTimeNode: INodeType = {
         const operation = this.getNodeParameter<string>('operation', i);
         const zone = this.getNodeParameter<string>('options.timezone', i, '') || this.getTimezone();
         if (!Luxon.now().setZone(zone).isValid) {
-          throw new NodeOperationError(this.getNode(), `Unknown timezone "${zone}"`, { itemIndex: i });
+          throw new NodeOperationError(this.getNode(), `Unknown timezone "${zone}"`, {
+            itemIndex: i,
+          });
         }
         const includeInput = this.getNodeParameter<boolean>('options.includeInputFields', i, true);
         const field = this.getNodeParameter<string>('outputFieldName', i, 'date') || 'date';
@@ -200,7 +225,8 @@ export const DateTimeNode: INodeType = {
           if (!parsed || !parsed.isValid) {
             throw new NodeOperationError(this.getNode(), `"${String(raw)}" is not a valid date`, {
               itemIndex: i,
-              description: 'Use an ISO 8601 string (2025-01-31T10:00:00Z), a Unix timestamp or an expression',
+              description:
+                'Use an ISO 8601 string (2025-01-31T10:00:00Z), a Unix timestamp or an expression',
             });
           }
           return parsed;
@@ -210,7 +236,9 @@ export const DateTimeNode: INodeType = {
         switch (operation) {
           case 'getCurrentDate': {
             const now = Luxon.now().setZone(zone);
-            value = this.getNodeParameter<boolean>('includeTime', i, true) ? now.toISO() : now.toISODate();
+            value = this.getNodeParameter<boolean>('includeTime', i, true)
+              ? now.toISO()
+              : now.toISODate();
             break;
           }
           case 'addToDate':
@@ -218,13 +246,18 @@ export const DateTimeNode: INodeType = {
             const unit = this.getNodeParameter<DurationUnit>('timeUnit', i);
             const amount = Number(this.getNodeParameter('duration', i, 0));
             const date = readDate('magnitude');
-            value = (operation === 'addToDate' ? date.plus({ [unit]: amount }) : date.minus({ [unit]: amount })).toISO();
+            value = (
+              operation === 'addToDate'
+                ? date.plus({ [unit]: amount })
+                : date.minus({ [unit]: amount })
+            ).toISO();
             break;
           }
           case 'formatDate': {
             const date = readDate('magnitude');
             let format = this.getNodeParameter<string>('format', i, 'iso');
-            if (format === 'custom') format = this.getNodeParameter<string>('customFormat', i, 'yyyy-MM-dd');
+            if (format === 'custom')
+              format = this.getNodeParameter<string>('customFormat', i, 'yyyy-MM-dd');
             if (format === 'iso') value = date.toISO();
             else if (format === 'X') value = Math.floor(date.toSeconds());
             else if (format === 'x') value = date.toMillis();
@@ -249,11 +282,17 @@ export const DateTimeNode: INodeType = {
             const unit = this.getNodeParameter<(typeof PARTS)[number]>('toNearest', i);
             const mode = this.getNodeParameter<string>('roundMode', i, 'roundDown');
             const down = date.startOf(unit);
-            value = (mode === 'roundUp' && down.toMillis() !== date.toMillis() ? date.endOf(unit).plus({ milliseconds: 1 }) : down).toISO();
+            value = (
+              mode === 'roundUp' && down.toMillis() !== date.toMillis()
+                ? date.endOf(unit).plus({ milliseconds: 1 })
+                : down
+            ).toISO();
             break;
           }
           default:
-            throw new NodeOperationError(this.getNode(), `Unknown operation "${operation}"`, { itemIndex: i });
+            throw new NodeOperationError(this.getNode(), `Unknown operation "${operation}"`, {
+              itemIndex: i,
+            });
         }
 
         const json: IDataObject = includeInput ? deepClone(item.json) : {};

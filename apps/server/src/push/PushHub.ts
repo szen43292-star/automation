@@ -3,8 +3,14 @@ import type { FastifyBaseLogger } from 'fastify';
 
 /** Events pushed to editor / desktop / mobile clients. */
 export type PushEvent =
-  | { type: 'executionStarted'; data: { executionId: string; workflowId: string; mode: string; startedAt: string } }
-  | { type: 'nodeExecuteBefore'; data: { executionId: string; workflowId: string; nodeName: string } }
+  | {
+      type: 'executionStarted';
+      data: { executionId: string; workflowId: string; mode: string; startedAt: string };
+    }
+  | {
+      type: 'nodeExecuteBefore';
+      data: { executionId: string; workflowId: string; nodeName: string };
+    }
   | {
       type: 'nodeExecuteAfter';
       data: {
@@ -20,7 +26,13 @@ export type PushEvent =
     }
   | {
       type: 'executionFinished';
-      data: { executionId: string; workflowId: string; status: string; stoppedAt: string; errorMessage?: string };
+      data: {
+        executionId: string;
+        workflowId: string;
+        status: string;
+        stoppedAt: string;
+        errorMessage?: string;
+      };
     }
   | { type: 'workflowUpdated'; data: { workflowId: string; active: boolean; versionId: string } };
 

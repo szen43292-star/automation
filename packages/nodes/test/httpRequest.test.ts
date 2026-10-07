@@ -5,7 +5,12 @@ import { errorOf, runNode } from './harness';
 
 let server: Server;
 let base: string;
-const received: Array<{ method?: string; url?: string; headers: IncomingMessage['headers']; body: string }> = [];
+const received: Array<{
+  method?: string;
+  url?: string;
+  headers: IncomingMessage['headers'];
+  body: string;
+}> = [];
 
 beforeAll(async () => {
   server = createServer((req, res) => {
@@ -16,10 +21,21 @@ beforeAll(async () => {
       const url = new URL(req.url!, 'http://x');
       if (url.pathname === '/orders') {
         res.setHeader('content-type', 'application/json');
-        res.end(JSON.stringify([{ id: 1, status: 'shipped' }, { id: 2, status: 'pending' }]));
+        res.end(
+          JSON.stringify([
+            { id: 1, status: 'shipped' },
+            { id: 2, status: 'pending' },
+          ]),
+        );
       } else if (url.pathname === '/echo') {
         res.setHeader('content-type', 'application/json');
-        res.end(JSON.stringify({ method: req.method, query: Object.fromEntries(url.searchParams), body: body ? JSON.parse(body) : null }));
+        res.end(
+          JSON.stringify({
+            method: req.method,
+            query: Object.fromEntries(url.searchParams),
+            body: body ? JSON.parse(body) : null,
+          }),
+        );
       } else if (url.pathname === '/text') {
         res.setHeader('content-type', 'text/plain');
         res.end('hello');
@@ -41,9 +57,15 @@ afterAll(() => new Promise<void>((resolve) => server.close(() => resolve())));
 
 describe('HTTP Request node', () => {
   it('splits JSON array responses into items', async () => {
-    const { output, run } = await runNode('flowforge.httpRequest', { method: 'GET', url: `${base}/orders` });
+    const { output, run } = await runNode('flowforge.httpRequest', {
+      method: 'GET',
+      url: `${base}/orders`,
+    });
     expect(run.status).toBe('success');
-    expect(output()).toEqual([{ id: 1, status: 'shipped' }, { id: 2, status: 'pending' }]);
+    expect(output()).toEqual([
+      { id: 1, status: 'shipped' },
+      { id: 2, status: 'pending' },
+    ]);
   });
 
   it('sends query, headers and JSON body built from expressions', async () => {
@@ -63,7 +85,9 @@ describe('HTTP Request node', () => {
       },
       [{ phone: '+911234', name: 'Asha' }],
     );
-    expect(output()).toEqual([{ method: 'POST', query: { phone: '+911234' }, body: { name: 'Asha' } }]);
+    expect(output()).toEqual([
+      { method: 'POST', query: { phone: '+911234' }, body: { name: 'Asha' } },
+    ]);
     expect(received.at(-1)!.headers['x-api-key']).toBe('secret');
     expect(received.at(-1)!.headers['content-type']).toBe('application/json');
   });
@@ -111,6 +135,8 @@ describe('HTTP Request node', () => {
       { onError: 'continueRegularOutput' },
     );
     expect(run.status).toBe('success');
-    expect(output()).toEqual([{ id: 1, error: 'The resource you are requesting could not be found' }]);
+    expect(output()).toEqual([
+      { id: 1, error: 'The resource you are requesting could not be found' },
+    ]);
   });
 });

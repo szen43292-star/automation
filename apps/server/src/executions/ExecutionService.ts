@@ -55,7 +55,10 @@ export class ExecutionService {
     private readonly config: Config,
     private readonly logger: FastifyBaseLogger,
   ) {
-    this.sandbox = new CodeSandbox({ timeoutMs: config.CODE_TIMEOUT_MS, memoryLimitMb: config.CODE_MEMORY_MB });
+    this.sandbox = new CodeSandbox({
+      timeoutMs: config.CODE_TIMEOUT_MS,
+      memoryLimitMb: config.CODE_MEMORY_MB,
+    });
     this.engineLogger = {
       debug: (msg, meta) => logger.debug(meta ?? {}, msg),
       info: (msg, meta) => logger.info(meta ?? {}, msg),
@@ -107,7 +110,13 @@ export class ExecutionService {
           nodeExecuteAfter: (nodeName, task, runIndex) =>
             this.push.publish(topics, {
               type: 'nodeExecuteAfter',
-              data: { executionId, workflowId: options.workflowId, nodeName, runIndex, ...summariseTask(task) },
+              data: {
+                executionId,
+                workflowId: options.workflowId,
+                nodeName,
+                runIndex,
+                ...summariseTask(task),
+              },
             }),
         },
       }),
@@ -177,7 +186,12 @@ export class ExecutionService {
         },
       }),
       ...(options.retryOfId && run.status === 'success'
-        ? [this.prisma.execution.update({ where: { id: options.retryOfId }, data: { retrySuccessId: executionId } })]
+        ? [
+            this.prisma.execution.update({
+              where: { id: options.retryOfId },
+              data: { retrySuccessId: executionId },
+            }),
+          ]
         : []),
     ]);
   }
@@ -186,7 +200,11 @@ export class ExecutionService {
     await this.prisma.execution
       .update({
         where: { id: executionId },
-        data: { status: 'crashed', stoppedAt: new Date(), errorMessage: String((error as Error)?.message ?? error) },
+        data: {
+          status: 'crashed',
+          stoppedAt: new Date(),
+          errorMessage: String((error as Error)?.message ?? error),
+        },
       })
       .catch((e: unknown) => this.logger.error({ err: e }, 'Could not mark execution as crashed'));
   }
@@ -212,7 +230,11 @@ export class ExecutionService {
   /** Retry a failed execution, either with the workflow as it was or as it is now. */
   async retry(user: AuthUser, executionId: string, useCurrentWorkflow: boolean) {
     const execution = await this.getRow(user, executionId);
-    if (execution.status !== 'error' && execution.status !== 'crashed' && execution.status !== 'canceled') {
+    if (
+      execution.status !== 'error' &&
+      execution.status !== 'crashed' &&
+      execution.status !== 'canceled'
+    ) {
       throw badRequest('Only failed, crashed or cancelled executions can be retried');
     }
     const stored = await this.prisma.executionData.findUnique({ where: { executionId } });
@@ -267,7 +289,8 @@ export class ExecutionService {
         mode: row.mode,
         startedAt: row.startedAt?.toISOString() ?? null,
         stoppedAt: row.stoppedAt?.toISOString() ?? null,
-        durationMs: row.startedAt && row.stoppedAt ? row.stoppedAt.getTime() - row.startedAt.getTime() : null,
+        durationMs:
+          row.startedAt && row.stoppedAt ? row.stoppedAt.getTime() - row.startedAt.getTime() : null,
         lastNodeExecuted: row.lastNodeExecuted,
         errorMessage: row.errorMessage,
         retryOfId: row.retryOfId,
@@ -314,7 +337,11 @@ export class ExecutionService {
   async recoverCrashed() {
     const { count } = await this.prisma.execution.updateMany({
       where: { status: { in: ['running', 'new'] } },
-      data: { status: 'crashed', stoppedAt: new Date(), errorMessage: 'The server stopped while this execution was running' },
+      data: {
+        status: 'crashed',
+        stoppedAt: new Date(),
+        errorMessage: 'The server stopped while this execution was running',
+      },
     });
     if (count) this.logger.warn(`Marked ${count} interrupted execution(s) as crashed`);
   }

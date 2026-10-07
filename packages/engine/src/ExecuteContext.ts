@@ -96,7 +96,8 @@ export class ExecuteContext implements IExecuteFunctions {
     const { node, nodeType } = this.opts;
     let value = getPath(node.parameters, name) as NodeParameterValueType;
     if (value === undefined) {
-      value = findProperty(nodeType.description.properties, name)?.default as NodeParameterValueType;
+      value = findProperty(nodeType.description.properties, name)
+        ?.default as NodeParameterValueType;
     }
     if (value === undefined) {
       if (fallback !== undefined) return fallback;
@@ -105,7 +106,11 @@ export class ExecuteContext implements IExecuteFunctions {
     if (options.rawExpressions) return value as T;
 
     try {
-      return resolveParameterValue(value, this.expressionData(itemIndex), this.opts.additional.expressionEvaluator) as T;
+      return resolveParameterValue(
+        value,
+        this.expressionData(itemIndex),
+        this.opts.additional.expressionEvaluator,
+      ) as T;
     } catch (error) {
       const displayName = findProperty(nodeType.description.properties, name)?.displayName ?? name;
       throw new ExpressionError(node, (error as Error).message, {

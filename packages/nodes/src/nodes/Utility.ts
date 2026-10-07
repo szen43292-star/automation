@@ -44,7 +44,13 @@ export const Limit: INodeType = {
     outputs: [{ type: 'main' }],
     keywords: ['top', 'first', 'last', 'take', 'slice'],
     properties: [
-      { displayName: 'Max Items', name: 'maxItems', type: 'number', default: 1, typeOptions: { minValue: 1 } },
+      {
+        displayName: 'Max Items',
+        name: 'maxItems',
+        type: 'number',
+        default: 1,
+        typeOptions: { minValue: 1 },
+      },
       {
         displayName: 'Keep',
         name: 'keep',
@@ -58,10 +64,15 @@ export const Limit: INodeType = {
     ],
   },
   async execute(this: IExecuteFunctions) {
-    const items = this.getInputData().map((item, index) => ({ ...item, pairedItem: { item: index } }));
+    const items = this.getInputData().map((item, index) => ({
+      ...item,
+      pairedItem: { item: index },
+    }));
     const max = Math.max(0, Math.floor(Number(this.getNodeParameter('maxItems', 0, 1))));
     const keep = this.getNodeParameter<string>('keep', 0, 'firstItems');
-    return [keep === 'lastItems' ? items.slice(Math.max(0, items.length - max)) : items.slice(0, max)];
+    return [
+      keep === 'lastItems' ? items.slice(Math.max(0, items.length - max)) : items.slice(0, max),
+    ];
   },
 };
 
@@ -112,21 +123,29 @@ export const SplitOut: INodeType = {
     const out: INodeExecutionData[] = [];
     items.forEach((item, i) => {
       const field = this.getNodeParameter<string>('fieldToSplitOut', i, '').trim();
-      if (!field) throw new NodeOperationError(this.getNode(), '"Field To Split Out" is empty', { itemIndex: i });
+      if (!field)
+        throw new NodeOperationError(this.getNode(), '"Field To Split Out" is empty', {
+          itemIndex: i,
+        });
       const include = this.getNodeParameter<string>('include', i, 'noOtherFields');
       const destination = this.getNodeParameter<string>('destinationFieldName', i, '') || field;
       const value = getPath(item.json, field);
       if (value === undefined) {
-        throw new NodeOperationError(this.getNode(), `The field "${field}" wasn't found in item ${i}`, {
-          itemIndex: i,
-          description: 'Check the field name, or that the previous node outputs this field',
-        });
+        throw new NodeOperationError(
+          this.getNode(),
+          `The field "${field}" wasn't found in item ${i}`,
+          {
+            itemIndex: i,
+            description: 'Check the field name, or that the previous node outputs this field',
+          },
+        );
       }
       const list = Array.isArray(value) ? value : isObject(value) ? Object.values(value) : [value];
       for (const entry of list) {
         let json: IDataObject = {};
         if (include === 'allOtherFields') json = deepClone(item.json);
-        if (isObject(entry) && destination === field && include === 'noOtherFields') json = { ...entry };
+        if (isObject(entry) && destination === field && include === 'noOtherFields')
+          json = { ...entry };
         else setPath(json, destination, entry);
         out.push({ json, pairedItem: { item: i } });
       }
@@ -186,11 +205,17 @@ export const StopAndError: INodeType = {
       } catch {
         throw new NodeOperationError(this.getNode(), 'Error Object is not valid JSON');
       }
-      throw new NodeOperationError(this.getNode(), String(obj.message ?? obj.description ?? 'Workflow stopped'), {
-        context: obj,
-      });
+      throw new NodeOperationError(
+        this.getNode(),
+        String(obj.message ?? obj.description ?? 'Workflow stopped'),
+        {
+          context: obj,
+        },
+      );
     }
-    const message = this.getNodeParameter<string>('errorMessage', 0, '') || 'Workflow stopped by "Stop and Error" node';
+    const message =
+      this.getNodeParameter<string>('errorMessage', 0, '') ||
+      'Workflow stopped by "Stop and Error" node';
     throw new NodeOperationError(this.getNode(), message);
   },
 };
@@ -208,13 +233,22 @@ export const StickyNote: INodeType = {
     inputs: [],
     outputs: [],
     properties: [
-      { displayName: 'Content', name: 'content', type: 'string', default: '## Note\nDouble-click to edit', typeOptions: { editor: 'markdown', rows: 6 } },
+      {
+        displayName: 'Content',
+        name: 'content',
+        type: 'string',
+        default: '## Note\nDouble-click to edit',
+        typeOptions: { editor: 'markdown', rows: 6 },
+      },
       {
         displayName: 'Color',
         name: 'color',
         type: 'options',
         default: 'yellow',
-        options: ['yellow', 'blue', 'green', 'pink', 'purple', 'gray'].map((c) => ({ name: c, value: c })),
+        options: ['yellow', 'blue', 'green', 'pink', 'purple', 'gray'].map((c) => ({
+          name: c,
+          value: c,
+        })),
       },
     ],
   },

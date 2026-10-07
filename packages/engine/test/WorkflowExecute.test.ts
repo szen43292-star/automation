@@ -43,7 +43,10 @@ const set: INodeType = {
   async execute(this: IExecuteFunctions) {
     return [
       this.getInputData().map((item, i) => ({
-        json: { ...item.json, [this.getNodeParameter<string>('field', i)]: this.getNodeParameter('value', i) },
+        json: {
+          ...item.json,
+          [this.getNodeParameter<string>('field', i)]: this.getNodeParameter('value', i),
+        },
       })),
     ];
   },
@@ -62,7 +65,13 @@ const branch: INodeType = {
 const merge: INodeType = {
   description: description('test.merge', 2, 1),
   async execute(this: IExecuteFunctions) {
-    return [[...this.getInputData(0), ...this.getInputData(1), { json: { inputs: this.getInputCount() } }]];
+    return [
+      [
+        ...this.getInputData(0),
+        ...this.getInputData(1),
+        { json: { inputs: this.getInputCount() } },
+      ],
+    ];
   },
 };
 
@@ -108,7 +117,9 @@ const partialFail: INodeType = {
   async execute(this: IExecuteFunctions) {
     return [
       this.getInputData().map((item) =>
-        item.json.ok ? item : { json: item.json, error: { name: 'E', message: 'bad item', timestamp: 0 } },
+        item.json.ok
+          ? item
+          : { json: item.json, error: { name: 'E', message: 'bad item', timestamp: 0 } },
       ),
     ];
   },
@@ -130,7 +141,15 @@ function registry(extra: INodeType[] = []): INodeTypes {
 
 let y = 0;
 function n(name: string, type: string, extra: Partial<INode> = {}): INode {
-  return { id: name, name, type, typeVersion: 1, position: [0, (y += 10)], parameters: {}, ...extra };
+  return {
+    id: name,
+    name,
+    type,
+    typeVersion: 1,
+    position: [0, (y += 10)],
+    parameters: {},
+    ...extra,
+  };
 }
 const c = (source: string, target: string, sourceOutput = 0, targetInput = 0): IConnection => ({
   source,
@@ -141,7 +160,11 @@ const c = (source: string, target: string, sourceOutput = 0, targetInput = 0): I
 
 async function run(
   wf: Omit<IWorkflowBase, 'name'>,
-  opts: { types?: INodeTypes; hooks?: IExecutionHooks; options?: Parameters<WorkflowExecute['run']>[0] } = {},
+  opts: {
+    types?: INodeTypes;
+    hooks?: IExecutionHooks;
+    options?: Parameters<WorkflowExecute['run']>[0];
+  } = {},
 ) {
   const order: string[] = [];
   const executor = new WorkflowExecute(
@@ -186,7 +209,9 @@ describe('WorkflowExecute', () => {
         nodes: [
           n('Start', 'test.trigger'),
           n('A', 'test.set', { parameters: { field: 'x', value: 'one' } }),
-          n('B', 'test.set', { parameters: { field: 'fromStart', value: '=Hi {{ $node["Start"].json.name }}' } }),
+          n('B', 'test.set', {
+            parameters: { field: 'fromStart', value: '=Hi {{ $node["Start"].json.name }}' },
+          }),
         ],
         connections: [c('Start', 'A'), c('A', 'B')],
       },
@@ -206,7 +231,12 @@ describe('WorkflowExecute', () => {
           n('TrueB', 'test.set'),
           n('FalseA', 'test.set'),
         ],
-        connections: [c('Start', 'Branch'), c('Branch', 'TrueA', 0), c('TrueA', 'TrueB'), c('Branch', 'FalseA', 1)],
+        connections: [
+          c('Start', 'Branch'),
+          c('Branch', 'TrueA', 0),
+          c('TrueA', 'TrueB'),
+          c('Branch', 'FalseA', 1),
+        ],
       },
       { options: { triggerItems: [{ json: { ok: true } }, { json: { ok: false } }] } },
     );
@@ -225,7 +255,11 @@ describe('WorkflowExecute', () => {
     expect(result.status).toBe('success');
 
     const second = await run({
-      nodes: [n('Start', 'test.trigger'), n('Empty', 'test.empty', { alwaysOutputData: true }), n('After', 'test.set')],
+      nodes: [
+        n('Start', 'test.trigger'),
+        n('Empty', 'test.empty', { alwaysOutputData: true }),
+        n('After', 'test.set'),
+      ],
       connections: [c('Start', 'Empty'), c('Empty', 'After')],
     });
     expect(second.order).toEqual(['Start', 'Empty', 'After']);
@@ -239,7 +273,12 @@ describe('WorkflowExecute', () => {
         n('Right', 'test.set', { parameters: { field: 'side', value: 'right' } }),
         n('Merge', 'test.merge'),
       ],
-      connections: [c('Start', 'Left'), c('Start', 'Right'), c('Left', 'Merge', 0, 0), c('Right', 'Merge', 0, 1)],
+      connections: [
+        c('Start', 'Left'),
+        c('Start', 'Right'),
+        c('Left', 'Merge', 0, 0),
+        c('Right', 'Merge', 0, 1),
+      ],
     });
     expect(order.filter((x) => x === 'Merge')).toHaveLength(1);
     expect(out(result, 'Merge')).toEqual([{ side: 'left' }, { side: 'right' }, { inputs: 2 }]);
@@ -285,7 +324,10 @@ describe('WorkflowExecute', () => {
     const flakyNode = flaky(2);
     const { result } = await run(
       {
-        nodes: [n('Start', 'test.trigger'), n('Flaky', 'test.flaky', { retryOnFail: true, maxTries: 3, waitBetweenTries: 1 })],
+        nodes: [
+          n('Start', 'test.trigger'),
+          n('Flaky', 'test.flaky', { retryOnFail: true, maxTries: 3, waitBetweenTries: 1 }),
+        ],
         connections: [c('Start', 'Flaky')],
       },
       { types: registry([flakyNode.node]) },
@@ -296,11 +338,17 @@ describe('WorkflowExecute', () => {
 
   it('continues with the regular output on error', async () => {
     const { result } = await run({
-      nodes: [n('Start', 'test.trigger'), n('Fail', 'test.fail', { onError: 'continueRegularOutput' }), n('After', 'test.set')],
+      nodes: [
+        n('Start', 'test.trigger'),
+        n('Fail', 'test.fail', { onError: 'continueRegularOutput' }),
+        n('After', 'test.set'),
+      ],
       connections: [c('Start', 'Fail'), c('Fail', 'After')],
     });
     expect(result.status).toBe('success');
-    expect(out(result, 'After')).toEqual([{ error: 'Boom', errorDescription: 'it failed', value: '' }]);
+    expect(out(result, 'After')).toEqual([
+      { error: 'Boom', errorDescription: 'it failed', value: '' },
+    ]);
   });
 
   it('routes failures to the error output', async () => {
@@ -322,7 +370,11 @@ describe('WorkflowExecute', () => {
 
   it('passes data through disabled nodes', async () => {
     const { result } = await run({
-      nodes: [n('Start', 'test.trigger'), n('Fail', 'test.fail', { disabled: true }), n('After', 'test.set')],
+      nodes: [
+        n('Start', 'test.trigger'),
+        n('Fail', 'test.fail', { disabled: true }),
+        n('After', 'test.set'),
+      ],
       connections: [c('Start', 'Fail'), c('Fail', 'After')],
     });
     expect(result.status).toBe('success');
@@ -342,7 +394,12 @@ describe('WorkflowExecute', () => {
   it('only runs ancestors of the destination node', async () => {
     const { order } = await run(
       {
-        nodes: [n('Start', 'test.trigger'), n('A', 'test.set'), n('B', 'test.set'), n('Other', 'test.set')],
+        nodes: [
+          n('Start', 'test.trigger'),
+          n('A', 'test.set'),
+          n('B', 'test.set'),
+          n('Other', 'test.set'),
+        ],
         connections: [c('Start', 'A'), c('A', 'B'), c('Start', 'Other')],
       },
       { options: { destinationNode: 'A' } },
@@ -383,7 +440,12 @@ describe('WorkflowExecute', () => {
         nodes: [n('Start', 'test.trigger'), n('A', 'test.set'), n('B', 'test.set')],
         connections: [c('Start', 'A'), c('A', 'B'), c('B', 'A')],
       }),
-      createAdditionalData({ executionId: 'x', mode: 'manual', nodeTypes: registry(), maxNodeRuns: 50 }),
+      createAdditionalData({
+        executionId: 'x',
+        mode: 'manual',
+        nodeTypes: registry(),
+        maxNodeRuns: 50,
+      }),
     );
     const result = await executor.run();
     expect(result.status).toBe('error');
@@ -425,7 +487,10 @@ describe('WorkflowExecute', () => {
 
   it('reports expression errors with the parameter name', async () => {
     const { result } = await run({
-      nodes: [n('Start', 'test.trigger'), n('A', 'test.set', { parameters: { value: '={{ $json.a * 2 }}' } })],
+      nodes: [
+        n('Start', 'test.trigger'),
+        n('A', 'test.set', { parameters: { value: '={{ $json.a * 2 }}' } }),
+      ],
       connections: [c('Start', 'A')],
     });
     expect(result.status).toBe('error');

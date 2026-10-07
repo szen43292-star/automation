@@ -79,15 +79,19 @@ export class CodeSandbox {
       );
 
       const { source, lineOffset } = buildScript(input.code, input.mode);
-      const script = await isolate.compileScript(source, { filename: FILENAME }).catch((error: Error) => {
-        throw toCodeError(error, lineOffset);
-      });
+      const script = await isolate
+        .compileScript(source, { filename: FILENAME })
+        .catch((error: Error) => {
+          throw toCodeError(error, lineOffset);
+        });
 
       const execution = script.run(context, { timeout: timeoutMs, promise: true, copy: true });
 
       const guard = new Promise<never>((_, reject) => {
         timer = setTimeout(() => {
-          reject(new CodeExecutionError(`Code execution timed out after ${timeoutMs / 1000} seconds`));
+          reject(
+            new CodeExecutionError(`Code execution timed out after ${timeoutMs / 1000} seconds`),
+          );
         }, timeoutMs);
         if (input.signal) {
           onAbort = () => reject(input.signal!.reason ?? new Error('Execution was cancelled'));
@@ -168,7 +172,8 @@ function toCodeError(error: unknown, lineOffset: number): Error {
   if (/Isolate was disposed|memory limit/i.test(message)) {
     message = 'Code used too much memory and was stopped';
   } else if (/could not be cloned/i.test(message)) {
-    message = 'Code returned a value that cannot be converted to JSON (e.g. a function). Return plain objects only.';
+    message =
+      'Code returned a value that cannot be converted to JSON (e.g. a function). Return plain objects only.';
   } else if (/Script execution timed out/i.test(message)) {
     message = 'Code execution timed out';
   }
@@ -178,5 +183,9 @@ function toCodeError(error: unknown, lineOffset: number): Error {
     return '';
   });
   const where = line && line > 0 ? ` [line ${line}]` : '';
-  return new CodeExecutionError(`${message}${where}`, line && line > 0 ? line : undefined, itemIndex);
+  return new CodeExecutionError(
+    `${message}${where}`,
+    line && line > 0 ? line : undefined,
+    itemIndex,
+  );
 }

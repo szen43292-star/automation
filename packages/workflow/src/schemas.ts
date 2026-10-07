@@ -83,7 +83,11 @@ export const workflowGraphSchema = z
     const names = new Set<string>();
     graph.nodes.forEach((node, i) => {
       if (ids.has(node.id)) {
-        ctx.addIssue({ code: 'custom', path: ['nodes', i, 'id'], message: `Duplicate node id "${node.id}"` });
+        ctx.addIssue({
+          code: 'custom',
+          path: ['nodes', i, 'id'],
+          message: `Duplicate node id "${node.id}"`,
+        });
       }
       if (names.has(node.name)) {
         ctx.addIssue({

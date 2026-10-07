@@ -27,7 +27,11 @@ export interface ExpressionData {
   /** All items on input 0 of the current node. */
   inputItems: INodeExecutionData[];
   /** Output items of another node (last run, output 0 unless specified). */
-  getNodeOutput(nodeName: string, outputIndex?: number, runIndex?: number): INodeExecutionData[] | undefined;
+  getNodeOutput(
+    nodeName: string,
+    outputIndex?: number,
+    runIndex?: number,
+  ): INodeExecutionData[] | undefined;
   workflow: { id?: string; name: string; active?: boolean };
   execution: { id: string; mode: ExecutionMode };
   /** Current node parameters (raw). */
@@ -99,7 +103,9 @@ export function evaluateExpression(
   }
   return segments
     .map((segment) =>
-      segment.kind === 'text' ? segment.value : stringify(normaliseResult(evaluator.evaluate(segment.value, data))),
+      segment.kind === 'text'
+        ? segment.value
+        : stringify(normaliseResult(evaluator.evaluate(segment.value, data))),
     )
     .join('');
 }
@@ -208,7 +214,10 @@ export class SimpleExpressionEvaluator implements IExpressionEvaluator {
         const m = /^\[\s*(["'])(.+?)\1\s*\](.*)$/s.exec(rest);
         if (!m) throw unsupported(src);
         const items = this.nodeItems(data, m[2]!);
-        base = { json: items[data.itemIndex]?.json ?? items[0]?.json ?? {}, binary: items[data.itemIndex]?.binary };
+        base = {
+          json: items[data.itemIndex]?.json ?? items[0]?.json ?? {},
+          binary: items[data.itemIndex]?.binary,
+        };
         rest = m[3]!.trim();
         break;
       }
@@ -227,7 +236,8 @@ export class SimpleExpressionEvaluator implements IExpressionEvaluator {
     if (rest === '') return base;
     // Luxon helpers commonly used on $now / $today.
     if (DateTime.isDateTime(base)) return dateAccess(base, rest, src);
-    if (!/^(\.[A-Za-z_$][\w$]*|\[\s*(?:\d+|"[^"]*"|'[^']*')\s*\])+$/.test(rest)) throw unsupported(src);
+    if (!/^(\.[A-Za-z_$][\w$]*|\[\s*(?:\d+|"[^"]*"|'[^']*')\s*\])+$/.test(rest))
+      throw unsupported(src);
     return getPath(base, parsePath(rest));
   }
 
@@ -254,7 +264,11 @@ function accessItems(
   const tail = m[2]!.trim();
   if (accessor === 'all()') return { value: items.map((i) => i.json), rest: tail };
   const item =
-    accessor === 'item' ? (items[itemIndex] ?? items[0]) : accessor === 'first()' ? items[0] : items[items.length - 1];
+    accessor === 'item'
+      ? (items[itemIndex] ?? items[0])
+      : accessor === 'first()'
+        ? items[0]
+        : items[items.length - 1];
   return { value: item ?? { json: {} }, rest: tail };
 }
 

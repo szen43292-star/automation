@@ -26,7 +26,8 @@ export async function createTestApp(): Promise<FastifyInstance> {
 
 /** Empty all tables between tests. Only ever runs against a *_test database. */
 export async function resetDb() {
-  if (!new URL(TEST_DATABASE_URL).pathname.endsWith('_test')) throw new Error('resetDb only runs on *_test databases');
+  if (!new URL(TEST_DATABASE_URL).pathname.endsWith('_test'))
+    throw new Error('resetDb only runs on *_test databases');
   await prisma.$executeRawUnsafe(
     'TRUNCATE "ExecutionData", "Execution", "WorkflowVersion", "Workflow", "User" RESTART IDENTITY CASCADE',
   );

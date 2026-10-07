@@ -2,7 +2,16 @@ import type { AddressInfo } from 'node:net';
 import type { FastifyInstance } from 'fastify';
 import { WebSocket } from 'ws';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { OWNER, auth, createTestApp, manualTrigger, prisma, resetDb, settle, setupOwner } from './helpers';
+import {
+  OWNER,
+  auth,
+  createTestApp,
+  manualTrigger,
+  prisma,
+  resetDb,
+  settle,
+  setupOwner,
+} from './helpers';
 
 let app: FastifyInstance;
 
@@ -19,32 +28,55 @@ describe('auth', () => {
   it('requires setup first, then allows exactly one owner', async () => {
     expect((await app.inject('/api/auth/status')).json()).toMatchObject({ setupRequired: true });
 
-    const weak = await app.inject({ method: 'POST', url: '/api/auth/setup', payload: { ...OWNER, password: 'short' } });
+    const weak = await app.inject({
+      method: 'POST',
+      url: '/api/auth/setup',
+      payload: { ...OWNER, password: 'short' },
+    });
     expect(weak.statusCode).toBe(400);
-    expect(weak.json()).toMatchObject({ error: 'ValidationError', message: 'password: Password must be at least 8 characters' });
+    expect(weak.json()).toMatchObject({
+      error: 'ValidationError',
+      message: 'password: Password must be at least 8 characters',
+    });
 
     const token = await setupOwner(app);
     expect(token).toBeTruthy();
     expect((await app.inject('/api/auth/status')).json()).toMatchObject({ setupRequired: false });
 
-    const again = await app.inject({ method: 'POST', url: '/api/auth/setup', payload: { ...OWNER, email: 'x@y.com' } });
+    const again = await app.inject({
+      method: 'POST',
+      url: '/api/auth/setup',
+      payload: { ...OWNER, email: 'x@y.com' },
+    });
     expect(again.statusCode).toBe(403);
   });
 
   it('logs in and protects the API', async () => {
     await setupOwner(app);
-    const bad = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { ...OWNER, password: 'Wrong123!' } });
+    const bad = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { ...OWNER, password: 'Wrong123!' },
+    });
     expect(bad.statusCode).toBe(401);
     expect(bad.json().message).toBe('Wrong email or password');
 
-    const ok = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { email: 'OWNER@example.com ', password: OWNER.password } });
+    const ok = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { email: 'OWNER@example.com ', password: OWNER.password },
+    });
     expect(ok.statusCode).toBe(200);
     const { token, user } = ok.json();
     expect(user).toMatchObject({ email: OWNER.email, role: 'owner' });
 
     expect((await app.inject('/api/workflows')).statusCode).toBe(401);
-    expect((await app.inject({ url: '/api/workflows', headers: auth('garbage') })).statusCode).toBe(401);
-    expect((await app.inject({ url: '/api/auth/me', headers: auth(token) })).json().user.email).toBe(OWNER.email);
+    expect((await app.inject({ url: '/api/workflows', headers: auth('garbage') })).statusCode).toBe(
+      401,
+    );
+    expect(
+      (await app.inject({ url: '/api/auth/me', headers: auth(token) })).json().user.email,
+    ).toBe(OWNER.email);
   });
 });
 
@@ -63,9 +95,15 @@ describe('workflows', () => {
     const wf = created.json();
     expect(wf).toMatchObject({ name: 'Receptionist', active: false, settings: {} });
 
-    const list = (await app.inject({ url: '/api/workflows?search=recep', headers: auth(token) })).json();
+    const list = (
+      await app.inject({ url: '/api/workflows?search=recep', headers: auth(token) })
+    ).json();
     expect(list.total).toBe(1);
-    expect(list.data[0]).toMatchObject({ id: wf.id, nodeCount: 1, nodeTypes: ['flowforge.manualTrigger'] });
+    expect(list.data[0]).toMatchObject({
+      id: wf.id,
+      nodeCount: 1,
+      nodeTypes: ['flowforge.manualTrigger'],
+    });
 
     const updated = await app.inject({
       method: 'PATCH',
@@ -84,13 +122,23 @@ describe('workflows', () => {
     });
     expect(stale.statusCode).toBe(409);
 
-    const versions = (await app.inject({ url: `/api/workflows/${wf.id}/versions`, headers: auth(token) })).json();
+    const versions = (
+      await app.inject({ url: `/api/workflows/${wf.id}/versions`, headers: auth(token) })
+    ).json();
     expect(versions.data).toHaveLength(2);
-    const first = await app.inject({ url: `/api/workflows/${wf.id}/versions/${wf.versionId}`, headers: auth(token) });
+    const first = await app.inject({
+      url: `/api/workflows/${wf.id}/versions/${wf.versionId}`,
+      headers: auth(token),
+    });
     expect(first.json().name).toBe('Receptionist');
 
-    expect((await app.inject({ method: 'DELETE', url: `/api/workflows/${wf.id}`, headers: auth(token) })).statusCode).toBe(204);
-    expect((await app.inject({ url: `/api/workflows/${wf.id}`, headers: auth(token) })).statusCode).toBe(404);
+    expect(
+      (await app.inject({ method: 'DELETE', url: `/api/workflows/${wf.id}`, headers: auth(token) }))
+        .statusCode,
+    ).toBe(204);
+    expect(
+      (await app.inject({ url: `/api/workflows/${wf.id}`, headers: auth(token) })).statusCode,
+    ).toBe(404);
   });
 
   it('validates the graph', async () => {
@@ -119,13 +167,16 @@ describe('workflows', () => {
 
   it('imports and exports JSON', async () => {
     const wf = (await create({ name: 'Export me', nodes: [manualTrigger] })).json();
-    const exported = await app.inject({ url: `/api/workflows/${wf.id}/export`, headers: auth(token) });
+    const exported = await app.inject({
+      url: `/api/workflows/${wf.id}/export`,
+      headers: auth(token),
+    });
     expect(exported.headers['content-disposition']).toBe('attachment; filename="Export me.json"');
     const imported = await app.inject({
       method: 'POST',
       url: '/api/workflows/import',
       headers: auth(token),
-      payload: { ...(exported.json() as Record<string, unknown>), name: "Imported" },
+      payload: { ...(exported.json() as Record<string, unknown>), name: 'Imported' },
     });
     expect(imported.statusCode).toBe(201);
     expect(imported.json()).toMatchObject({ name: 'Imported', nodes: [manualTrigger] });
@@ -135,7 +186,14 @@ describe('workflows', () => {
   it('lists node types', async () => {
     const res = (await app.inject({ url: '/api/node-types', headers: auth(token) })).json();
     const names = res.data.map((d: { name: string }) => d.name);
-    expect(names).toEqual(expect.arrayContaining(['flowforge.manualTrigger', 'flowforge.httpRequest', 'flowforge.code', 'flowforge.if']));
+    expect(names).toEqual(
+      expect.arrayContaining([
+        'flowforge.manualTrigger',
+        'flowforge.httpRequest',
+        'flowforge.code',
+        'flowforge.if',
+      ]),
+    );
   });
 });
 
@@ -153,7 +211,9 @@ describe('executions', () => {
       type: 'flowforge.code',
       typeVersion: 1,
       position: [200, 0],
-      parameters: { jsCode: 'return [{ json: { greeting: "hi" } }, { json: { greeting: "hello" } }];' },
+      parameters: {
+        jsCode: 'return [{ json: { greeting: "hi" } }, { json: { greeting: "hello" } }];',
+      },
     },
     {
       id: 'if',
@@ -164,7 +224,14 @@ describe('executions', () => {
       parameters: {
         conditions: {
           combinator: 'and',
-          conditions: [{ id: '1', leftValue: '={{ $json.greeting }}', rightValue: 'hi', operator: { type: 'string', operation: 'equals' } }],
+          conditions: [
+            {
+              id: '1',
+              leftValue: '={{ $json.greeting }}',
+              rightValue: 'hi',
+              operator: { type: 'string', operation: 'equals' },
+            },
+          ],
         },
       },
     },
@@ -175,7 +242,12 @@ describe('executions', () => {
   ];
 
   async function runWorkflow(workflowId: string, body: Record<string, unknown> = {}) {
-    const res = await app.inject({ method: 'POST', url: `/api/workflows/${workflowId}/run`, headers: auth(token), payload: body });
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/workflows/${workflowId}/run`,
+      headers: auth(token),
+      payload: body,
+    });
     expect(res.statusCode).toBe(202);
     const { executionId } = res.json();
     await settle(app, executionId);
@@ -183,26 +255,62 @@ describe('executions', () => {
   }
 
   it('runs a workflow and stores per-node data in the history', async () => {
-    const wf = (await app.inject({ method: 'POST', url: '/api/workflows', headers: auth(token), payload: { name: 'Run me', nodes, connections } })).json();
+    const wf = (
+      await app.inject({
+        method: 'POST',
+        url: '/api/workflows',
+        headers: auth(token),
+        payload: { name: 'Run me', nodes, connections },
+      })
+    ).json();
     const executionId = await runWorkflow(wf.id);
 
-    const detail = (await app.inject({ url: `/api/executions/${executionId}`, headers: auth(token) })).json();
-    expect(detail).toMatchObject({ status: 'success', mode: 'manual', lastNodeExecuted: 'If', running: false });
+    const detail = (
+      await app.inject({ url: `/api/executions/${executionId}`, headers: auth(token) })
+    ).json();
+    expect(detail).toMatchObject({
+      status: 'success',
+      mode: 'manual',
+      lastNodeExecuted: 'If',
+      running: false,
+    });
     const runData = detail.data.resultData.runData;
-    expect(runData.If[0].data.main[0]).toEqual([{ json: { greeting: 'hi' }, pairedItem: { item: 0 } }]);
-    expect(runData.If[0].data.main[1]).toEqual([{ json: { greeting: 'hello' }, pairedItem: { item: 1 } }]);
+    expect(runData.If[0].data.main[0]).toEqual([
+      { json: { greeting: 'hi' }, pairedItem: { item: 0 } },
+    ]);
+    expect(runData.If[0].data.main[1]).toEqual([
+      { json: { greeting: 'hello' }, pairedItem: { item: 1 } },
+    ]);
     expect(detail.workflowData.nodes).toHaveLength(3);
 
-    const list = (await app.inject({ url: `/api/executions?workflowId=${wf.id}`, headers: auth(token) })).json();
+    const list = (
+      await app.inject({ url: `/api/executions?workflowId=${wf.id}`, headers: auth(token) })
+    ).json();
     expect(list.data).toHaveLength(1);
-    expect(list.data[0]).toMatchObject({ id: executionId, workflowName: 'Run me', status: 'success' });
+    expect(list.data[0]).toMatchObject({
+      id: executionId,
+      workflowName: 'Run me',
+      status: 'success',
+    });
     expect(list.data[0].durationMs).toBeGreaterThanOrEqual(0);
   });
 
   it('runs unsaved editor data and supports "execute step"', async () => {
-    const wf = (await app.inject({ method: 'POST', url: '/api/workflows', headers: auth(token), payload: { name: 'Draft', nodes: [manualTrigger] } })).json();
-    const executionId = await runWorkflow(wf.id, { workflowData: { nodes, connections }, destinationNode: 'Code' });
-    const detail = (await app.inject({ url: `/api/executions/${executionId}`, headers: auth(token) })).json();
+    const wf = (
+      await app.inject({
+        method: 'POST',
+        url: '/api/workflows',
+        headers: auth(token),
+        payload: { name: 'Draft', nodes: [manualTrigger] },
+      })
+    ).json();
+    const executionId = await runWorkflow(wf.id, {
+      workflowData: { nodes, connections },
+      destinationNode: 'Code',
+    });
+    const detail = (
+      await app.inject({ url: `/api/executions/${executionId}`, headers: auth(token) })
+    ).json();
     expect(Object.keys(detail.data.resultData.runData).sort()).toEqual(['Code', 'Manual Trigger']);
   });
 
@@ -211,29 +319,45 @@ describe('executions', () => {
       manualTrigger,
       { ...nodes[1], parameters: { jsCode: 'throw new Error("CRM is down")' } },
     ];
-    const wf = (await app.inject({
-      method: 'POST',
-      url: '/api/workflows',
-      headers: auth(token),
-      payload: { name: 'Fails', nodes: failing, connections: [connections[0]] },
-    })).json();
+    const wf = (
+      await app.inject({
+        method: 'POST',
+        url: '/api/workflows',
+        headers: auth(token),
+        payload: { name: 'Fails', nodes: failing, connections: [connections[0]] },
+      })
+    ).json();
     const executionId = await runWorkflow(wf.id);
 
-    const detail = (await app.inject({ url: `/api/executions/${executionId}`, headers: auth(token) })).json();
+    const detail = (
+      await app.inject({ url: `/api/executions/${executionId}`, headers: auth(token) })
+    ).json();
     expect(detail.status).toBe('error');
     expect(detail.errorMessage).toBe('CRM is down [line 1]');
-    expect(detail.data.resultData.error).toMatchObject({ node: 'Code', name: 'NodeOperationError' });
+    expect(detail.data.resultData.error).toMatchObject({
+      node: 'Code',
+      name: 'NodeOperationError',
+    });
 
-    const errors = (await app.inject({ url: '/api/executions?status=error', headers: auth(token) })).json();
+    const errors = (
+      await app.inject({ url: '/api/executions?status=error', headers: auth(token) })
+    ).json();
     expect(errors.data.map((e: { id: string }) => e.id)).toEqual([executionId]);
-    expect((await app.inject({ url: '/api/executions?status=bogus', headers: auth(token) })).statusCode).toBe(400);
+    expect(
+      (await app.inject({ url: '/api/executions?status=bogus', headers: auth(token) })).statusCode,
+    ).toBe(400);
 
     // Fix the workflow, then retry using the current version.
     await app.inject({
       method: 'PATCH',
       url: `/api/workflows/${wf.id}`,
       headers: auth(token),
-      payload: { nodes: [manualTrigger, { ...nodes[1], parameters: { jsCode: 'return [{ json: { fixed: true } }]' } }] },
+      payload: {
+        nodes: [
+          manualTrigger,
+          { ...nodes[1], parameters: { jsCode: 'return [{ json: { fixed: true } }]' } },
+        ],
+      },
     });
     const retry = await app.inject({
       method: 'POST',
@@ -244,41 +368,69 @@ describe('executions', () => {
     expect(retry.statusCode).toBe(202);
     const retryId = retry.json().executionId;
     await settle(app, retryId);
-    const retried = (await app.inject({ url: `/api/executions/${retryId}`, headers: auth(token) })).json();
+    const retried = (
+      await app.inject({ url: `/api/executions/${retryId}`, headers: auth(token) })
+    ).json();
     expect(retried).toMatchObject({ status: 'success', mode: 'retry', retryOfId: executionId });
-    expect(retried.data.resultData.runData.Code[0].data.main[0]).toEqual([{ json: { fixed: true } }]);
-    const original = (await app.inject({ url: `/api/executions/${executionId}`, headers: auth(token) })).json();
+    expect(retried.data.resultData.runData.Code[0].data.main[0]).toEqual([
+      { json: { fixed: true } },
+    ]);
+    const original = (
+      await app.inject({ url: `/api/executions/${executionId}`, headers: auth(token) })
+    ).json();
     expect(original.retrySuccessId).toBe(retryId);
   });
 
   it('stops a running execution', async () => {
-    const wf = (await app.inject({
+    const wf = (
+      await app.inject({
+        method: 'POST',
+        url: '/api/workflows',
+        headers: auth(token),
+        payload: {
+          name: 'Slow',
+          nodes: [manualTrigger, { ...nodes[1], parameters: { jsCode: 'while (true) {}' } }],
+          connections: [connections[0]],
+        },
+      })
+    ).json();
+    const res = await app.inject({
       method: 'POST',
-      url: '/api/workflows',
+      url: `/api/workflows/${wf.id}/run`,
       headers: auth(token),
-      payload: {
-        name: 'Slow',
-        nodes: [manualTrigger, { ...nodes[1], parameters: { jsCode: 'while (true) {}' } }],
-        connections: [connections[0]],
-      },
-    })).json();
-    const res = await app.inject({ method: 'POST', url: `/api/workflows/${wf.id}/run`, headers: auth(token), payload: {} });
+      payload: {},
+    });
     const { executionId } = res.json();
     await new Promise((r) => setTimeout(r, 200));
-    const stop = await app.inject({ method: 'POST', url: `/api/executions/${executionId}/stop`, headers: auth(token) });
+    const stop = await app.inject({
+      method: 'POST',
+      url: `/api/executions/${executionId}/stop`,
+      headers: auth(token),
+    });
     expect(stop.statusCode).toBe(200);
-    const detail = (await app.inject({ url: `/api/executions/${executionId}`, headers: auth(token) })).json();
+    const detail = (
+      await app.inject({ url: `/api/executions/${executionId}`, headers: auth(token) })
+    ).json();
     expect(detail.status).toBe('canceled');
     expect(detail.errorMessage).toBe('Execution was stopped by a user');
   });
 
   it('pushes live node events over WebSocket', async () => {
-    const wf = (await app.inject({ method: 'POST', url: '/api/workflows', headers: auth(token), payload: { name: 'Live', nodes, connections } })).json();
+    const wf = (
+      await app.inject({
+        method: 'POST',
+        url: '/api/workflows',
+        headers: auth(token),
+        payload: { name: 'Live', nodes, connections },
+      })
+    ).json();
     await app.listen({ port: 0, host: '127.0.0.1' });
     const { port } = app.server.address() as AddressInfo;
 
     const denied = new WebSocket(`ws://127.0.0.1:${port}/api/push?token=bad`);
-    const closeCode = await new Promise<number>((resolve) => denied.on('close', (code) => resolve(code)));
+    const closeCode = await new Promise<number>((resolve) =>
+      denied.on('close', (code) => resolve(code)),
+    );
     expect(closeCode).toBe(4401);
 
     const ws = new WebSocket(`ws://127.0.0.1:${port}/api/push?token=${token}`);
@@ -311,8 +463,17 @@ describe('executions', () => {
   });
 
   it('marks executions interrupted by a restart as crashed', async () => {
-    const wf = (await app.inject({ method: 'POST', url: '/api/workflows', headers: auth(token), payload: { name: 'X', nodes } })).json();
-    const stuck = await prisma.execution.create({ data: { workflowId: wf.id, mode: 'manual', status: 'running', startedAt: new Date() } });
+    const wf = (
+      await app.inject({
+        method: 'POST',
+        url: '/api/workflows',
+        headers: auth(token),
+        payload: { name: 'X', nodes },
+      })
+    ).json();
+    const stuck = await prisma.execution.create({
+      data: { workflowId: wf.id, mode: 'manual', status: 'running', startedAt: new Date() },
+    });
     await app.services.executions.recoverCrashed();
     const row = await prisma.execution.findUniqueOrThrow({ where: { id: stuck.id } });
     expect(row.status).toBe('crashed');
@@ -332,7 +493,11 @@ describe('rate limiting', () => {
     config.editorDist = null;
     const limited = await buildApp(config, { prisma, logger: false });
     const attempt = () =>
-      limited.inject({ method: 'POST', url: '/api/auth/login', payload: { email: 'a@b.com', password: 'x' } });
+      limited.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: { email: 'a@b.com', password: 'x' },
+      });
     for (let i = 0; i < 3; i++) expect((await attempt()).statusCode).toBe(401);
     const blocked = await attempt();
     expect(blocked.statusCode).toBe(429);

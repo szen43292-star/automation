@@ -16,7 +16,8 @@ export const ManualTrigger: INodeType = {
     keywords: ['start', 'manual', 'test', 'click'],
     properties: [
       {
-        displayName: 'This node is where the workflow starts when you click "Execute workflow" in the editor.',
+        displayName:
+          'This node is where the workflow starts when you click "Execute workflow" in the editor.',
         name: 'notice',
         type: 'notice',
         default: '',

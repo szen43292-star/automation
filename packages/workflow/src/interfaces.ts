@@ -48,10 +48,7 @@ export interface INodeExecutionData {
 
 export type NodeParameterValue = string | number | boolean | null | undefined;
 export type NodeParameterValueType =
-  | NodeParameterValue
-  | INodeParameters
-  | NodeParameterValue[]
-  | INodeParameters[];
+  NodeParameterValue | INodeParameters | NodeParameterValue[] | INodeParameters[];
 
 export interface INodeParameters {
   [key: string]: NodeParameterValueType;
@@ -251,13 +248,7 @@ export interface IWorkflowBase {
 
 export type ExecutionMode = 'manual' | 'trigger' | 'webhook' | 'retry' | 'internal' | 'error';
 export type ExecutionStatus =
-  | 'new'
-  | 'running'
-  | 'success'
-  | 'error'
-  | 'canceled'
-  | 'crashed'
-  | 'waiting';
+  'new' | 'running' | 'success' | 'error' | 'canceled' | 'crashed' | 'waiting';
 
 export interface ISourceData {
   previousNode: string;

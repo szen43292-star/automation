@@ -1,5 +1,16 @@
-import { evaluateFilter, type IExecuteFunctions, type INodeExecutionData, type INodeType } from '@flowforge/workflow';
-import { conditionOptionsProperties, conditionsProperty, errorItem, getFilterParameters, wrapItemError } from '../shared/helpers';
+import {
+  evaluateFilter,
+  type IExecuteFunctions,
+  type INodeExecutionData,
+  type INodeType,
+} from '@flowforge/workflow';
+import {
+  conditionOptionsProperties,
+  conditionsProperty,
+  errorItem,
+  getFilterParameters,
+  wrapItemError,
+} from '../shared/helpers';
 
 export const If: INodeType = {
   description: {

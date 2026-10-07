@@ -9,7 +9,9 @@ async function main() {
   await app.listen({ port: config.PORT, host: config.HOST });
   app.log.info(`FlowForge ${app.flowforgeVersion} ready on ${config.PUBLIC_URL}`);
   if (!config.editorDist) {
-    app.log.info('Editor build not found - run "pnpm --filter @flowforge/editor build" or use the Vite dev server');
+    app.log.info(
+      'Editor build not found - run "pnpm --filter @flowforge/editor build" or use the Vite dev server',
+    );
   }
 
   let closing = false;

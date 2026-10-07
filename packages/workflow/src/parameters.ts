@@ -39,7 +39,8 @@ export function getNodeParameters(
   const merged: INodeParameters = { ...current };
   for (const prop of properties) {
     if (prop.type === 'notice') continue;
-    if (merged[prop.name] === undefined) merged[prop.name] = deepClone(prop.default) as NodeParameterValueType;
+    if (merged[prop.name] === undefined)
+      merged[prop.name] = deepClone(prop.default) as NodeParameterValueType;
   }
   for (const prop of properties) {
     if (prop.type === 'notice') continue;
@@ -50,7 +51,10 @@ export function getNodeParameters(
 }
 
 /** Look up a property's definition, following collection paths like `options.timeout`. */
-export function findProperty(properties: INodeProperties[], path: string): INodeProperties | undefined {
+export function findProperty(
+  properties: INodeProperties[],
+  path: string,
+): INodeProperties | undefined {
   const [head, ...rest] = path.split('.');
   const prop = properties.find((p) => p.name === head);
   if (!prop || rest.length === 0) return prop;
@@ -59,7 +63,9 @@ export function findProperty(properties: INodeProperties[], path: string): INode
   }
   if (prop.type === 'fixedCollection') {
     const [group, ...inner] = rest;
-    const coll = (prop.options as INodePropertyCollection[] | undefined)?.find((c) => c.name === group);
+    const coll = (prop.options as INodePropertyCollection[] | undefined)?.find(
+      (c) => c.name === group,
+    );
     return coll && inner.length ? findProperty(coll.values, inner.join('.')) : undefined;
   }
   return undefined;

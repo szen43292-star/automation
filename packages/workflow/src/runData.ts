@@ -30,6 +30,8 @@ export function summariseTask(task: ITaskData): ITaskSummary {
     status: task.executionStatus,
     executionTime: task.executionTime,
     itemCounts: getTaskItemCounts(task),
-    error: task.error ? { message: task.error.message, description: task.error.description } : undefined,
+    error: task.error
+      ? { message: task.error.message, description: task.error.description }
+      : undefined,
   };
 }

@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { getNodeParameters } from '@flowforge/workflow';
+import { getNodeParameters, type INodeParameters } from '@flowforge/workflow';
 import { builtinNodes } from '../src';
 import { errorOf, runNode } from './harness';
 
-const cond = (leftValue: unknown, type: string, operation: string, rightValue?: unknown) => ({
-  combinator: 'and',
-  conditions: [{ id: '1', leftValue, rightValue, operator: { type, operation } }],
-});
+const cond = (leftValue: unknown, type: string, operation: string, rightValue?: unknown) =>
+  ({
+    combinator: 'and',
+    conditions: [{ id: '1', leftValue, rightValue, operator: { type, operation } }],
+  }) as unknown as INodeParameters;
 
 describe('node descriptions', () => {
   it('are unique, complete and produce valid default parameters', () => {
@@ -36,10 +37,14 @@ describe('If', () => {
   });
 
   it('explains type errors and supports loose conversion', async () => {
-    const strict = await runNode('flowforge.if', { conditions: cond('={{ $json.amount }}', 'number', 'gt', 100) }, [
-      { amount: '500' },
-    ]);
-    expect(errorOf(strict.run)?.message).toMatch(/Wrong type: '500' is a string but was expecting a number/);
+    const strict = await runNode(
+      'flowforge.if',
+      { conditions: cond('={{ $json.amount }}', 'number', 'gt', 100) },
+      [{ amount: '500' }],
+    );
+    expect(errorOf(strict.run)?.message).toMatch(
+      /Wrong type: '500' is a string but was expecting a number/,
+    );
 
     const loose = await runNode(
       'flowforge.if',
@@ -78,7 +83,9 @@ describe('Edit Fields', () => {
       },
       [{ name: 'Asha', other: 1 }],
     );
-    expect(output()).toEqual([{ customer: { name: 'Asha' }, total: 42.5, vip: true, tags: ['a', 'b'] }]);
+    expect(output()).toEqual([
+      { customer: { name: 'Asha' }, total: 42.5, vip: true, tags: ['a', 'b'] },
+    ]);
   });
 
   it('can include other fields and use raw JSON', async () => {
@@ -110,9 +117,19 @@ describe('Sort', () => {
           ],
         },
       },
-      [{ group: 'b', score: 1 }, { group: 'a', score: 2 }, { group: 'a', score: 10 }, { score: 99 }],
+      [
+        { group: 'b', score: 1 },
+        { group: 'a', score: 2 },
+        { group: 'a', score: 10 },
+        { score: 99 },
+      ],
     );
-    expect(output()).toEqual([{ group: 'a', score: 10 }, { group: 'a', score: 2 }, { group: 'b', score: 1 }, { score: 99 }]);
+    expect(output()).toEqual([
+      { group: 'a', score: 10 },
+      { group: 'a', score: 2 },
+      { group: 'b', score: 1 },
+      { score: 99 },
+    ]);
   });
 });
 
@@ -123,7 +140,9 @@ describe('Aggregate', () => {
       {
         aggregate: 'aggregateIndividualFields',
         fieldsToAggregate: {
-          fieldToAggregate: [{ fieldToAggregate: 'email', renameField: true, outputFieldName: 'emails' }],
+          fieldToAggregate: [
+            { fieldToAggregate: 'email', renameField: true, outputFieldName: 'emails' },
+          ],
         },
       },
       [{ email: 'a@x.com' }, { email: 'b@x.com' }, {}],
@@ -131,7 +150,10 @@ describe('Aggregate', () => {
     expect(output()).toEqual([{ emails: ['a@x.com', 'b@x.com'] }]);
   });
   it('aggregates all item data', async () => {
-    const { output } = await runNode('flowforge.aggregate', { aggregate: 'aggregateAllItemData' }, [{ a: 1 }, { a: 2 }]);
+    const { output } = await runNode('flowforge.aggregate', { aggregate: 'aggregateAllItemData' }, [
+      { a: 1 },
+      { a: 2 },
+    ]);
     expect(output()).toEqual([{ data: [{ a: 1 }, { a: 2 }] }]);
   });
 });
@@ -169,14 +191,21 @@ describe('Date & Time', () => {
     expect(diff.output()).toEqual([{ gap: { days: 2, hours: 12 } }]);
   });
   it('rejects invalid dates with a clear message', async () => {
-    const { run } = await runNode('flowforge.dateTime', { operation: 'formatDate', magnitude: 'not a date' });
+    const { run } = await runNode('flowforge.dateTime', {
+      operation: 'formatDate',
+      magnitude: 'not a date',
+    });
     expect(errorOf(run)?.message).toBe('"not a date" is not a valid date');
   });
 });
 
 describe('Limit / Split Out / Stop and Error', () => {
   it('limits items', async () => {
-    const { output } = await runNode('flowforge.limit', { maxItems: 2, keep: 'lastItems' }, [{ i: 1 }, { i: 2 }, { i: 3 }]);
+    const { output } = await runNode('flowforge.limit', { maxItems: 2, keep: 'lastItems' }, [
+      { i: 1 },
+      { i: 2 },
+      { i: 3 },
+    ]);
     expect(output()).toEqual([{ i: 2 }, { i: 3 }]);
   });
   it('splits out lists', async () => {

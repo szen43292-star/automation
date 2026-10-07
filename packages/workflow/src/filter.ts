@@ -113,7 +113,9 @@ export class FilterError extends Error {
 export function evaluateFilter(filter: FilterValue, options: FilterOptions): boolean {
   const conditions = filter.conditions ?? [];
   if (conditions.length === 0) return true;
-  const results = conditions.map((condition, index) => evaluateCondition(condition, options, index));
+  const results = conditions.map((condition, index) =>
+    evaluateCondition(condition, options, index),
+  );
   return filter.combinator === 'or' ? results.some(Boolean) : results.every(Boolean);
 }
 
@@ -124,7 +126,11 @@ function isEmptyValue(value: unknown): boolean {
   return false;
 }
 
-export function evaluateCondition(condition: FilterCondition, options: FilterOptions, index = 0): boolean {
+export function evaluateCondition(
+  condition: FilterCondition,
+  options: FilterOptions,
+  index = 0,
+): boolean {
   const { operator } = condition;
   const { operation } = operator;
 
@@ -143,10 +149,23 @@ export function evaluateCondition(condition: FilterCondition, options: FilterOpt
   const right = isSingleValueOperator(operator)
     ? undefined
     : operator.type === 'array' && operation.startsWith('length')
-      ? coerce(condition.rightValue, 'number', options, index, 'right')
+      ? coerce(
+          condition.rightValue,
+          'number',
+          { ...options, typeValidation: 'loose' },
+          index,
+          'right',
+        )
       : operator.type === 'array'
         ? condition.rightValue
-        : coerce(condition.rightValue, operator.type, options, index, 'right');
+        : // The right-hand side is usually a literal typed in the editor ("5"), so always convert it.
+          coerce(
+            condition.rightValue,
+            operator.type,
+            { ...options, typeValidation: 'loose' },
+            index,
+            'right',
+          );
 
   switch (operator.type) {
     case 'string': {
@@ -157,16 +176,26 @@ export function evaluateCondition(condition: FilterCondition, options: FilterOpt
         r = r.toLowerCase();
       }
       switch (operation) {
-        case 'equals': return l === r;
-        case 'notEquals': return l !== r;
-        case 'contains': return l.includes(r);
-        case 'notContains': return !l.includes(r);
-        case 'startsWith': return l.startsWith(r);
-        case 'notStartsWith': return !l.startsWith(r);
-        case 'endsWith': return l.endsWith(r);
-        case 'notEndsWith': return !l.endsWith(r);
-        case 'regex': return toRegex(r, options, index).test(l);
-        case 'notRegex': return !toRegex(r, options, index).test(l);
+        case 'equals':
+          return l === r;
+        case 'notEquals':
+          return l !== r;
+        case 'contains':
+          return l.includes(r);
+        case 'notContains':
+          return !l.includes(r);
+        case 'startsWith':
+          return l.startsWith(r);
+        case 'notStartsWith':
+          return !l.startsWith(r);
+        case 'endsWith':
+          return l.endsWith(r);
+        case 'notEndsWith':
+          return !l.endsWith(r);
+        case 'regex':
+          return toRegex(r, options, index).test(l);
+        case 'notRegex':
+          return !toRegex(r, options, index).test(l);
       }
       break;
     }
@@ -174,15 +203,21 @@ export function evaluateCondition(condition: FilterCondition, options: FilterOpt
       const l = left as number | null;
       const r = right as number | null;
       switch (operation) {
-        case 'equals': return l === r;
-        case 'notEquals': return l !== r;
+        case 'equals':
+          return l === r;
+        case 'notEquals':
+          return l !== r;
       }
       if (l === null || r === null) return false;
       switch (operation) {
-        case 'gt': return l > r;
-        case 'lt': return l < r;
-        case 'gte': return l >= r;
-        case 'lte': return l <= r;
+        case 'gt':
+          return l > r;
+        case 'lt':
+          return l < r;
+        case 'gte':
+          return l >= r;
+        case 'lte':
+          return l <= r;
       }
       break;
     }
@@ -190,36 +225,52 @@ export function evaluateCondition(condition: FilterCondition, options: FilterOpt
       const l = (left as DateTime | null)?.toMillis() ?? null;
       const r = (right as DateTime | null)?.toMillis() ?? null;
       switch (operation) {
-        case 'equals': return l === r;
-        case 'notEquals': return l !== r;
+        case 'equals':
+          return l === r;
+        case 'notEquals':
+          return l !== r;
       }
       if (l === null || r === null) return false;
       switch (operation) {
-        case 'after': return l > r;
-        case 'before': return l < r;
-        case 'afterOrEquals': return l >= r;
-        case 'beforeOrEquals': return l <= r;
+        case 'after':
+          return l > r;
+        case 'before':
+          return l < r;
+        case 'afterOrEquals':
+          return l >= r;
+        case 'beforeOrEquals':
+          return l <= r;
       }
       break;
     }
     case 'boolean': {
       switch (operation) {
-        case 'true': return left === true;
-        case 'false': return left === false;
-        case 'equals': return left === right;
-        case 'notEquals': return left !== right;
+        case 'true':
+          return left === true;
+        case 'false':
+          return left === false;
+        case 'equals':
+          return left === right;
+        case 'notEquals':
+          return left !== right;
       }
       break;
     }
     case 'array': {
       const l = (left as unknown[] | null) ?? [];
       switch (operation) {
-        case 'contains': return l.some((v) => looseEquals(v, right));
-        case 'notContains': return !l.some((v) => looseEquals(v, right));
-        case 'lengthEquals': return l.length === right;
-        case 'lengthNotEquals': return l.length !== right;
-        case 'lengthGt': return l.length > (right as number);
-        case 'lengthLt': return l.length < (right as number);
+        case 'contains':
+          return l.some((v) => looseEquals(v, right));
+        case 'notContains':
+          return !l.some((v) => looseEquals(v, right));
+        case 'lengthEquals':
+          return l.length === right;
+        case 'lengthNotEquals':
+          return l.length !== right;
+        case 'lengthGt':
+          return l.length > (right as number);
+        case 'lengthLt':
+          return l.length < (right as number);
       }
       break;
     }
@@ -229,7 +280,8 @@ export function evaluateCondition(condition: FilterCondition, options: FilterOpt
 
 function looseEquals(a: unknown, b: unknown): boolean {
   if (a === b) return true;
-  if (typeof a === 'object' || typeof b === 'object') return JSON.stringify(a) === JSON.stringify(b);
+  if (typeof a === 'object' || typeof b === 'object')
+    return JSON.stringify(a) === JSON.stringify(b);
   return String(a) === String(b);
 }
 

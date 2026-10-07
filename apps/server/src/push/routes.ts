@@ -3,7 +3,10 @@ import { z } from 'zod';
 import { toAuthUser, type AuthUser } from '../auth/auth';
 
 const messageSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('subscribe'), topic: z.string().regex(/^(workflow|execution):[\w-]+$/) }),
+  z.object({
+    type: z.literal('subscribe'),
+    topic: z.string().regex(/^(workflow|execution):[\w-]+$/),
+  }),
   z.object({ type: z.literal('unsubscribe'), topic: z.string() }),
   z.object({ type: z.literal('ping') }),
 ]);
@@ -30,7 +33,8 @@ export async function pushRoutes(app: FastifyInstance) {
     const canAccess = async (topic: string) => {
       const [kind, id] = topic.split(':') as [string, string];
       const scope = app.services.workflows.scope(user);
-      if (kind === 'workflow') return (await app.prisma.workflow.count({ where: { id, ...scope } })) > 0;
+      if (kind === 'workflow')
+        return (await app.prisma.workflow.count({ where: { id, ...scope } })) > 0;
       return (await app.prisma.execution.count({ where: { id, workflow: scope } })) > 0;
     };
 
@@ -45,9 +49,14 @@ export async function pushRoutes(app: FastifyInstance) {
       }
       if (message.type === 'subscribe') {
         if (await canAccess(message.topic)) app.push.subscribe(client, message.topic);
-        else socket.send(JSON.stringify({ type: 'error', data: { message: `Cannot subscribe to ${message.topic}` } }));
-      }
-      else if (message.type === 'unsubscribe') app.push.unsubscribe(client, message.topic);
+        else
+          socket.send(
+            JSON.stringify({
+              type: 'error',
+              data: { message: `Cannot subscribe to ${message.topic}` },
+            }),
+          );
+      } else if (message.type === 'unsubscribe') app.push.unsubscribe(client, message.topic);
       else socket.send(JSON.stringify({ type: 'pong' }));
     });
     socket.send(JSON.stringify({ type: 'connected', data: { userId: user.id } }));

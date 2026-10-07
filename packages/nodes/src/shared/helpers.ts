@@ -33,7 +33,8 @@ export const conditionOptionsProperties: INodeProperties[] = [
     name: 'looseTypeValidation',
     type: 'boolean',
     default: false,
-    description: 'Try to convert values (e.g. the string "5" to the number 5) instead of failing on a type mismatch',
+    description:
+      'Try to convert values (e.g. the string "5" to the number 5) instead of failing on a type mismatch',
   },
   {
     displayName: 'Options',
@@ -86,10 +87,14 @@ export function wrapItemError(ctx: IExecuteFunctions, error: unknown, itemIndex:
   if (error instanceof NodeOperationError) return error;
   if (error instanceof Error && error.name.startsWith('Node')) return error;
   if (error instanceof Error && error.name === 'ExpressionError') return error;
-  return new NodeOperationError(ctx.getNode(), error instanceof Error ? error.message : String(error), {
-    itemIndex,
-    cause: error,
-  });
+  return new NodeOperationError(
+    ctx.getNode(),
+    error instanceof Error ? error.message : String(error),
+    {
+      itemIndex,
+      cause: error,
+    },
+  );
 }
 
 /** Parse ISO strings, epoch millis, JS dates and luxon DateTimes. */

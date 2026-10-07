@@ -33,11 +33,15 @@ return { json: { ...$json, upper: $json.name.toUpperCase(), index: $itemIndex, w
       { name: 'asha', upper: 'ASHA', index: 0, wf: 'test' },
       { name: 'ravi', upper: 'RAVI', index: 1, wf: 'test' },
     ]);
-    expect(run.data.resultData.runData.Node![0]!.data!.main[0]![1]!.pairedItem).toEqual({ item: 1 });
+    expect(run.data.resultData.runData.Node![0]!.data!.main[0]![1]!.pairedItem).toEqual({
+      item: 1,
+    });
   });
 
   it('reports syntax errors with a line number', async () => {
-    const { run } = await runNode('flowforge.code', { jsCode: 'const a = 1;\nreturn [{ json: { a } ];' });
+    const { run } = await runNode('flowforge.code', {
+      jsCode: 'const a = 1;\nreturn [{ json: { a } ];',
+    });
     expect(run.status).toBe('error');
     expect(errorOf(run)?.message).toMatch(/\[line 2\]/);
   });
@@ -45,7 +49,10 @@ return { json: { ...$json, upper: $json.name.toUpperCase(), index: $itemIndex, w
   it('reports runtime errors with item index and line', async () => {
     const { run } = await runNode(
       'flowforge.code',
-      { mode: 'runOnceForEachItem', jsCode: 'if ($json.bad) {\n  throw new Error("bad item");\n}\nreturn $input.item;' },
+      {
+        mode: 'runOnceForEachItem',
+        jsCode: 'if ($json.bad) {\n  throw new Error("bad item");\n}\nreturn $input.item;',
+      },
       [{ bad: false }, { bad: true }],
     );
     const error = errorOf(run)!;
@@ -66,7 +73,14 @@ return { json: { ...$json, upper: $json.name.toUpperCase(), index: $itemIndex, w
         require: typeof require, process: typeof process, fetch: typeof fetch, globalProcess: typeof globalThis.process
       } }];`,
     });
-    expect(output()).toEqual([{ require: 'undefined', process: 'undefined', fetch: 'undefined', globalProcess: 'undefined' }]);
+    expect(output()).toEqual([
+      {
+        require: 'undefined',
+        process: 'undefined',
+        fetch: 'undefined',
+        globalProcess: 'undefined',
+      },
+    ]);
   });
 
   it('stops infinite loops', async () => {

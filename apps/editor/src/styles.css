@@ -1,0 +1,258 @@
+@import 'tailwindcss';
+@import '@xyflow/react/dist/style.css';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --ff-bg: #f5f6f8;
+  --ff-panel: #ffffff;
+  --ff-panel-2: #f2f4f7;
+  --ff-panel-3: #e9ecf1;
+  --ff-border: #dfe3ea;
+  --ff-text: #1b1f27;
+  --ff-muted: #687083;
+  --ff-accent: #ff6d3a;
+  --ff-accent-hover: #f05a25;
+  --ff-accent-soft: #fff0ea;
+  --ff-success: #16a34a;
+  --ff-success-soft: #e8f7ee;
+  --ff-danger: #dc2626;
+  --ff-danger-soft: #fdecec;
+  --ff-warning: #c27803;
+  --ff-warning-soft: #fdf5e6;
+  --ff-info: #2563eb;
+  --ff-canvas: #f0f1f4;
+  --ff-canvas-dot: #c5c9d2;
+  --ff-node: #ffffff;
+  --ff-edge: #9aa1ae;
+  --ff-shadow: 0 1px 2px rgb(16 24 40 / 6%), 0 4px 12px rgb(16 24 40 / 6%);
+  color-scheme: light;
+}
+
+.dark {
+  --ff-bg: #0e1015;
+  --ff-panel: #161920;
+  --ff-panel-2: #1c2029;
+  --ff-panel-3: #252a35;
+  --ff-border: #2b313d;
+  --ff-text: #e6e8ee;
+  --ff-muted: #969eae;
+  --ff-accent: #ff7a4a;
+  --ff-accent-hover: #ff8f66;
+  --ff-accent-soft: #3a2117;
+  --ff-success: #34c26b;
+  --ff-success-soft: #13291c;
+  --ff-danger: #f05252;
+  --ff-danger-soft: #331718;
+  --ff-warning: #e3a008;
+  --ff-warning-soft: #33280f;
+  --ff-info: #60a5fa;
+  --ff-canvas: #12141a;
+  --ff-canvas-dot: #2c313c;
+  --ff-node: #1d212a;
+  --ff-edge: #5d6575;
+  --ff-shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 4px 14px rgb(0 0 0 / 35%);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--ff-bg);
+  --color-panel: var(--ff-panel);
+  --color-panel-2: var(--ff-panel-2);
+  --color-panel-3: var(--ff-panel-3);
+  --color-line: var(--ff-border);
+  --color-fg: var(--ff-text);
+  --color-muted: var(--ff-muted);
+  --color-accent: var(--ff-accent);
+  --color-accent-hover: var(--ff-accent-hover);
+  --color-accent-soft: var(--ff-accent-soft);
+  --color-success: var(--ff-success);
+  --color-success-soft: var(--ff-success-soft);
+  --color-danger: var(--ff-danger);
+  --color-danger-soft: var(--ff-danger-soft);
+  --color-warning: var(--ff-warning);
+  --color-warning-soft: var(--ff-warning-soft);
+  --color-info: var(--ff-info);
+  --color-node: var(--ff-node);
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --shadow-card: var(--ff-shadow);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--ff-bg);
+  color: var(--ff-text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  border-color: var(--ff-border);
+}
+
+::selection {
+  background: color-mix(in srgb, var(--ff-accent) 30%, transparent);
+}
+
+/* Inputs */
+.ff-input {
+  width: 100%;
+  border: 1px solid var(--ff-border);
+  background: var(--ff-panel);
+  color: var(--ff-text);
+  border-radius: 6px;
+  padding: 6px 9px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.ff-input:focus {
+  border-color: var(--ff-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ff-accent) 18%, transparent);
+}
+.ff-input.is-expression {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: color-mix(in srgb, var(--ff-success) 6%, var(--ff-panel));
+  border-color: color-mix(in srgb, var(--ff-success) 45%, var(--ff-border));
+}
+.ff-input.drop-target {
+  border-color: var(--ff-accent);
+  border-style: dashed;
+  background: var(--ff-accent-soft);
+}
+select.ff-input {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 26px;
+}
+
+/* React Flow theming */
+.react-flow {
+  --xy-background-color: var(--ff-canvas);
+  --xy-edge-stroke: var(--ff-edge);
+  --xy-edge-stroke-selected: var(--ff-accent);
+  --xy-connectionline-stroke: var(--ff-accent);
+  --xy-minimap-background-color: var(--ff-panel);
+  --xy-minimap-mask-background-color: color-mix(in srgb, var(--ff-bg) 70%, transparent);
+  --xy-minimap-node-background-color: var(--ff-panel-3);
+  --xy-controls-button-background-color: var(--ff-panel);
+  --xy-controls-button-background-color-hover: var(--ff-panel-2);
+  --xy-controls-button-color: var(--ff-text);
+  --xy-controls-button-border-color: var(--ff-border);
+  --xy-selection-background-color: color-mix(in srgb, var(--ff-accent) 8%, transparent);
+  --xy-selection-border: 1px dashed var(--ff-accent);
+  --xy-attribution-background-color: transparent;
+}
+.react-flow__edge-path {
+  stroke-width: 2;
+}
+.react-flow__edge.selected .react-flow__edge-path,
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke: var(--ff-accent);
+}
+.react-flow__handle {
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--ff-panel);
+  background: var(--ff-edge);
+}
+.react-flow__handle.target {
+  border-radius: 2px;
+  width: 8px;
+  height: 16px;
+}
+.react-flow__handle:hover {
+  background: var(--ff-accent);
+}
+.react-flow__node.selected > .ff-node-box,
+.react-flow__node.selected > div > .ff-node-box {
+  outline: 2px solid var(--ff-accent);
+  outline-offset: 2px;
+}
+.react-flow__controls {
+  box-shadow: var(--ff-shadow);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.react-flow__minimap {
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: var(--ff-shadow);
+}
+.react-flow__panel.react-flow__attribution {
+  display: none;
+}
+
+@keyframes ff-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.ff-spin {
+  animation: ff-spin 0.9s linear infinite;
+}
+@keyframes ff-pulse-border {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--ff-accent) 45%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--ff-accent) 0%, transparent);
+  }
+}
+.ff-running {
+  animation: ff-pulse-border 1.2s ease-in-out infinite;
+}
+
+.ff-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.ff-scroll::-webkit-scrollbar-thumb {
+  background: var(--ff-panel-3);
+  border-radius: 8px;
+}
+
+.cm-editor {
+  border-radius: 6px;
+  border: 1px solid var(--ff-border);
+  font-size: 12.5px;
+}
+.cm-editor.cm-focused {
+  outline: none !important;
+  border-color: var(--ff-accent);
+}
+
+.ff-markdown h1,
+.ff-markdown h2,
+.ff-markdown h3 {
+  font-weight: 650;
+  margin: 0 0 6px;
+}
+.ff-markdown h1 {
+  font-size: 18px;
+}
+.ff-markdown h2 {
+  font-size: 16px;
+}
+.ff-markdown p {
+  margin: 0 0 6px;
+}
+.ff-markdown code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: rgb(0 0 0 / 7%);
+  padding: 1px 4px;
+  border-radius: 4px;
+}

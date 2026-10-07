@@ -86,7 +86,10 @@ export const Sort: INodeType = {
   },
 
   async execute(this: IExecuteFunctions) {
-    const items = this.getInputData().map((item, index) => ({ ...item, pairedItem: { item: index } }));
+    const items = this.getInputData().map((item, index) => ({
+      ...item,
+      pairedItem: { item: index },
+    }));
     const type = this.getNodeParameter<string>('type', 0, 'simple');
 
     if (type === 'random') {
@@ -107,7 +110,10 @@ export const Sort: INodeType = {
     }
     const sorted: INodeExecutionData[] = [...items].sort((a, b) => {
       for (const field of fields) {
-        const result = compareValues(getPath(a.json, field.fieldName), getPath(b.json, field.fieldName));
+        const result = compareValues(
+          getPath(a.json, field.fieldName),
+          getPath(b.json, field.fieldName),
+        );
         if (result !== 0) {
           const missing = [getPath(a.json, field.fieldName), getPath(b.json, field.fieldName)].some(
             (v) => v === undefined || v === null,

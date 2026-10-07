@@ -99,7 +99,9 @@ export class WorkflowExecute {
       await additional.hooks?.workflowExecuteBefore?.();
       this.initialise(options);
       const allowed = this.allowedNodes(options.destinationNode);
-      const destination = options.destinationNode ? this.resolveNode(options.destinationNode) : undefined;
+      const destination = options.destinationNode
+        ? this.resolveNode(options.destinationNode)
+        : undefined;
       const maxRuns = additional.maxNodeRuns ?? 100_000;
       let runs = 0;
 
@@ -183,7 +185,8 @@ export class WorkflowExecute {
 
   private resolveNode(idOrName: string): INode {
     const node = this.workflow.getNode(idOrName) ?? this.workflow.getNodeByName(idOrName);
-    if (!node) throw new WorkflowOperationError(`Node "${idOrName}" does not exist in this workflow`);
+    if (!node)
+      throw new WorkflowOperationError(`Node "${idOrName}" does not exist in this workflow`);
     return node;
   }
 
@@ -270,12 +273,24 @@ export class WorkflowExecute {
     error: NodeErrorJSON,
   ): Array<INodeExecutionData[] | null> | null {
     if (node.onError === 'continueRegularOutput') {
-      return [[{ json: { error: error.message, ...(error.description ? { errorDescription: error.description } : {}) } }]];
+      return [
+        [
+          {
+            json: {
+              error: error.message,
+              ...(error.description ? { errorDescription: error.description } : {}),
+            },
+          },
+        ],
+      ];
     }
     if (node.onError === 'continueErrorOutput') {
       const outputCount = this.outputCount(node);
       const input = entry.data.main[0] ?? [{ json: {} }];
-      const outputs: Array<INodeExecutionData[] | null> = Array.from({ length: outputCount }, () => []);
+      const outputs: Array<INodeExecutionData[] | null> = Array.from(
+        { length: outputCount },
+        () => [],
+      );
       outputs.push(
         input.map((item, index) => ({
           json: { ...item.json, error: error.message },
@@ -292,7 +307,11 @@ export class WorkflowExecute {
     return this.additional.nodeTypes.get(node.type)?.description.outputs.length ?? 1;
   }
 
-  private async runNodeWithRetries(node: INode, entry: IExecuteStackEntry, runIndex: number): Promise<NodeRunResult> {
+  private async runNodeWithRetries(
+    node: INode,
+    entry: IExecuteStackEntry,
+    runIndex: number,
+  ): Promise<NodeRunResult> {
     const signal = this.controller.signal;
     const maxTries = node.retryOnFail ? Math.min(Math.max(node.maxTries ?? 3, 2), 10) : 1;
     const wait = node.waitBetweenTries ?? 1000;
@@ -310,7 +329,11 @@ export class WorkflowExecute {
     throw lastError;
   }
 
-  private async runNode(node: INode, entry: IExecuteStackEntry, runIndex: number): Promise<NodeRunResult> {
+  private async runNode(
+    node: INode,
+    entry: IExecuteStackEntry,
+    runIndex: number,
+  ): Promise<NodeRunResult> {
     const signal = this.controller.signal;
     const pinned = this.workflow.pinData[node.name];
     if (pinned && !node.disabled) return { outputs: [deepClone(pinned)], logs: [], hints: [] };
@@ -323,7 +346,8 @@ export class WorkflowExecute {
     const nodeType = this.additional.nodeTypes.get(node.type);
     if (!nodeType) {
       throw new NodeOperationError(node, `Unknown node type "${node.type}"`, {
-        description: 'The node is not installed on this server. Install it or remove the node from the workflow.',
+        description:
+          'The node is not installed on this server. Install it or remove the node from the workflow.',
       });
     }
 
@@ -363,11 +387,16 @@ export class WorkflowExecute {
     return { outputs, logs: context.logs, hints: context.hints };
   }
 
-  private normaliseOutput(node: INode, nodeType: INodeType, raw: unknown): Array<INodeExecutionData[] | null> {
+  private normaliseOutput(
+    node: INode,
+    nodeType: INodeType,
+    raw: unknown,
+  ): Array<INodeExecutionData[] | null> {
     if (raw === null || raw === undefined) return nodeType.description.outputs.map(() => []);
     if (!Array.isArray(raw) || raw.some((output) => output !== null && !Array.isArray(output))) {
       throw new NodeOperationError(node, 'The node returned data in an invalid format', {
-        description: 'execute() must return an array with one array of items per output, e.g. [[{ json: {} }]]',
+        description:
+          'execute() must return an array with one array of items per output, e.g. [[{ json: {} }]]',
       });
     }
     return raw.map((output: unknown[] | null) =>
@@ -376,7 +405,8 @@ export class WorkflowExecute {
         : output.map((item, index) => {
             if (!isObject(item) || !isObject(item.json)) {
               throw new NodeOperationError(node, `Item ${index} is not a valid item`, {
-                description: 'Every item must be an object with a "json" property, e.g. { json: { name: "Ada" } }',
+                description:
+                  'Every item must be an object with a "json" property, e.g. { json: { name: "Ada" } }',
                 itemIndex: index,
               });
             }
@@ -418,12 +448,20 @@ export class WorkflowExecute {
           previousNodeOutput: outputIndex,
           previousNodeRun: runIndex,
         };
-        const inputCount = this.additional.nodeTypes.get(target.type)?.description.inputs.length ?? 1;
+        const inputCount =
+          this.additional.nodeTypes.get(target.type)?.description.inputs.length ?? 1;
         if (inputCount <= 1) {
           next.push({ nodeId: target.id, data: { main: [items] }, source: [source] });
           continue;
         }
-        const ready = this.addToWaiting(target, conn.targetInput, inputCount, items, source, allowed);
+        const ready = this.addToWaiting(
+          target,
+          conn.targetInput,
+          inputCount,
+          items,
+          source,
+          allowed,
+        );
         if (ready) next.push(ready);
       }
     });
@@ -438,7 +476,9 @@ export class WorkflowExecute {
     source: ISourceData,
     allowed: Set<string> | null,
   ): IExecuteStackEntry | null {
-    let entry = this.waiting.find((w) => w.nodeId === target.id && w.data.main[inputIndex] === null);
+    let entry = this.waiting.find(
+      (w) => w.nodeId === target.id && w.data.main[inputIndex] === null,
+    );
     if (!entry) {
       entry = {
         nodeId: target.id,

@@ -41,12 +41,18 @@ export interface BuildOptions {
   logger?: FastifyServerOptions['logger'];
 }
 
-export async function buildApp(config: Config, options: BuildOptions = {}): Promise<FastifyInstance> {
+export async function buildApp(
+  config: Config,
+  options: BuildOptions = {},
+): Promise<FastifyInstance> {
   const app = Fastify({
     logger:
       options.logger ??
       (config.NODE_ENV === 'development'
-        ? { level: config.LOG_LEVEL, transport: { target: 'pino-pretty', options: { translateTime: 'HH:MM:ss' } } }
+        ? {
+            level: config.LOG_LEVEL,
+            transport: { target: 'pino-pretty', options: { translateTime: 'HH:MM:ss' } },
+          }
         : { level: config.LOG_LEVEL }),
     bodyLimit: 16 * 1024 * 1024,
     trustProxy: true,
@@ -82,7 +88,10 @@ export async function buildApp(config: Config, options: BuildOptions = {}): Prom
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
   });
   await app.register(rateLimit, { global: false });
-  await app.register(jwt, { secret: config.JWT_SECRET, sign: { expiresIn: config.JWT_EXPIRES_IN } });
+  await app.register(jwt, {
+    secret: config.JWT_SECRET,
+    sign: { expiresIn: config.JWT_EXPIRES_IN },
+  });
   await app.register(websocket, { options: { maxPayload: 64 * 1024 } });
 
   // --- Public routes -------------------------------------------------------
@@ -92,7 +101,9 @@ export async function buildApp(config: Config, options: BuildOptions = {}): Prom
       await prisma.$queryRaw`SELECT 1`;
       return { status: 'ok' };
     } catch {
-      return reply.status(503).send({ status: 'unavailable', message: 'Database is not reachable' });
+      return reply
+        .status(503)
+        .send({ status: 'unavailable', message: 'Database is not reachable' });
     }
   });
   await app.register(authRoutes, { rateLimit: config.AUTH_RATE_LIMIT });
@@ -101,7 +112,9 @@ export async function buildApp(config: Config, options: BuildOptions = {}): Prom
   // --- Authenticated API -----------------------------------------------------
   await app.register(async (api) => {
     api.addHook('onRequest', authenticate);
-    api.get('/api/node-types', async () => ({ data: nodeTypes.getAll().map((n) => n.description) }));
+    api.get('/api/node-types', async () => ({
+      data: nodeTypes.getAll().map((n) => n.description),
+    }));
     await api.register(workflowRoutes);
     await api.register(executionRoutes);
   });
@@ -110,18 +123,28 @@ export async function buildApp(config: Config, options: BuildOptions = {}): Prom
   if (config.editorDist) {
     const indexHtml = await readFile(resolve(config.editorDist, 'index.html'), 'utf8');
     await app.register(fastifyStatic, { root: config.editorDist, wildcard: false, index: false });
-    const serveIndex = (_req: unknown, reply: { type: (t: string) => { send: (b: string) => unknown } }) =>
-      reply.type('text/html').send(indexHtml);
+    const serveIndex = (
+      _req: unknown,
+      reply: { type: (t: string) => { send: (b: string) => unknown } },
+    ) => reply.type('text/html').send(indexHtml);
     app.get('/', serveIndex);
     app.setNotFoundHandler((request, reply) => {
-      if (request.method === 'GET' && !request.url.startsWith('/api/') && !/\.\w+$/.test(request.url.split('?')[0]!)) {
+      if (
+        request.method === 'GET' &&
+        !request.url.startsWith('/api/') &&
+        !/\.\w+$/.test(request.url.split('?')[0]!)
+      ) {
         return reply.type('text/html').send(indexHtml);
       }
-      return reply.status(404).send({ error: 'NotFound', message: `Route ${request.method} ${request.url} not found` });
+      return reply
+        .status(404)
+        .send({ error: 'NotFound', message: `Route ${request.method} ${request.url} not found` });
     });
   } else {
     app.setNotFoundHandler((request, reply) =>
-      reply.status(404).send({ error: 'NotFound', message: `Route ${request.method} ${request.url} not found` }),
+      reply
+        .status(404)
+        .send({ error: 'NotFound', message: `Route ${request.method} ${request.url} not found` }),
     );
   }
 

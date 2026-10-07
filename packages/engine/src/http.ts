@@ -13,7 +13,8 @@ export class HttpRequestError extends Error {
 }
 
 const NETWORK_MESSAGES: Record<string, string> = {
-  ENOTFOUND: 'The DNS server returned an error, perhaps the server is offline or the domain is wrong',
+  ENOTFOUND:
+    'The DNS server returned an error, perhaps the server is offline or the domain is wrong',
   EAI_AGAIN: 'The DNS lookup timed out, perhaps the server is offline or the domain is wrong',
   ECONNREFUSED: 'The service refused the connection - perhaps it is offline',
   ECONNRESET: 'The connection to the server was closed unexpectedly, perhaps it is offline',
@@ -29,10 +30,16 @@ export function buildUrl(url: string, qs?: IHttpRequestOptions['qs']): string {
   try {
     parsed = new URL(url);
   } catch {
-    throw new HttpRequestError(`Invalid URL: "${url}". URLs must start with http:// or https://`, 'INVALID_URL');
+    throw new HttpRequestError(
+      `Invalid URL: "${url}". URLs must start with http:// or https://`,
+      'INVALID_URL',
+    );
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new HttpRequestError(`Unsupported protocol "${parsed.protocol}" - use http:// or https://`, 'INVALID_URL');
+    throw new HttpRequestError(
+      `Unsupported protocol "${parsed.protocol}" - use http:// or https://`,
+      'INVALID_URL',
+    );
   }
   for (const [key, value] of Object.entries(qs ?? {})) {
     if (Array.isArray(value)) value.forEach((v) => parsed.searchParams.append(key, String(v)));
@@ -68,13 +75,17 @@ function isTextual(contentType: string): boolean {
   );
 }
 
-export async function httpRequest(options: IHttpRequestOptions, signal?: AbortSignal): Promise<IHttpResponse> {
+export async function httpRequest(
+  options: IHttpRequestOptions,
+  signal?: AbortSignal,
+): Promise<IHttpResponse> {
   const url = buildUrl(options.url, options.qs);
   const method = options.method ?? 'GET';
   const headers: Record<string, string> = {};
   for (const [k, v] of Object.entries(options.headers ?? {})) headers[k.toLowerCase()] = v;
   headers['user-agent'] ??= 'FlowForge';
-  const body = method === 'GET' || method === 'HEAD' ? undefined : encodeBody(options.body, headers);
+  const body =
+    method === 'GET' || method === 'HEAD' ? undefined : encodeBody(options.body, headers);
 
   const timeout = options.timeout ?? 300_000;
   const signals = [AbortSignal.timeout(timeout)];
@@ -85,7 +96,7 @@ export async function httpRequest(options: IHttpRequestOptions, signal?: AbortSi
     response = await fetch(url, {
       method,
       headers,
-      body: body as RequestInit["body"],
+      body: body as RequestInit['body'],
       redirect: options.followRedirects === false ? 'manual' : 'follow',
       signal: AbortSignal.any(signals),
     });
@@ -93,7 +104,9 @@ export async function httpRequest(options: IHttpRequestOptions, signal?: AbortSi
     if (signal?.aborted) throw signal.reason ?? error;
     const err = error as Error & { cause?: { code?: string; message?: string } };
     if (err.name === 'TimeoutError') {
-      throw new HttpRequestError(`The request timed out after ${timeout} ms`, 'ETIMEDOUT', { cause: error });
+      throw new HttpRequestError(`The request timed out after ${timeout} ms`, 'ETIMEDOUT', {
+        cause: error,
+      });
     }
     const code = err.cause?.code ?? 'ENETWORK';
     const host = new URL(url).host;
@@ -122,7 +135,10 @@ export async function httpRequest(options: IHttpRequestOptions, signal?: AbortSi
         bodyOut = text === '' ? {} : JSON.parse(text);
       } catch {
         if (responseType === 'json') {
-          throw new HttpRequestError('The response is not valid JSON. Set "Response Format" to Text to read it as-is.', 'EJSON');
+          throw new HttpRequestError(
+            'The response is not valid JSON. Set "Response Format" to Text to read it as-is.',
+            'EJSON',
+          );
         }
         bodyOut = text;
       }

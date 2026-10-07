@@ -33,13 +33,19 @@ export type Config = z.infer<typeof envSchema> & {
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const parsed = envSchema.safeParse(env);
   if (!parsed.success) {
-    const problems = parsed.error.issues.map((i) => `  - ${i.path.join('.')}: ${i.message}`).join('\n');
-    throw new Error(`Invalid server configuration:\n${problems}\nSee .env.example for all options.`);
+    const problems = parsed.error.issues
+      .map((i) => `  - ${i.path.join('.')}: ${i.message}`)
+      .join('\n');
+    throw new Error(
+      `Invalid server configuration:\n${problems}\nSee .env.example for all options.`,
+    );
   }
   const cfg = parsed.data;
-  const candidates = [cfg.EDITOR_DIST, resolve(here, '../../editor/dist'), resolve(here, '../editor')].filter(
-    (p): p is string => Boolean(p),
-  );
+  const candidates = [
+    cfg.EDITOR_DIST,
+    resolve(here, '../../editor/dist'),
+    resolve(here, '../editor'),
+  ].filter((p): p is string => Boolean(p));
   const editorDist = candidates.find((p) => existsSync(resolve(p, 'index.html'))) ?? null;
   return {
     ...cfg,

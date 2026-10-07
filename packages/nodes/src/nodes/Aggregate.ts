@@ -113,7 +113,8 @@ export const Aggregate: INodeType = {
     }
 
     const fields = (
-      this.getNodeParameter<{ fieldToAggregate?: FieldToAggregate[] }>('fieldsToAggregate', 0, {}).fieldToAggregate ?? []
+      this.getNodeParameter<{ fieldToAggregate?: FieldToAggregate[] }>('fieldsToAggregate', 0, {})
+        .fieldToAggregate ?? []
     ).filter((f) => f.fieldToAggregate);
     if (fields.length === 0) {
       throw new NodeOperationError(this.getNode(), 'No field to aggregate specified', {
@@ -123,7 +124,8 @@ export const Aggregate: INodeType = {
 
     const json: IDataObject = {};
     for (const field of fields) {
-      const output = field.renameField && field.outputFieldName ? field.outputFieldName : field.fieldToAggregate;
+      const output =
+        field.renameField && field.outputFieldName ? field.outputFieldName : field.fieldToAggregate;
       const values: unknown[] = [];
       for (const item of items) {
         const value = getPath(item.json, field.fieldToAggregate);
@@ -134,7 +136,9 @@ export const Aggregate: INodeType = {
       json[output] = values;
     }
     if (items.length > 0 && Object.values(json).every((v) => (v as unknown[]).length === 0)) {
-      this.addHint('None of the fields to aggregate were found in the input items. Check the field names.');
+      this.addHint(
+        'None of the fields to aggregate were found in the input items. Check the field names.',
+      );
     }
     return [[{ json, pairedItem }]];
   },

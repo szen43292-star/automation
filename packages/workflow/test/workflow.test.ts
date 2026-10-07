@@ -46,7 +46,9 @@ describe('paths', () => {
   });
   it('generates unique node names', () => {
     expect(uniqueNodeName('HTTP Request', ['HTTP Request'])).toBe('HTTP Request1');
-    expect(uniqueNodeName('HTTP Request1', ['HTTP Request', 'HTTP Request1'])).toBe('HTTP Request2');
+    expect(uniqueNodeName('HTTP Request1', ['HTTP Request', 'HTTP Request1'])).toBe(
+      'HTTP Request2',
+    );
     expect(uniqueNodeName('Code', [])).toBe('Code');
   });
 });
@@ -54,11 +56,18 @@ describe('paths', () => {
 describe('Workflow graph', () => {
   const lookup = {
     getDescription: (type: string) =>
-      (type === 'trigger' ? { group: ['trigger'] } : { group: ['core'] }) as unknown as INodeTypeDescription,
+      (type === 'trigger'
+        ? { group: ['trigger'] }
+        : { group: ['core'] }) as unknown as INodeTypeDescription,
   };
   const wf = new Workflow({
     name: 'g',
-    nodes: [node('t', 0, 0, 'trigger'), node('a', 200, 100), node('b', 200, -100), node('c', 400, 0)],
+    nodes: [
+      node('t', 0, 0, 'trigger'),
+      node('a', 200, 100),
+      node('b', 200, -100),
+      node('c', 400, 0),
+    ],
     connections: [
       { source: 't', sourceOutput: 0, target: 'a', targetInput: 0 },
       { source: 't', sourceOutput: 0, target: 'b', targetInput: 0 },
@@ -78,9 +87,14 @@ describe('Workflow graph', () => {
     expect(wf.getStartNode(lookup).id).toBe('t');
   });
   it('rejects duplicate names', () => {
-    expect(() => new Workflow({ name: 'x', nodes: [node('a'), { ...node('b'), name: 'A' }], connections: [] })).toThrow(
-      /Duplicate node name/,
-    );
+    expect(
+      () =>
+        new Workflow({
+          name: 'x',
+          nodes: [node('a'), { ...node('b'), name: 'A' }],
+          connections: [],
+        }),
+    ).toThrow(/Duplicate node name/);
   });
 });
 
@@ -104,7 +118,9 @@ describe('schemas', () => {
 describe('expressions', () => {
   const evaluator = new SimpleExpressionEvaluator();
   const data: ExpressionData = {
-    item: { json: { name: 'Asha', phone: '+919999999999', order: { id: 42, items: ['tea', 'cake'] } } },
+    item: {
+      json: { name: 'Asha', phone: '+919999999999', order: { id: 42, items: ['tea', 'cake'] } },
+    },
     itemIndex: 0,
     runIndex: 0,
     inputItems: [{ json: { name: 'Asha' } }, { json: { name: 'Ravi' } }],
@@ -168,7 +184,14 @@ describe('filter conditions', () => {
     expect(evaluateFilter(cond('number', 'gt', 10, 5), strict)).toBe(true);
     expect(evaluateFilter(cond('number', 'gt', '10', 5), loose)).toBe(true);
     expect(() => evaluateFilter(cond('number', 'gt', '10', 5), strict)).toThrow(/Wrong type/);
-    expect(evaluateFilter(cond('dateTime', 'after', '2025-02-01', '2025-01-01'), strict)).toBe(true);
+    // Literal right-hand values typed in the editor are always converted.
+    expect(evaluateFilter(cond('number', 'equals', 1, '1'), strict)).toBe(true);
+    expect(() => evaluateFilter(cond('number', 'equals', 1, 'abc'), strict)).toThrow(
+      /Wrong type: 'abc'/,
+    );
+    expect(evaluateFilter(cond('dateTime', 'after', '2025-02-01', '2025-01-01'), strict)).toBe(
+      true,
+    );
   });
   it('handles existence, arrays and combinators', () => {
     expect(evaluateFilter(cond('string', 'exists', undefined), strict)).toBe(false);
@@ -177,7 +200,12 @@ describe('filter conditions', () => {
     const or = {
       combinator: 'or' as const,
       conditions: [
-        { id: '1', leftValue: 1, rightValue: 2, operator: { type: 'number' as const, operation: 'equals' } },
+        {
+          id: '1',
+          leftValue: 1,
+          rightValue: 2,
+          operator: { type: 'number' as const, operation: 'equals' },
+        },
         { id: '2', leftValue: true, operator: { type: 'boolean' as const, operation: 'true' } },
       ],
     };
@@ -189,8 +217,20 @@ describe('parameters', () => {
   const props: INodeProperties[] = [
     { displayName: 'Method', name: 'method', type: 'options', default: 'GET' },
     { displayName: 'Send Body', name: 'sendBody', type: 'boolean', default: false },
-    { displayName: 'Body', name: 'body', type: 'string', default: '', displayOptions: { show: { sendBody: [true] } } },
-    { displayName: 'Hidden for GET', name: 'x', type: 'string', default: 'y', displayOptions: { hide: { method: ['GET'] } } },
+    {
+      displayName: 'Body',
+      name: 'body',
+      type: 'string',
+      default: '',
+      displayOptions: { show: { sendBody: [true] } },
+    },
+    {
+      displayName: 'Hidden for GET',
+      name: 'x',
+      type: 'string',
+      default: 'y',
+      displayOptions: { hide: { method: ['GET'] } },
+    },
   ];
   it('applies defaults for visible properties only', () => {
     expect(getNodeParameters(props, {})).toEqual({ method: 'GET', sendBody: false });

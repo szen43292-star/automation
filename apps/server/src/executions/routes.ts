@@ -40,7 +40,9 @@ export async function executionRoutes(app: FastifyInstance) {
       z.object({ useCurrentWorkflow: z.boolean().default(false) }),
       request.body ?? {},
     );
-    return reply.status(202).send(await executions.retry(request.currentUser, id, useCurrentWorkflow));
+    return reply
+      .status(202)
+      .send(await executions.retry(request.currentUser, id, useCurrentWorkflow));
   });
 
   app.delete('/api/executions/:id', async (request, reply) => {

@@ -35,11 +35,14 @@ function toItem(
     hasJsonKey && extraKeys.length === 0
       ? {
           json: value.json as INodeExecutionData['json'],
-          ...(isObject(value.binary) ? { binary: value.binary as INodeExecutionData['binary'] } : {}),
+          ...(isObject(value.binary)
+            ? { binary: value.binary as INodeExecutionData['binary'] }
+            : {}),
         }
       : { json: value };
   if (pairedItem !== undefined) item.pairedItem = { item: pairedItem };
-  else if (value.pairedItem !== undefined) item.pairedItem = value.pairedItem as INodeExecutionData['pairedItem'];
+  else if (value.pairedItem !== undefined)
+    item.pairedItem = value.pairedItem as INodeExecutionData['pairedItem'];
   return item;
 }
 
@@ -99,11 +102,16 @@ export const Code: INodeType = {
       ({ items: result } = await this.helpers.runCode({ code, mode, items }));
     } catch (error) {
       if (error instanceof Error && error.name === 'CodeExecutionError') {
-        const { itemIndex, lineNumber } = error as Error & { itemIndex?: number; lineNumber?: number };
+        const { itemIndex, lineNumber } = error as Error & {
+          itemIndex?: number;
+          lineNumber?: number;
+        };
         throw new NodeOperationError(this.getNode(), error.message, {
           itemIndex,
           description:
-            lineNumber !== undefined ? `Error in your code at line ${lineNumber}` : 'Error while running your code',
+            lineNumber !== undefined
+              ? `Error in your code at line ${lineNumber}`
+              : 'Error while running your code',
         });
       }
       throw error;
@@ -120,7 +128,9 @@ export const Code: INodeType = {
     }
 
     if (result === undefined || result === null) {
-      throw new NodeOperationError(this.getNode(), 'Code returned nothing', { description: RETURN_HINT });
+      throw new NodeOperationError(this.getNode(), 'Code returned nothing', {
+        description: RETURN_HINT,
+      });
     }
     const list = Array.isArray(result) ? result : [result];
     return [list.map((value, index) => toItem(this, value, index, undefined))];

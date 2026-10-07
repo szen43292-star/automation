@@ -87,7 +87,12 @@ export async function authRoutes(app: FastifyInstance, opts: { rateLimit: number
     const user = await app.prisma.$transaction(async (tx) => {
       if ((await tx.user.count()) > 0) return null;
       return tx.user.create({
-        data: { email: body.email, name: body.name, passwordHash: await hashPassword(body.password), role: 'owner' },
+        data: {
+          email: body.email,
+          name: body.name,
+          passwordHash: await hashPassword(body.password),
+          role: 'owner',
+        },
       });
     });
     if (!user) throw forbidden('This instance is already set up. Sign in instead.');
@@ -104,5 +109,7 @@ export async function authRoutes(app: FastifyInstance, opts: { rateLimit: number
     return issue(user);
   });
 
-  app.get('/api/auth/me', { onRequest: authenticate }, async (request) => ({ user: request.currentUser }));
+  app.get('/api/auth/me', { onRequest: authenticate }, async (request) => ({
+    user: request.currentUser,
+  }));
 }

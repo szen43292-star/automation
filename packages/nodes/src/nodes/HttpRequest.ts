@@ -41,7 +41,10 @@ export const HttpRequest: INodeType = {
         name: 'method',
         type: 'options',
         default: 'GET',
-        options: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'].map((m) => ({ name: m, value: m })),
+        options: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'].map((m) => ({
+          name: m,
+          value: m,
+        })),
       },
       {
         displayName: 'URL',
@@ -119,7 +122,13 @@ export const HttpRequest: INodeType = {
         type: 'fixedCollection',
         typeOptions: { multipleValues: true },
         default: { parameters: [{ name: '', value: '' }] },
-        displayOptions: { show: { sendBody: [true], specifyBody: ['keypair'], contentType: ['json', 'form-urlencoded'] } },
+        displayOptions: {
+          show: {
+            sendBody: [true],
+            specifyBody: ['keypair'],
+            contentType: ['json', 'form-urlencoded'],
+          },
+        },
         options: [
           {
             name: 'parameters',
@@ -137,7 +146,13 @@ export const HttpRequest: INodeType = {
         type: 'json',
         default: '{\n  "key": "value"\n}',
         typeOptions: { rows: 6, editor: 'json' },
-        displayOptions: { show: { sendBody: [true], specifyBody: ['json'], contentType: ['json', 'form-urlencoded'] } },
+        displayOptions: {
+          show: {
+            sendBody: [true],
+            specifyBody: ['json'],
+            contentType: ['json', 'form-urlencoded'],
+          },
+        },
       },
       {
         displayName: 'Content Type',
@@ -186,7 +201,12 @@ export const HttpRequest: INodeType = {
             default: false,
             description: 'Succeed even when the status code is not 2xx',
           },
-          { displayName: 'Follow Redirects', name: 'followRedirects', type: 'boolean', default: true },
+          {
+            displayName: 'Follow Redirects',
+            name: 'followRedirects',
+            type: 'boolean',
+            default: true,
+          },
           {
             displayName: 'Timeout (ms)',
             name: 'timeout',
@@ -199,7 +219,8 @@ export const HttpRequest: INodeType = {
             name: 'splitIntoItems',
             type: 'boolean',
             default: true,
-            description: 'When the response body is an array of objects, output one item per element',
+            description:
+              'When the response body is an array of objects, output one item per element',
           },
         ],
       },
@@ -214,7 +235,10 @@ export const HttpRequest: INodeType = {
       try {
         const method = this.getNodeParameter<IHttpRequestOptions['method']>('method', i);
         const url = String(this.getNodeParameter('url', i) ?? '').trim();
-        if (!url) throw new NodeOperationError(this.getNode(), 'The URL parameter is empty', { itemIndex: i });
+        if (!url)
+          throw new NodeOperationError(this.getNode(), 'The URL parameter is empty', {
+            itemIndex: i,
+          });
 
         const options = this.getNodeParameter<IDataObject>('options', i, {});
         const request: IHttpRequestOptions = {
@@ -222,22 +246,31 @@ export const HttpRequest: INodeType = {
           method,
           timeout: (options.timeout as number | undefined) ?? 300_000,
           followRedirects: (options.followRedirects as boolean | undefined) ?? true,
-          responseType: ((options.responseFormat as string | undefined) ?? 'auto') as IHttpRequestOptions['responseType'],
+          responseType: ((options.responseFormat as string | undefined) ??
+            'auto') as IHttpRequestOptions['responseType'],
           headers: {},
         };
 
         if (this.getNodeParameter('sendQuery', i, false)) {
-          request.qs = pairsToObject(this.getNodeParameter<{ parameters?: NameValue[] }>('queryParameters', i, {}).parameters);
+          request.qs = pairsToObject(
+            this.getNodeParameter<{ parameters?: NameValue[] }>('queryParameters', i, {})
+              .parameters,
+          );
         }
         if (this.getNodeParameter('sendHeaders', i, false)) {
           request.headers = pairsToObject(
-            this.getNodeParameter<{ parameters?: NameValue[] }>('headerParameters', i, {}).parameters,
+            this.getNodeParameter<{ parameters?: NameValue[] }>('headerParameters', i, {})
+              .parameters,
           );
         }
         if (this.getNodeParameter('sendBody', i, false)) {
           const contentType = this.getNodeParameter<string>('contentType', i, 'json');
           if (contentType === 'raw') {
-            request.headers!['content-type'] = this.getNodeParameter<string>('rawContentType', i, 'text/plain');
+            request.headers!['content-type'] = this.getNodeParameter<string>(
+              'rawContentType',
+              i,
+              'text/plain',
+            );
             request.body = this.getNodeParameter<string>('rawBody', i, '');
           } else {
             const specify = this.getNodeParameter<string>('specifyBody', i, 'keypair');
@@ -255,10 +288,15 @@ export const HttpRequest: INodeType = {
                 }
               } else body = raw;
             } else {
-              body = pairsToObject(this.getNodeParameter<{ parameters?: NameValue[] }>('bodyParameters', i, {}).parameters);
+              body = pairsToObject(
+                this.getNodeParameter<{ parameters?: NameValue[] }>('bodyParameters', i, {})
+                  .parameters,
+              );
             }
             request.headers!['content-type'] =
-              contentType === 'form-urlencoded' ? 'application/x-www-form-urlencoded' : 'application/json';
+              contentType === 'form-urlencoded'
+                ? 'application/x-www-form-urlencoded'
+                : 'application/json';
             request.body = body;
           }
         }
@@ -292,7 +330,11 @@ export const HttpRequest: INodeType = {
           output.push({
             json,
             binary: {
-              data: this.helpers.prepareBinaryData(response.binary, fileName, response.headers['content-type']),
+              data: this.helpers.prepareBinaryData(
+                response.binary,
+                fileName,
+                response.headers['content-type'],
+              ),
             },
             pairedItem: { item: i },
           });
@@ -315,7 +357,8 @@ export const HttpRequest: INodeType = {
         const body = response.body;
         const split = (options.splitIntoItems as boolean | undefined) ?? true;
         if (Array.isArray(body) && split && body.every(isObject)) {
-          for (const entry of body) output.push({ json: entry as IDataObject, pairedItem: { item: i } });
+          for (const entry of body)
+            output.push({ json: entry as IDataObject, pairedItem: { item: i } });
         } else if (isObject(body)) {
           output.push({ json: body, pairedItem: { item: i } });
         } else {

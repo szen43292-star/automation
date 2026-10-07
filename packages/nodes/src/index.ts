@@ -1,14 +1,14 @@
 import type { INodeType, INodeTypeDescription, INodeTypes } from '@flowforge/workflow';
-import { Aggregate } from './nodes/Aggregate.node';
-import { Code } from './nodes/Code.node';
-import { DateTimeNode } from './nodes/DateTime.node';
-import { EditFields } from './nodes/EditFields.node';
-import { Filter } from './nodes/Filter.node';
-import { HttpRequest } from './nodes/HttpRequest.node';
-import { If } from './nodes/If.node';
-import { ManualTrigger } from './nodes/ManualTrigger.node';
-import { Sort } from './nodes/Sort.node';
-import { Limit, NoOp, SplitOut, StickyNote, StopAndError } from './nodes/Utility.nodes';
+import { Aggregate } from './nodes/Aggregate';
+import { Code } from './nodes/Code';
+import { DateTimeNode } from './nodes/DateTime';
+import { EditFields } from './nodes/EditFields';
+import { Filter } from './nodes/Filter';
+import { HttpRequest } from './nodes/HttpRequest';
+import { If } from './nodes/If';
+import { ManualTrigger } from './nodes/ManualTrigger';
+import { Sort } from './nodes/Sort';
+import { Limit, NoOp, SplitOut, StickyNote, StopAndError } from './nodes/Utility';
 
 export {
   Aggregate,

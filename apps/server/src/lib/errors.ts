@@ -13,9 +13,12 @@ export class HttpError extends Error {
   }
 }
 
-export const badRequest = (message: string, details?: unknown) => new HttpError(400, message, 'BadRequest', details);
-export const unauthorized = (message = 'Authentication required') => new HttpError(401, message, 'Unauthorized');
-export const forbidden = (message = 'You do not have permission to do this') => new HttpError(403, message, 'Forbidden');
+export const badRequest = (message: string, details?: unknown) =>
+  new HttpError(400, message, 'BadRequest', details);
+export const unauthorized = (message = 'Authentication required') =>
+  new HttpError(401, message, 'Unauthorized');
+export const forbidden = (message = 'You do not have permission to do this') =>
+  new HttpError(403, message, 'Forbidden');
 export const notFound = (what = 'Resource') => new HttpError(404, `${what} not found`, 'NotFound');
 export const conflict = (message: string) => new HttpError(409, message, 'Conflict');
 
@@ -31,7 +34,11 @@ function formatZod(error: ZodError) {
   }));
   const first = issues[0];
   return {
-    message: first ? (first.path ? `${first.path}: ${first.message}` : first.message) : 'Invalid input',
+    message: first
+      ? first.path
+        ? `${first.path}: ${first.message}`
+        : first.message
+      : 'Invalid input',
     issues,
   };
 }
@@ -45,21 +52,35 @@ export function registerErrorHandler(app: FastifyInstance) {
     if (error instanceof HttpError) {
       return reply
         .status(error.statusCode)
-        .send({ error: error.code, message: error.message, ...(error.details ? { details: error.details } : {}) });
+        .send({
+          error: error.code,
+          message: error.message,
+          ...(error.details ? { details: error.details } : {}),
+        });
     }
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      if (error.code === 'P2025') return reply.status(404).send({ error: 'NotFound', message: 'Resource not found' });
+      if (error.code === 'P2025')
+        return reply.status(404).send({ error: 'NotFound', message: 'Resource not found' });
       if (error.code === 'P2002') {
-        return reply.status(409).send({ error: 'Conflict', message: 'A record with these values already exists' });
+        return reply
+          .status(409)
+          .send({ error: 'Conflict', message: 'A record with these values already exists' });
       }
     }
     const fastifyError = error as FastifyError;
     if (fastifyError.validation || (fastifyError.statusCode && fastifyError.statusCode < 500)) {
       const status = fastifyError.statusCode ?? 400;
-      const label = status === 429 ? 'TooManyRequests' : status === 413 ? 'PayloadTooLarge' : (fastifyError.code ?? 'BadRequest');
+      const label =
+        status === 429
+          ? 'TooManyRequests'
+          : status === 413
+            ? 'PayloadTooLarge'
+            : (fastifyError.code ?? 'BadRequest');
       return reply.status(status).send({ error: label, message: fastifyError.message });
     }
     request.log.error({ err: error }, 'Unhandled error');
-    return reply.status(500).send({ error: 'InternalServerError', message: 'Something went wrong on the server' });
+    return reply
+      .status(500)
+      .send({ error: 'InternalServerError', message: 'Something went wrong on the server' });
   });
 }

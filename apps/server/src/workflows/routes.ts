@@ -14,7 +14,10 @@ const idParams = z.object({ id: z.string().min(1) });
 
 const listQuery = z.object({
   search: z.string().trim().max(200).optional(),
-  active: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
+  active: z
+    .enum(['true', 'false'])
+    .transform((v) => v === 'true')
+    .optional(),
   limit: z.coerce.number().int().min(1).max(250).default(50),
   offset: z.coerce.number().int().min(0).default(0),
 });
@@ -41,7 +44,10 @@ export async function workflowRoutes(app: FastifyInstance) {
   });
 
   app.post('/api/workflows', async (request, reply) => {
-    const row = await workflows.create(request.currentUser, parse(workflowCreateSchema, request.body));
+    const row = await workflows.create(
+      request.currentUser,
+      parse(workflowCreateSchema, request.body),
+    );
     return reply.status(201).send(toWorkflowDTO(row));
   });
 
@@ -59,7 +65,11 @@ export async function workflowRoutes(app: FastifyInstance) {
 
   app.patch('/api/workflows/:id', async (request) => {
     const { id } = parse(idParams, request.params);
-    const row = await workflows.update(request.currentUser, id, parse(workflowUpdateSchema, request.body));
+    const row = await workflows.update(
+      request.currentUser,
+      id,
+      parse(workflowUpdateSchema, request.body),
+    );
     app.push.publish([`workflow:${id}`], {
       type: 'workflowUpdated',
       data: { workflowId: id, active: row.active, versionId: row.versionId },
@@ -77,7 +87,13 @@ export async function workflowRoutes(app: FastifyInstance) {
   app.get('/api/workflows/:id/export', async (request, reply) => {
     const { id } = parse(idParams, request.params);
     const wf = toWorkflowDTO(await workflows.get(request.currentUser, id));
-    const body = { name: wf.name, nodes: wf.nodes, connections: wf.connections, settings: wf.settings, pinData: wf.pinData };
+    const body = {
+      name: wf.name,
+      nodes: wf.nodes,
+      connections: wf.connections,
+      settings: wf.settings,
+      pinData: wf.pinData,
+    };
     const fileName = `${wf.name.replace(/[^\w\- ]+/g, '').trim() || 'workflow'}.json`;
     return reply.header('content-disposition', `attachment; filename="${fileName}"`).send(body);
   });
@@ -88,7 +104,10 @@ export async function workflowRoutes(app: FastifyInstance) {
   });
 
   app.get('/api/workflows/:id/versions/:versionId', async (request) => {
-    const { id, versionId } = parse(idParams.extend({ versionId: z.string().min(1) }), request.params);
+    const { id, versionId } = parse(
+      idParams.extend({ versionId: z.string().min(1) }),
+      request.params,
+    );
     return workflows.version(request.currentUser, id, versionId);
   });
 
