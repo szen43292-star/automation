@@ -4,7 +4,10 @@ import type {
   IDataObject,
   INode,
   INodeExecutionData,
+  INodeParameters,
+  INodeProperties,
   INodeTypeDescription,
+  IWorkflowBase,
 } from './interfaces';
 import type { INodeTypeLookup } from './Workflow';
 
@@ -20,6 +23,83 @@ export interface INodeType {
    * Return `null` to stop the branch without output.
    */
   execute?(this: IExecuteFunctions): Promise<INodeExecutionData[][] | null>;
+  /** Webhook triggers: turn an incoming HTTP request into items (or reject it). */
+  webhook?(this: IWebhookFunctions): Promise<IWebhookResult>;
+  /** Schedule triggers: cron expressions (5 or 6 fields) derived from the parameters. */
+  cronExpressions?(parameters: INodeParameters): string[];
+}
+
+export interface IWebhookRequest {
+  method: string;
+  path: string;
+  headers: Record<string, string | string[] | undefined>;
+  query: Record<string, unknown>;
+  body: unknown;
+  rawBody?: Buffer;
+  ip?: string;
+}
+
+export interface IWebhookResult {
+  /** Items to start the workflow with (one array per output). */
+  workflowData?: INodeExecutionData[][];
+  /** Respond immediately without starting the workflow (e.g. 401). */
+  response?: { status: number; body?: unknown; headers?: Record<string, string> };
+}
+
+export interface IWebhookFunctions {
+  getRequest(): IWebhookRequest;
+  getNode(): INode;
+  /** Webhook parameters are resolved with the request as `$json` ({ headers, query, body }). */
+  getNodeParameter<T = unknown>(name: string, fallback?: T): T;
+  getCredentials<T extends object = IDataObject>(type: string): Promise<T>;
+  getWorkflow(): { id?: string; name: string; active: boolean };
+  getMode(): ExecutionMode;
+  helpers: Pick<IExecuteHelpers, 'prepareBinaryData' | 'returnJsonArray'>;
+}
+
+/** Credential type definition (e.g. "httpHeaderAuth", "oAuth2Api"). */
+export interface ICredentialType {
+  name: string;
+  displayName: string;
+  icon?: string;
+  documentationUrl?: string;
+  properties: INodeProperties[];
+  /** How the credential is applied to HTTP requests. */
+  authenticate?: ICredentialAuthenticate;
+  /** Request used by "Test connection". */
+  test?: { request: IHttpRequestOptions; expectStatus?: number };
+  /** OAuth2 credentials store tokens in `oauthTokenData`. */
+  oauth2?: boolean;
+}
+
+export type ICredentialAuthenticate =
+  | { type: 'header'; name: string; value: string }
+  | { type: 'query'; name: string; value: string }
+  | { type: 'basic'; username: string; password: string }
+  | { type: 'bearer'; token: string }
+  | { type: 'oauth2' };
+
+export interface ICredentialTypes {
+  get(name: string): ICredentialType | undefined;
+  getAll(): ICredentialType[];
+}
+
+export interface IExecuteWorkflowSource {
+  workflowId?: string;
+  workflowData?: IWorkflowBase;
+}
+
+export interface IExecuteWorkflowResult {
+  executionId: string;
+  /** Output of the sub-workflow's last executed node (null when it produced nothing). */
+  data: INodeExecutionData[][] | null;
+}
+
+export interface IWaitOptions {
+  /** Resume at this time (null = no time limit). */
+  waitTill: Date | null;
+  /** Resume when /webhook-waiting/<executionId> is called. */
+  resumeOnWebhook?: boolean;
 }
 
 export interface INodeTypes extends INodeTypeLookup {
@@ -62,6 +142,22 @@ export interface IExecuteFunctions {
   /** Messages shown in the editor's output panel (e.g. console.log of Code node). */
   log(message: string): void;
   addHint(message: string): void;
+  /** Decrypted credentials attached to this node (`node.credentials[type]`). */
+  getCredentials<T extends object = IDataObject>(type: string): Promise<T>;
+  /** Mutable state of this node that survives between its runs in one execution. */
+  getContext(): IDataObject;
+  /** Pause the execution after this node (Wait node). */
+  putExecutionToWait(options: IWaitOptions): void;
+  /** Items passed in when the execution resumes after a Wait (e.g. the resume webhook request). */
+  getResumeData(): INodeExecutionData[] | undefined;
+  /** Send the HTTP response of the webhook that started this execution ("Respond to Webhook"). */
+  sendWebhookResponse(response: {
+    status: number;
+    body?: unknown;
+    headers?: Record<string, string>;
+  }): boolean;
+  /** Base URL of the server (for resume URLs etc.). */
+  getPublicUrl(): string;
   logger: ILogger;
   helpers: IExecuteHelpers;
 }
@@ -106,6 +202,17 @@ export interface ICodeRunResult {
 
 export interface IExecuteHelpers {
   httpRequest(options: IHttpRequestOptions): Promise<IHttpResponse>;
+  /** HTTP request with the given credential applied (refreshes OAuth2 tokens when needed). */
+  httpRequestWithAuthentication(
+    credentialType: string,
+    options: IHttpRequestOptions,
+  ): Promise<IHttpResponse>;
+  /** Run another workflow and wait for its result. */
+  executeWorkflow(
+    source: IExecuteWorkflowSource,
+    items: INodeExecutionData[],
+    options?: { waitForCompletion?: boolean },
+  ): Promise<IExecuteWorkflowResult>;
   runCode(options: ICodeRunOptions): Promise<ICodeRunResult>;
   returnJsonArray(data: IDataObject | IDataObject[]): INodeExecutionData[];
   prepareBinaryData(data: Buffer, fileName?: string, mimeType?: string): IBinaryData;

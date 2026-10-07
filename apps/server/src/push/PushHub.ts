@@ -34,7 +34,11 @@ export type PushEvent =
         errorMessage?: string;
       };
     }
-  | { type: 'workflowUpdated'; data: { workflowId: string; active: boolean; versionId: string } };
+  | { type: 'workflowUpdated'; data: { workflowId: string; active: boolean; versionId: string } }
+  | {
+      type: 'testWebhookReceived';
+      data: { workflowId: string; executionId: string; nodeId: string };
+    };
 
 interface Client {
   socket: WebSocket;

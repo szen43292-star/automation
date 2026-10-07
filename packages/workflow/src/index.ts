@@ -8,3 +8,6 @@ export * from './parameters';
 export * from './schemas';
 export * from './runData';
 export * from './nodeTypes';
+export * from './pairedItem';
+export * from './expressionRuntime';
+export * from './credentials';

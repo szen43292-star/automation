@@ -9,8 +9,28 @@ import { If } from './nodes/If';
 import { ManualTrigger } from './nodes/ManualTrigger';
 import { Sort } from './nodes/Sort';
 import { Limit, NoOp, SplitOut, StickyNote, StopAndError } from './nodes/Utility';
+import { LoopOverItems } from './nodes/LoopOverItems';
+import { Merge } from './nodes/Merge';
+import { ScheduleTrigger, scheduleToCron } from './nodes/Schedule';
+import { ErrorTrigger, ExecuteWorkflow, ExecuteWorkflowTrigger } from './nodes/SubWorkflow';
+import { Switch } from './nodes/Switch';
+import { Wait } from './nodes/Wait';
+import { RespondToWebhook, Webhook } from './nodes/Webhook';
+
+export * from './credentials';
+export { scheduleToCron };
 
 export {
+  ErrorTrigger,
+  ExecuteWorkflow,
+  ExecuteWorkflowTrigger,
+  LoopOverItems,
+  Merge,
+  RespondToWebhook,
+  ScheduleTrigger,
+  Switch,
+  Wait,
+  Webhook,
   Aggregate,
   Code,
   DateTimeNode,
@@ -30,6 +50,16 @@ export {
 /** Every node shipped with FlowForge. */
 export const builtinNodes: INodeType[] = [
   ManualTrigger,
+  Webhook,
+  ScheduleTrigger,
+  ExecuteWorkflowTrigger,
+  ErrorTrigger,
+  RespondToWebhook,
+  Merge,
+  Switch,
+  LoopOverItems,
+  Wait,
+  ExecuteWorkflow,
   HttpRequest,
   Code,
   If,

@@ -50,13 +50,11 @@ export function registerErrorHandler(app: FastifyInstance) {
       return reply.status(400).send({ error: 'ValidationError', message, issues });
     }
     if (error instanceof HttpError) {
-      return reply
-        .status(error.statusCode)
-        .send({
-          error: error.code,
-          message: error.message,
-          ...(error.details ? { details: error.details } : {}),
-        });
+      return reply.status(error.statusCode).send({
+        error: error.code,
+        message: error.message,
+        ...(error.details ? { details: error.details } : {}),
+      });
     }
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === 'P2025')

@@ -6,7 +6,13 @@ import {
   type INodeParameters,
   type IRun,
 } from '@flowforge/workflow';
-import { CodeSandbox, WorkflowExecute, createAdditionalData } from '@flowforge/engine';
+import {
+  CodeSandbox,
+  WorkflowExecute,
+  createAdditionalData,
+  type WorkflowExecuteAdditionalData,
+  type WorkflowRunOptions,
+} from '@flowforge/engine';
 import { createNodeTypes } from '../src';
 
 export const nodeTypes = createNodeTypes();
@@ -21,6 +27,7 @@ export async function runNode(
   parameters: INodeParameters,
   input: IDataObject[] = [{}],
   extra: Partial<INode> = {},
+  additional: Partial<WorkflowExecuteAdditionalData> = {},
 ): Promise<{ run: IRun; output: (outputIndex?: number) => IDataObject[] | undefined }> {
   const nodes: INode[] = [
     {
@@ -38,7 +45,13 @@ export async function runNode(
   ];
   const run = await new WorkflowExecute(
     new Workflow({ name: 'test', nodes, connections }),
-    createAdditionalData({ executionId: 'test', mode: 'manual', nodeTypes, codeSandbox }),
+    createAdditionalData({
+      executionId: 'test',
+      mode: 'manual',
+      nodeTypes,
+      codeSandbox,
+      ...additional,
+    }),
   ).run({ triggerItems: input.map((json) => ({ json })) });
   return {
     run,
@@ -49,4 +62,45 @@ export async function runNode(
 
 export function errorOf(run: IRun) {
   return run.data.resultData.error;
+}
+
+/** Run an arbitrary graph. Nodes get ids equal to their names. */
+export async function runGraph(
+  nodes: Array<Omit<INode, 'id' | 'typeVersion' | 'position'> & { position?: [number, number] }>,
+  connections: Array<[string, string, number?, number?]>,
+  options: WorkflowRunOptions = {},
+  additional: Partial<WorkflowExecuteAdditionalData> = {},
+) {
+  const full: INode[] = nodes.map((n, i) => ({
+    id: n.name,
+    typeVersion: 1,
+    position: n.position ?? [i * 200, 0],
+    ...n,
+  }));
+  const run = await new WorkflowExecute(
+    new Workflow({
+      name: 'graph',
+      nodes: full,
+      connections: connections.map(([source, target, sourceOutput = 0, targetInput = 0]) => ({
+        source,
+        target,
+        sourceOutput,
+        targetInput,
+      })),
+    }),
+    createAdditionalData({
+      executionId: 'graph',
+      mode: 'manual',
+      nodeTypes,
+      codeSandbox,
+      ...additional,
+    }),
+  ).run(options);
+  return {
+    run,
+    output: (node: string, outputIndex = 0, runIndex?: number) => {
+      const runs = run.data.resultData.runData[node];
+      return runs?.[runIndex ?? runs.length - 1]?.data?.main[outputIndex]?.map((i) => i.json);
+    },
+  };
 }

@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
-  SimpleExpressionEvaluator,
   Workflow,
+  applyCredentialAuthentication,
+  referencedNodes,
+  resolveNodeOutputs,
+  resolvePairedItem,
+  type IRunData,
   evaluateExpression,
   evaluateFilter,
   getNodeParameters,
@@ -12,6 +16,7 @@ import {
   splitTemplate,
   uniqueNodeName,
   workflowCreateSchema,
+  workflowUpdateSchema,
   workflowGraphSchema,
   type ExpressionData,
   type INode,
@@ -103,6 +108,9 @@ describe('schemas', () => {
     const parsed = workflowCreateSchema.parse({ name: ' Demo ' });
     expect(parsed).toMatchObject({ name: 'Demo', nodes: [], connections: [], settings: {} });
   });
+  it('leaves omitted fields out of partial updates', () => {
+    expect(workflowUpdateSchema.parse({ active: true })).toEqual({ active: true });
+  });
   it('detects dangling connections and duplicate names', () => {
     const result = workflowGraphSchema.safeParse({
       nodes: [node('a'), { ...node('b'), name: 'A' }],
@@ -115,54 +123,113 @@ describe('schemas', () => {
   });
 });
 
-describe('expressions', () => {
-  const evaluator = new SimpleExpressionEvaluator();
-  const data: ExpressionData = {
-    item: {
-      json: { name: 'Asha', phone: '+919999999999', order: { id: 42, items: ['tea', 'cake'] } },
-    },
-    itemIndex: 0,
-    runIndex: 0,
-    inputItems: [{ json: { name: 'Asha' } }, { json: { name: 'Ravi' } }],
-    getNodeOutput: (name) => (name === 'Lookup' ? [{ json: { customer: 'Asha K' } }] : undefined),
-    workflow: { id: 'w1', name: 'Receptionist' },
-    execution: { id: 'e1', mode: 'manual' },
-    parameters: {},
-    timezone: 'Asia/Kolkata',
-    vars: { BUSINESS: 'Chai Point' },
-  };
-  const ev = (expr: string) => evaluateExpression(expr, data, evaluator);
-
+describe('expression helpers', () => {
   it('splits templates', () => {
     expect(splitTemplate('Hi {{ $json.name }}!')).toEqual([
       { kind: 'text', value: 'Hi ' },
       { kind: 'code', value: '$json.name' },
       { kind: 'text', value: '!' },
     ]);
+    expect(splitTemplate('{{ "}}" + $json.a }}')).toEqual([
+      { kind: 'code', value: '"}}" + $json.a' },
+    ]);
   });
-  it('returns raw values for single blocks', () => {
-    expect(ev('={{ $json.order.id }}')).toBe(42);
-    expect(ev('={{ $json.order.items }}')).toEqual(['tea', 'cake']);
-    expect(ev('={{ $json.order.items[1] }}')).toBe('cake');
+  it('finds referenced nodes', () => {
+    expect(
+      referencedNodes(`$('Lookup').item.json.x + $node["CRM Lead"].json.y + $node.Sheet.json`),
+    ).toEqual(['Lookup', 'CRM Lead', 'Sheet']);
   });
-  it('interpolates templates', () => {
-    expect(ev('=Hello {{ $json.name }}, order {{ $json.order.id }}')).toBe('Hello Asha, order 42');
-    expect(ev('=Items: {{ $json.order.items }}')).toBe('Items: ["tea","cake"]');
+  it('evaluates templates with any evaluator', () => {
+    const data = { item: { json: { name: 'Asha' } } } as unknown as ExpressionData;
+    const evaluator = {
+      evaluate: (code: string, d: ExpressionData) =>
+        code === '$json.name' ? d.item!.json.name : 42,
+    };
+    expect(evaluateExpression('={{ $json.name }}', data, evaluator)).toBe('Asha');
+    expect(evaluateExpression('=Hi {{ $json.name }}, {{ x }}', data, evaluator)).toBe(
+      'Hi Asha, 42',
+    );
   });
-  it('references other nodes and context', () => {
-    expect(ev('={{ $node["Lookup"].json.customer }}')).toBe('Asha K');
-    expect(ev("={{ $('Lookup').item.json.customer }}")).toBe('Asha K');
-    expect(ev('={{ $input.last().json.name }}')).toBe('Ravi');
-    expect(ev('={{ $workflow.name }}')).toBe('Receptionist');
-    expect(ev('={{ $vars.BUSINESS }}')).toBe('Chai Point');
+  it('resolves paired items across nodes', () => {
+    const runData: IRunData = {
+      Start: [
+        {
+          startTime: 0,
+          executionTime: 0,
+          executionStatus: 'success',
+          source: [null],
+          data: { main: [[{ json: { id: 1 } }, { json: { id: 2 } }]] },
+        },
+      ],
+      Split: [
+        {
+          startTime: 0,
+          executionTime: 0,
+          executionStatus: 'success',
+          source: [{ previousNode: 'Start', previousNodeOutput: 0, previousNodeRun: 0 }],
+          data: { main: [[{ json: { p: 'a' }, pairedItem: { item: 1 } }]] },
+        },
+      ],
+    };
+    const source = { previousNode: 'Split', previousNodeOutput: 0, previousNodeRun: 0 };
+    expect(resolvePairedItem(runData, source, 0, 'Start')).toEqual({
+      ok: true,
+      item: { json: { id: 2 } },
+    });
+    expect(resolvePairedItem(runData, source, 0, 'Missing')).toEqual({
+      ok: false,
+      reason: 'notExecuted',
+    });
   });
-  it('supports $now', () => {
-    expect(typeof ev('={{ $now }}')).toBe('string');
-    expect(ev("={{ $now.toFormat('yyyy') }}")).toBe(String(new Date().getFullYear()));
+  it('computes dynamic outputs', () => {
+    const d = {
+      outputs: [{ type: 'main' as const }],
+      dynamicOutputs: {
+        modeParameter: 'mode',
+        modes: {
+          rules: {
+            fromArray: 'rules.values',
+            labelField: 'outputKey',
+            labelToggle: 'renameOutput',
+          },
+          expression: { fromCount: 'numberOutputs' },
+        },
+        extra: { parameter: 'options.fallbackOutput', equals: 'extra', label: 'Fallback' },
+      },
+    };
+    const rules = {
+      mode: 'rules',
+      rules: { values: [{ renameOutput: true, outputKey: 'Sales' }, {}] },
+      options: { fallbackOutput: 'extra' },
+    };
+    expect(resolveNodeOutputs(d, rules as never).map((o) => o.displayName)).toEqual([
+      'Sales',
+      '1',
+      'Fallback',
+    ]);
+    expect(resolveNodeOutputs(d, { mode: 'expression', numberOutputs: 3 }).length).toBe(3);
   });
-  it('gives a helpful error for unsupported code and missing nodes', () => {
-    expect(() => ev('={{ $json.a + 1 }}')).toThrow(/Unsupported expression/);
-    expect(() => ev('={{ $node["Nope"].json.x }}')).toThrow(/has not been executed/);
+  it('applies credentials to requests', () => {
+    const creds = { name: 'X-Api-Key', value: 'secret', user: 'u', password: 'p' };
+    expect(
+      applyCredentialAuthentication(
+        { type: 'header', name: '{{name}}', value: '{{value}}' },
+        creds,
+        { url: 'x' },
+      ).headers,
+    ).toEqual({ 'X-Api-Key': 'secret' });
+    expect(
+      applyCredentialAuthentication(
+        { type: 'basic', username: '{{user}}', password: '{{password}}' },
+        creds,
+        { url: 'x' },
+      ).headers,
+    ).toEqual({
+      authorization: `Basic ${Buffer.from('u:p').toString('base64')}`,
+    });
+    expect(() => applyCredentialAuthentication({ type: 'oauth2' }, {}, { url: 'x' })).toThrow(
+      /not connected/,
+    );
   });
 });
 

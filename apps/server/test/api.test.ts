@@ -114,6 +114,11 @@ describe('workflows', () => {
     expect(updated.statusCode).toBe(200);
     expect(updated.json().versionId).not.toBe(wf.versionId);
 
+    const kept = (
+      await app.inject({ url: `/api/workflows/${wf.id}`, headers: auth(token) })
+    ).json();
+    expect(kept.nodes).toHaveLength(1); // a rename must not touch the nodes
+
     const stale = await app.inject({
       method: 'PATCH',
       url: `/api/workflows/${wf.id}`,
@@ -373,7 +378,7 @@ describe('executions', () => {
     ).json();
     expect(retried).toMatchObject({ status: 'success', mode: 'retry', retryOfId: executionId });
     expect(retried.data.resultData.runData.Code[0].data.main[0]).toEqual([
-      { json: { fixed: true } },
+      { json: { fixed: true }, pairedItem: { item: 0 } },
     ]);
     const original = (
       await app.inject({ url: `/api/executions/${executionId}`, headers: auth(token) })

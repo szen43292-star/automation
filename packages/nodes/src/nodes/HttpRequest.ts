@@ -12,6 +12,14 @@ import { errorItem } from '../shared/helpers';
 
 type NameValue = { name: string; value: unknown };
 
+const GENERIC_AUTH_TYPES = [
+  'httpHeaderAuth',
+  'httpBasicAuth',
+  'httpQueryAuth',
+  'httpBearerAuth',
+  'oAuth2Api',
+];
+
 function pairsToObject(pairs: NameValue[] | undefined): Record<string, string> {
   const out: Record<string, string> = {};
   for (const { name, value } of pairs ?? []) {
@@ -35,6 +43,13 @@ export const HttpRequest: INodeType = {
     inputs: [{ type: 'main' }],
     outputs: [{ type: 'main' }],
     keywords: ['api', 'rest', 'fetch', 'curl', 'request', 'webhook'],
+    credentials: GENERIC_AUTH_TYPES.map((name) => ({
+      name,
+      required: true,
+      displayOptions: {
+        show: { authentication: ['genericCredentialType'], genericAuthType: [name] },
+      },
+    })),
     properties: [
       {
         displayName: 'Method',
@@ -53,6 +68,35 @@ export const HttpRequest: INodeType = {
         default: '',
         required: true,
         placeholder: 'https://api.example.com/v1/orders',
+      },
+      {
+        displayName: 'Authentication',
+        name: 'authentication',
+        type: 'options',
+        default: 'none',
+        noDataExpression: true,
+        options: [
+          { name: 'None', value: 'none' },
+          {
+            name: 'Credential (header, basic, query, bearer, OAuth2)',
+            value: 'genericCredentialType',
+          },
+        ],
+      },
+      {
+        displayName: 'Credential Type',
+        name: 'genericAuthType',
+        type: 'options',
+        default: 'httpHeaderAuth',
+        noDataExpression: true,
+        displayOptions: { show: { authentication: ['genericCredentialType'] } },
+        options: [
+          { name: 'Header Auth', value: 'httpHeaderAuth' },
+          { name: 'Basic Auth', value: 'httpBasicAuth' },
+          { name: 'Query Auth', value: 'httpQueryAuth' },
+          { name: 'Bearer Token', value: 'httpBearerAuth' },
+          { name: 'OAuth2', value: 'oAuth2Api' },
+        ],
       },
       { displayName: 'Send Query Parameters', name: 'sendQuery', type: 'boolean', default: false },
       {
@@ -303,7 +347,14 @@ export const HttpRequest: INodeType = {
 
         let response;
         try {
-          response = await this.helpers.httpRequest(request);
+          const authentication = this.getNodeParameter<string>('authentication', i, 'none');
+          response =
+            authentication === 'genericCredentialType'
+              ? await this.helpers.httpRequestWithAuthentication(
+                  this.getNodeParameter<string>('genericAuthType', i),
+                  request,
+                )
+              : await this.helpers.httpRequest(request);
         } catch (error) {
           if ((error as Error).name === 'HttpRequestError') {
             throw new NodeApiError(this.getNode(), (error as Error).message, {

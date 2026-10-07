@@ -51,6 +51,7 @@ export const workflowSettingsSchema = z
     saveDataSuccessExecution: z.enum(['all', 'none']).optional(),
     saveDataErrorExecution: z.enum(['all', 'none']).optional(),
     errorWorkflow: z.string().optional(),
+    maxConcurrency: z.number().int().min(1).max(1000).optional(),
   })
   .strict();
 
@@ -119,7 +120,17 @@ export const workflowCreateSchema = z.object({
   active: z.boolean().optional(),
 });
 
-export const workflowUpdateSchema = workflowCreateSchema.partial().extend({
+/**
+ * Partial update. Defined explicitly: `.partial()` would keep the create
+ * schema's defaults (Zod 4), turning an omitted `nodes` into `[]`.
+ */
+export const workflowUpdateSchema = z.object({
+  name: z.string().trim().min(1, 'Workflow name is required').max(128).optional(),
+  nodes: z.array(nodeSchema).max(2000).optional(),
+  connections: z.array(connectionSchema).max(10_000).optional(),
+  settings: workflowSettingsSchema.optional(),
+  pinData: pinDataSchema.optional(),
+  active: z.boolean().optional(),
   /** Optimistic concurrency: the versionId the client last loaded. */
   versionId: z.string().optional(),
 });

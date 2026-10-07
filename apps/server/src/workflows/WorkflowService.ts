@@ -41,13 +41,16 @@ export function toWorkflowDTO(row: WorkflowRow): WorkflowDTO {
 
 const json = (value: unknown) => value as Prisma.InputJsonValue;
 
-/** Node types that start an execution on their own (i.e. can be "activated"). */
-function isActivatableTrigger(nodeTypes: INodeTypes, type: string): boolean {
-  const description = nodeTypes.getDescription(type);
-  return Boolean(description?.group.includes('trigger') && type !== 'flowforge.manualTrigger');
+/** Registers / removes production triggers (implemented by ActiveWorkflowManager). */
+export interface WorkflowActivation {
+  validate(workflowId: string, workflow: IWorkflowBase): Promise<void>;
+  activate(row: WorkflowRow): Promise<void>;
+  deactivate(workflowId: string): Promise<void>;
 }
 
 export class WorkflowService {
+  activation?: WorkflowActivation;
+
   constructor(
     private readonly prisma: PrismaClient,
     private readonly nodeTypes: INodeTypes,
@@ -171,9 +174,16 @@ export class WorkflowService {
     const versionId = graphChanged ? randomUUID() : current.versionId;
 
     const active = input.active ?? current.active;
-    if (active) this.assertActivatable(nodes);
+    if (active && this.activation) {
+      await this.activation.validate(id, {
+        name: input.name ?? current.name,
+        nodes,
+        connections,
+        settings: (input.settings ?? current.settings) as IWorkflowSettings,
+      });
+    }
 
-    return this.prisma.$transaction(async (tx) => {
+    const saved = await this.prisma.$transaction(async (tx) => {
       const row = await tx.workflow.update({
         where: { id },
         data: {
@@ -201,23 +211,28 @@ export class WorkflowService {
       }
       return row;
     });
-  }
 
-  assertActivatable(nodes: INode[]) {
-    const triggers = nodes.filter(
-      (n) => !n.disabled && isActivatableTrigger(this.nodeTypes, n.type),
-    );
-    if (triggers.length === 0) {
-      throw badRequest(
-        'This workflow has no trigger that can start it automatically. "Manual Trigger" only runs from the editor - ' +
-          'add a trigger such as Webhook, Schedule or a WhatsApp trigger to activate it.',
-      );
+    // Keep production triggers in sync with the saved version.
+    if (this.activation) {
+      if (saved.active && (graphChanged || !current.active)) {
+        try {
+          await this.activation.activate(saved);
+        } catch (error) {
+          await this.prisma.workflow.update({ where: { id }, data: { active: false } });
+          await this.activation.deactivate(id);
+          throw error;
+        }
+      } else if (!saved.active && current.active) {
+        await this.activation.deactivate(id);
+      }
     }
+    return saved;
   }
 
   async remove(user: AuthUser, id: string) {
     const row = await this.get(user, id);
     if (user.role === 'member' && row.ownerId !== user.id) throw forbidden();
+    await this.activation?.deactivate(id);
     await this.prisma.workflow.delete({ where: { id } });
   }
 

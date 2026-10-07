@@ -5,9 +5,11 @@ async function main() {
   const config = loadConfig();
   const app = await buildApp(config);
 
-  await app.services.executions.recoverCrashed();
   await app.listen({ port: config.PORT, host: config.HOST });
-  app.log.info(`FlowForge ${app.flowforgeVersion} ready on ${config.PUBLIC_URL}`);
+  await app.startBackgroundServices();
+  app.log.info(
+    `FlowForge ${app.flowforgeVersion} ready on ${config.PUBLIC_URL} (executions: ${config.EXECUTIONS_MODE})`,
+  );
   if (!config.editorDist) {
     app.log.info(
       'Editor build not found - run "pnpm --filter @flowforge/editor build" or use the Vite dev server',

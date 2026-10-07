@@ -25,9 +25,10 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  workflows  Workflow[]
-  versions   WorkflowVersion[]
-  executions Execution[]
+  workflows   Workflow[]
+  versions    WorkflowVersion[]
+  executions  Execution[]
+  credentials Credential[]
 }
 
 model Workflow {
@@ -51,23 +52,24 @@ model Workflow {
 
   executions Execution[]
   versions   WorkflowVersion[]
+  webhooks   WebhookEntity[]
 
   @@index([ownerId])
   @@index([updatedAt])
 }
 
 model WorkflowVersion {
-  id          String    @id @default(cuid())
-  versionId   String    @unique
+  id          String   @id @default(cuid())
+  versionId   String   @unique
   workflowId  String
-  workflow    Workflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  workflow    Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
   name        String
   nodes       Json
   connections Json
   settings    Json
   authorId    String?
-  author      User?     @relation(fields: [authorId], references: [id], onDelete: SetNull)
-  createdAt   DateTime  @default(now())
+  author      User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
 
   @@index([workflowId, createdAt])
 }
@@ -92,27 +94,32 @@ enum ExecutionMode {
 }
 
 model Execution {
-  id               String          @id @default(cuid())
-  workflowId       String
-  workflow         Workflow        @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-  status           ExecutionStatus @default(new)
-  mode             ExecutionMode
-  startedAt        DateTime?
-  stoppedAt        DateTime?
-  createdAt        DateTime        @default(now())
+  id                String          @id @default(cuid())
+  workflowId        String
+  workflow          Workflow        @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  status            ExecutionStatus @default(new)
+  mode              ExecutionMode
+  startedAt         DateTime?
+  stoppedAt         DateTime?
+  createdAt         DateTime        @default(now())
   /// Execution this one retried.
-  retryOfId        String?
+  retryOfId         String?
   /// Successful retry of this execution.
-  retrySuccessId   String?
-  lastNodeExecuted String?
-  errorMessage     String?
-  triggeredById    String?
-  triggeredBy      User?           @relation(fields: [triggeredById], references: [id], onDelete: SetNull)
-  data             ExecutionData?
+  retrySuccessId    String?
+  lastNodeExecuted  String?
+  errorMessage      String?
+  /// Waiting executions resume at this time (Wait node).
+  waitTill          DateTime?
+  /// Sub-workflow executions point at the execution that called them.
+  parentExecutionId String?
+  triggeredById     String?
+  triggeredBy       User?           @relation(fields: [triggeredById], references: [id], onDelete: SetNull)
+  data              ExecutionData?
 
   @@index([workflowId, createdAt(sort: Desc)])
   @@index([status])
   @@index([createdAt(sort: Desc)])
+  @@index([status, waitTill])
 }
 
 /// Large payloads kept apart so execution lists stay fast.
@@ -123,4 +130,45 @@ model ExecutionData {
   workflowData Json
   /// IRunExecutionData
   data         Json
+  /// How to start a queued execution (start node, trigger items, resume data, …).
+  startData    Json?
+}
+
+/// Encrypted credentials (AES-256-GCM). `data` never leaves the server unencrypted
+/// except to the execution engine.
+model Credential {
+  id        String   @id @default(cuid())
+  name      String
+  type      String
+  data      String
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
+  @@index([type])
+}
+
+/// Instance-wide variables available as $vars.<key>.
+model Variable {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Production webhooks of active workflows.
+model WebhookEntity {
+  id         String   @id @default(cuid())
+  workflowId String
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  nodeId     String
+  method     String
+  path       String
+  createdAt  DateTime @default(now())
+
+  @@unique([method, path])
+  @@index([workflowId])
 }

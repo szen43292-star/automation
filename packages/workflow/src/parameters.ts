@@ -1,11 +1,13 @@
 import type {
+  INodeIO,
+  INodeTypeDescription,
   IDisplayOptions,
   INodeParameters,
   INodeProperties,
   INodePropertyCollection,
   NodeParameterValueType,
 } from './interfaces';
-import { deepClone, isObject } from './utils';
+import { deepClone, getPath, isObject } from './utils';
 
 /** Whether a property should be shown given the node's current parameter values. */
 export function isPropertyVisible(
@@ -77,4 +79,40 @@ export function getDefaultForPath(properties: INodeProperties[], path: string): 
 
 export function isCollectionOption(value: unknown): value is INodeProperties {
   return isObject(value) && 'displayName' in value && 'type' in value;
+}
+
+/** Outputs of a node, taking dynamic outputs (e.g. Switch rules) into account. */
+export function resolveNodeOutputs(
+  description: Pick<INodeTypeDescription, 'outputs' | 'dynamicOutputs'>,
+  parameters: INodeParameters,
+): INodeIO[] {
+  const dynamic = description.dynamicOutputs;
+  if (!dynamic) return description.outputs;
+  const mode = dynamic.modeParameter ? String(parameters[dynamic.modeParameter] ?? '') : 'default';
+  const spec = dynamic.modes[mode] ?? dynamic.modes.default;
+  let outputs: INodeIO[] = description.outputs;
+  if (spec?.fromArray) {
+    const entries = getPath(parameters, spec.fromArray);
+    const list = Array.isArray(entries) ? (entries as Array<Record<string, unknown>>) : [];
+    outputs = list.map((entry, i) => {
+      const custom =
+        spec.labelField && (!spec.labelToggle || entry?.[spec.labelToggle])
+          ? entry?.[spec.labelField]
+          : undefined;
+      return {
+        type: 'main' as const,
+        displayName: typeof custom === 'string' && custom ? custom : String(i),
+      };
+    });
+  } else if (spec?.fromCount) {
+    const count = Math.max(1, Math.min(64, Number(getPath(parameters, spec.fromCount)) || 1));
+    outputs = Array.from({ length: count }, (_, i) => ({
+      type: 'main' as const,
+      displayName: String(i),
+    }));
+  }
+  if (dynamic.extra && getPath(parameters, dynamic.extra.parameter) === dynamic.extra.equals) {
+    outputs = [...outputs, { type: 'main', displayName: dynamic.extra.label }];
+  }
+  return outputs;
 }

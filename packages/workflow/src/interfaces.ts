@@ -92,6 +92,10 @@ export interface INodePropertyTypeOptions {
   multipleValues?: boolean;
   sortable?: boolean;
   editor?: 'js' | 'json' | 'sql' | 'markdown';
+  /** The editor fills a random id when the node is added (e.g. webhook paths). */
+  generateId?: boolean;
+  /** Options loaded from the server: GET /api/node-options/<method> (e.g. "workflows"). */
+  loadOptionsMethod?: string;
 }
 
 /** A fixedCollection groups repeated value sets, e.g. `sortFields.values[]`. */
@@ -148,6 +152,26 @@ export interface INodeCredentialDescription {
   displayOptions?: IDisplayOptions;
 }
 
+export interface IDynamicOutputs {
+  /** Parameter that selects how outputs are computed (e.g. Switch "mode"). */
+  modeParameter?: string;
+  /** Per mode (or `default`): outputs from an array parameter or a count parameter. */
+  modes: Record<
+    string,
+    {
+      /** Dotted path to an array parameter; one output per entry. */
+      fromArray?: string;
+      /** Field of each entry used as the label when `labelToggle` is true. */
+      labelField?: string;
+      labelToggle?: string;
+      /** Parameter holding a number of outputs. */
+      fromCount?: string;
+    }
+  >;
+  /** Extra output (e.g. "Fallback") added when a parameter has a given value. */
+  extra?: { parameter: string; equals: string | number | boolean; label: string };
+}
+
 export interface INodeTypeDescription {
   /** Unique type id, e.g. `flowforge.httpRequest`. */
   name: string;
@@ -167,6 +191,25 @@ export interface INodeTypeDescription {
   properties: INodeProperties[];
   /** Max instances allowed in one workflow. */
   maxNodes?: number;
+  /**
+   * How a trigger node starts executions:
+   * - manual: only from the editor
+   * - webhook: an HTTP request to /webhook/<path> (see `webhook`)
+   * - schedule: cron rules (see INodeType.cronExpressions)
+   * - subworkflow: another workflow's "Execute Workflow" node
+   * - error: another workflow failed (error workflow)
+   * - event: an internal event source (WhatsApp messages/calls, phase 3+)
+   */
+  triggerKind?: 'manual' | 'webhook' | 'schedule' | 'subworkflow' | 'error' | 'event';
+  /** Webhook routing for nodes that receive HTTP requests. */
+  webhook?: {
+    /** Parameter holding the HTTP method (or a fixed method). */
+    methodParameter?: string;
+    method?: string;
+    pathParameter: string;
+  };
+  /** Outputs computed from parameters (e.g. one output per Switch rule). */
+  dynamicOutputs?: IDynamicOutputs;
   /** Alternative search terms for the node panel. */
   keywords?: string[];
   documentationUrl?: string;
@@ -225,7 +268,10 @@ export interface IWorkflowSettings {
   saveManualExecutions?: boolean;
   saveDataSuccessExecution?: 'all' | 'none';
   saveDataErrorExecution?: 'all' | 'none';
+  /** Workflow id started when a production execution of this workflow fails. */
   errorWorkflow?: string;
+  /** Max production executions of this workflow running at the same time. */
+  maxConcurrency?: number;
 }
 
 /** Map of node name → pinned output items. */
@@ -289,6 +335,12 @@ export interface IWaitingEntry {
 }
 
 export interface IRunExecutionData {
+  /** Per-node state that survives between runs of a node (e.g. Loop Over Items). */
+  contextData?: Record<string, IDataObject>;
+  /** Set when the execution is paused by a Wait node. */
+  waitTill?: string;
+  /** Node the execution is waiting in (resumes there). */
+  waitingNode?: string;
   resultData: {
     runData: IRunData;
     lastNodeExecuted?: string;

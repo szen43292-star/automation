@@ -1,5 +1,6 @@
 import {
   ExpressionError,
+  NodeApiError,
   NodeOperationError,
   findProperty,
   getPath,
@@ -20,7 +21,9 @@ import {
   type INodeExecutionData,
   type INodeType,
   type ITaskDataConnections,
+  type IWaitOptions,
   type NodeParameterValueType,
+  type PairedItemResult,
   type Workflow,
 } from '@flowforge/workflow';
 import type { WorkflowExecuteAdditionalData } from './types';
@@ -34,7 +37,20 @@ export interface ExecuteContextOptions {
   additional: WorkflowExecuteAdditionalData;
   signal: AbortSignal;
   getNodeOutput: ExpressionData['getNodeOutput'];
+  getPairedItem: (nodeName: string, itemIndex: number) => PairedItemResult;
+  nodeContext: IDataObject;
+  resumeData?: INodeExecutionData[];
   logger: ILogger;
+}
+
+export function prepareBinaryData(data: Buffer, fileName?: string, mimeType?: string): IBinaryData {
+  return {
+    data: data.toString('base64'),
+    mimeType: mimeType ?? 'application/octet-stream',
+    fileName,
+    fileExtension: fileName?.includes('.') ? fileName.split('.').pop() : undefined,
+    fileSize: data.length,
+  };
 }
 
 /** The `this` passed to `INodeType.execute()`. */
@@ -43,13 +59,41 @@ export class ExecuteContext implements IExecuteFunctions {
   readonly hints: string[] = [];
   readonly helpers: IExecuteHelpers;
   readonly logger: ILogger;
+  waitRequest?: IWaitOptions;
 
   constructor(private readonly opts: ExecuteContextOptions) {
     this.logger = opts.logger;
-    const { additional, signal } = opts;
+    const { additional, signal, node } = opts;
     this.helpers = {
       httpRequest: (options: IHttpRequestOptions): Promise<IHttpResponse> =>
         additional.httpRequest(options, signal),
+      httpRequestWithAuthentication: async (credentialType, options) => {
+        const credentials = additional.credentials;
+        if (!credentials)
+          throw new NodeOperationError(node, 'Credentials are not available in this context');
+        const authed = await credentials.authenticateRequest(node, credentialType, options);
+        const response = await additional.httpRequest(authed, signal);
+        // Expired OAuth2 access token: refresh once and retry.
+        if (
+          response.statusCode === 401 &&
+          credentials.refreshOAuth2 &&
+          (await credentials.refreshOAuth2(node, credentialType))
+        ) {
+          return additional.httpRequest(
+            await credentials.authenticateRequest(node, credentialType, options),
+            signal,
+          );
+        }
+        return response;
+      },
+      executeWorkflow: async (source, items, options) => {
+        if (!additional.executeWorkflow) {
+          throw new NodeOperationError(node, 'Sub-workflows cannot be executed in this context');
+        }
+        return additional.executeWorkflow(source, items, {
+          waitForCompletion: options?.waitForCompletion ?? true,
+        });
+      },
       runCode: async (options: ICodeRunOptions): Promise<ICodeRunResult> => {
         const { result, logs } = await additional.codeSandbox.run({
           code: options.code,
@@ -60,7 +104,7 @@ export class ExecuteContext implements IExecuteFunctions {
           meta: {
             workflow: this.getWorkflow(),
             execution: { id: additional.executionId, mode: additional.mode },
-            node: { name: opts.node.name },
+            node: { name: node.name },
             timezone: this.getTimezone(),
             vars: additional.variables ?? {},
           },
@@ -69,13 +113,7 @@ export class ExecuteContext implements IExecuteFunctions {
         return { items: result as INodeExecutionData[], logs };
       },
       returnJsonArray: (data) => toItems(data),
-      prepareBinaryData: (data: Buffer, fileName?: string, mimeType?: string): IBinaryData => ({
-        data: data.toString('base64'),
-        mimeType: mimeType ?? 'application/octet-stream',
-        fileName,
-        fileExtension: fileName?.includes('.') ? fileName.split('.').pop() : undefined,
-        fileSize: data.length,
-      }),
+      prepareBinaryData,
     };
   }
 
@@ -163,6 +201,47 @@ export class ExecuteContext implements IExecuteFunctions {
     if (!this.hints.includes(message)) this.hints.push(message);
   }
 
+  async getCredentials<T extends object = IDataObject>(type: string): Promise<T> {
+    const { node, additional } = this.opts;
+    if (!node.credentials?.[type]) {
+      throw new NodeOperationError(node, `No "${type}" credential selected`, {
+        description: 'Open the node and choose (or create) a credential.',
+      });
+    }
+    if (!additional.credentials)
+      throw new NodeOperationError(node, 'Credentials are not available in this context');
+    try {
+      return (await additional.credentials.getDecrypted(node, type)) as T;
+    } catch (error) {
+      if (error instanceof NodeApiError || error instanceof NodeOperationError) throw error;
+      throw new NodeOperationError(node, (error as Error).message);
+    }
+  }
+
+  getContext(): IDataObject {
+    return this.opts.nodeContext;
+  }
+
+  putExecutionToWait(options: IWaitOptions): void {
+    this.waitRequest = options;
+  }
+
+  getResumeData(): INodeExecutionData[] | undefined {
+    return this.opts.resumeData;
+  }
+
+  sendWebhookResponse(response: {
+    status: number;
+    body?: unknown;
+    headers?: Record<string, string>;
+  }): boolean {
+    return this.opts.additional.sendWebhookResponse?.(response) ?? false;
+  }
+
+  getPublicUrl(): string {
+    return (this.opts.additional.publicUrl ?? 'http://localhost:5678').replace(/\/+$/, '');
+  }
+
   private expressionData(itemIndex: number): ExpressionData {
     const items = this.getInputData(0);
     const { additional, node, runIndex } = this.opts;
@@ -172,8 +251,13 @@ export class ExecuteContext implements IExecuteFunctions {
       runIndex,
       inputItems: items,
       getNodeOutput: this.opts.getNodeOutput,
+      getPairedItem: this.opts.getPairedItem,
       workflow: this.getWorkflow(),
-      execution: { id: additional.executionId, mode: additional.mode },
+      execution: {
+        id: additional.executionId,
+        mode: additional.mode,
+        resumeUrl: `${this.getPublicUrl()}/webhook-waiting/${additional.executionId}`,
+      },
       parameters: node.parameters as IDataObject,
       timezone: this.getTimezone(),
       vars: additional.variables ?? {},

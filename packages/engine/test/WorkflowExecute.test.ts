@@ -489,7 +489,7 @@ describe('WorkflowExecute', () => {
     const { result } = await run({
       nodes: [
         n('Start', 'test.trigger'),
-        n('A', 'test.set', { parameters: { value: '={{ $json.a * 2 }}' } }),
+        n('A', 'test.set', { parameters: { value: '={{ $json.a.b.c }}' } }),
       ],
       connections: [c('Start', 'A')],
     });

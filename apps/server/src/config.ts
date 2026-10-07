@@ -23,6 +23,17 @@ const envSchema = z.object({
   CODE_MEMORY_MB: z.coerce.number().int().positive().default(128),
   /** Max sign-in / setup attempts per IP per minute. */
   AUTH_RATE_LIMIT: z.coerce.number().int().positive().default(10),
+  /** Key for encrypting credentials (64 hex chars or any long passphrase). Required in production. */
+  ENCRYPTION_KEY: z.string().min(16, 'ENCRYPTION_KEY must be at least 16 characters').optional(),
+  /** regular = run everything in this process; queue = production executions go through BullMQ workers. */
+  EXECUTIONS_MODE: z.enum(['regular', 'queue']).default('regular'),
+  REDIS_URL: z.string().optional(),
+  /** Parallel executions per worker process (queue mode). */
+  WORKER_CONCURRENCY: z.coerce.number().int().positive().default(10),
+  /** How long a webhook waits for "When Last Node Finishes" responses. */
+  WEBHOOK_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
+  /** Maximum webhook request body size. */
+  WEBHOOK_MAX_BODY_MB: z.coerce.number().positive().default(16),
 });
 
 export type Config = z.infer<typeof envSchema> & {
@@ -41,6 +52,21 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     );
   }
   const cfg = parsed.data;
+  if (cfg.EXECUTIONS_MODE === 'queue' && !cfg.REDIS_URL) {
+    throw new Error(
+      'Invalid server configuration:\n  - REDIS_URL is required when EXECUTIONS_MODE=queue',
+    );
+  }
+  if (!cfg.ENCRYPTION_KEY) {
+    if (cfg.NODE_ENV === 'production') {
+      throw new Error(
+        'Invalid server configuration:\n  - ENCRYPTION_KEY is required in production (generate one with: openssl rand -hex 32).\n' +
+          '    Keep it safe: credentials cannot be decrypted without it.',
+      );
+    }
+    // Development/test fallback, derived from the JWT secret.
+    cfg.ENCRYPTION_KEY = `dev:${cfg.JWT_SECRET}`;
+  }
   const candidates = [
     cfg.EDITOR_DIST,
     resolve(here, '../../editor/dist'),

@@ -7,6 +7,7 @@ export const ManualTrigger: INodeType = {
     icon: 'mouse-pointer-click',
     iconColor: '#ff6d5a',
     group: ['trigger'],
+    triggerKind: 'manual',
     version: 1,
     description: 'Runs the workflow when you click "Execute workflow" in the editor',
     defaults: { name: 'When clicking "Execute workflow"' },
