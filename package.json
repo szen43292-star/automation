@@ -1,0 +1,37 @@
+{
+  "name": "flowforge",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "turbo run dev --parallel --filter=@flowforge/server --filter=@flowforge/editor",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "db:migrate": "pnpm --filter @flowforge/server db:migrate",
+    "db:deploy": "pnpm --filter @flowforge/server db:deploy",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "prettier": "^3.6.2",
+    "turbo": "^2.5.8",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "isolated-vm",
+      "prisma",
+      "@prisma/client",
+      "@prisma/engines",
+      "esbuild",
+      "@tailwindcss/oxide",
+      "electron",
+      "@embedded-postgres/linux-x64",
+      "@embedded-postgres/windows-x64"
+    ]
+  }
+}

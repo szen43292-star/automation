@@ -1,0 +1,79 @@
+# FlowForge self-hosting stack.
+#   cp .env.example .env   # set JWT_SECRET, ENCRYPTION_KEY, POSTGRES_PASSWORD, PUBLIC_URL
+#   docker compose up -d --build
+# Then open http://localhost:5678 and create the owner account.
+#
+# Production executions run on the `worker` service (queue mode). Scale with:
+#   docker compose up -d --scale worker=3
+# Phase 4 adds `media` (WhatsApp call media server).
+
+name: flowforge
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: flowforge
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-flowforge}
+      POSTGRES_DB: flowforge
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U flowforge -d flowforge']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes']
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  server:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.server
+    image: flowforge/server:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - '${PORT:-5678}:5678'
+    environment: &env
+      DATABASE_URL: postgresql://flowforge:${POSTGRES_PASSWORD:-flowforge}@postgres:5432/flowforge
+      REDIS_URL: redis://redis:6379
+      EXECUTIONS_MODE: ${EXECUTIONS_MODE:-queue}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env (openssl rand -hex 32)}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Set ENCRYPTION_KEY in .env (openssl rand -hex 32) - it encrypts saved credentials}
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:5678}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DEFAULT_TIMEZONE: ${DEFAULT_TIMEZONE:-UTC}
+
+  worker:
+    image: flowforge/server:latest
+    restart: unless-stopped
+    depends_on:
+      server:
+        condition: service_healthy
+    command: ['node', '--no-node-snapshot', 'dist/worker.js']
+    healthcheck:
+      disable: true
+    environment:
+      <<: *env
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-10}
+
+volumes:
+  postgres-data:
+  redis-data:
