@@ -18,7 +18,17 @@ module.exports = {
   asar: true,
   npmRebuild: false,
   nodeGypRebuild: false,
-  publish: [{ provider: 'github', owner, repo, releaseType: 'release' }],
+  // RELEASES_PRIVATE=true (set by CI for private repositories): the updater authenticates with the
+  // token built into the app (UPDATE_GITHUB_TOKEN).
+  publish: [
+    {
+      provider: 'github',
+      owner,
+      repo,
+      releaseType: 'release',
+      private: process.env.RELEASES_PRIVATE === 'true',
+    },
+  ],
   win: {
     target: [{ target: 'nsis', arch: ['x64'] }],
     icon: 'build/icon.png',

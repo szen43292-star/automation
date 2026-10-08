@@ -145,6 +145,30 @@ if (isWindows) {
   }
 }
 
+// Private builds: keys from the environment (GitHub secrets in CI) are built into the app, so it
+// needs no setup. Only these names are taken; nothing is written when none are set.
+const BUNDLED = [
+  'META_APP_ID',
+  'META_APP_SECRET',
+  'META_EMBEDDED_SIGNUP_CONFIG_ID',
+  'WHATSAPP_WEBHOOK_VERIFY_TOKEN',
+  'PUBLIC_URL',
+  'OPENAI_API_KEY',
+  'DEEPGRAM_API_KEY',
+  'ELEVENLABS_API_KEY',
+  'SARVAM_API_KEY',
+  'GEMINI_API_KEY',
+  'ANTHROPIC_API_KEY',
+  'UPDATE_GITHUB_TOKEN',
+];
+const bundled = Object.fromEntries(
+  BUNDLED.map((key) => [key, process.env[`BUNDLE_${key}`]?.trim()]).filter(([, value]) => value),
+);
+if (Object.keys(bundled).length) {
+  writeFileSync(join(out, 'config.json'), JSON.stringify({ env: bundled }, null, 2));
+  console.log(`Built in: ${Object.keys(bundled).join(', ')}`);
+}
+
 writeFileSync(
   join(out, 'runtime.json'),
   JSON.stringify(

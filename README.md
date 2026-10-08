@@ -193,7 +193,7 @@ The installer is attached to the run as an artifact.
 - `release.json`, for the website
 - `SHA256SUMS.txt`
 
-> **The repository must be public for downloads and auto-update to work without a key.** GitHub only serves release files of private repositories to signed-in users with access. To keep the code private, publish releases to a separate public repository instead.
+> **Private repository? Fine.** Set it up once as described in [Private build](#private-build-your-keys-built-in). You add your keys as GitHub secrets, CI builds them into your installer, and it updates itself from the private releases.
 
 **Develop locally:**
 
@@ -205,6 +205,30 @@ pnpm --filter @flowforge/desktop test        # unit tests
 ```
 
 On Linux, PostgreSQL refuses to run as root, so run the smoke test as a regular user.
+
+### Private build (your keys built in)
+
+For your own private use, the app can carry your keys, so nothing has to be typed into it.
+
+1. **Repository secrets.** In GitHub, go to *Settings → Secrets and variables → Actions → New repository secret*. Add the ones you have; missing ones are simply skipped.
+
+   | Secret | Used for |
+   | --- | --- |
+   | `META_APP_ID`, `META_APP_SECRET`, `META_EMBEDDED_SIGNUP_CONFIG_ID` | WhatsApp: your Meta app (one-click "Connect WhatsApp") |
+   | `WHATSAPP_WEBHOOK_VERIFY_TOKEN` | Optional fixed verify token for the Meta webhook |
+   | `PUBLIC_URL` | Public HTTPS address of the app's server (e.g. a tunnel), needed for Meta to deliver messages |
+   | `OPENAI_API_KEY`, `DEEPGRAM_API_KEY`, `ELEVENLABS_API_KEY`, `SARVAM_API_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY` | AI voice agent providers (Phase 5) |
+   | `UPDATE_GITHUB_TOKEN` | Lets the app auto-update from your **private** releases. Use a fine-grained token, this repository only, *Contents: Read-only* |
+
+2. **Build.** Run *Actions → Windows app → Run workflow* with a version.
+   - The build writes the secrets into `resources/runtime/config.json` inside the installer.
+   - The app's server reads them as environment variables, which take precedence over anything entered on the WhatsApp page.
+3. **Download.** Get the installer from the private GitHub Release while signed in, or from your own download site (next step).
+4. **Your download site (optional).** Deploy `apps/website` on Vercel with two environment variables:
+   - `RELEASES_GITHUB_TOKEN`: the same kind of read-only token, kept server-side. The site hands out short-lived signed download links, never the token.
+   - `SITE_PASSWORD`: protects the whole site, because the installer contains your keys.
+
+> **Treat the installer like a password.** Anyone who has the file can extract the keys inside it, so keep the repository, its releases and the site private. If a copy leaks, rotate the keys in Meta, OpenAI and the other providers, then build again.
 
 ### The download website (`apps/website`)
 
@@ -242,7 +266,7 @@ pnpm --filter @flowforge/website build
    - SmartScreen will say "Windows protected your PC" because the build is unsigned. Choose *More info → Run anyway*.
    - FlowForge opens by itself. Create the owner account, build a workflow, and close the window. The tray icon remains, and an active schedule keeps running.
    - Right-click the tray icon to try *Open in browser*, *Start with Windows* and *Quit FlowForge*.
-3. Make the repository public, then run *Actions → Windows app → Run workflow* with version `0.2.0`. A release `v0.2.0` appears with the installer and `release.json`.
+3. Run *Actions → Windows app → Run workflow* with version `0.2.0` (with your secrets set for a private build). A release `v0.2.0` appears with the installer and `release.json`.
 4. Deploy `apps/website` on Vercel and open `/download`.
    - Version, size and SHA-256 match the release. Compare with `Get-FileHash .\FlowForge-Setup.exe -Algorithm SHA256`.
    - On a phone you get the "coming soon" note, and on a desktop the QR code.

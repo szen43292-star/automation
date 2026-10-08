@@ -69,6 +69,21 @@ jobs:
           echo "Building FlowForge $version (release: $release)"
 
       - name: Build the app and its runtime (Node.js, server, editor, PostgreSQL)
+        # Private builds: repository secrets named below are built into the app (see README).
+        # Unset secrets are skipped, so the app also builds without any.
+        env:
+          BUNDLE_META_APP_ID: ${{ secrets.META_APP_ID }}
+          BUNDLE_META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
+          BUNDLE_META_EMBEDDED_SIGNUP_CONFIG_ID: ${{ secrets.META_EMBEDDED_SIGNUP_CONFIG_ID }}
+          BUNDLE_WHATSAPP_WEBHOOK_VERIFY_TOKEN: ${{ secrets.WHATSAPP_WEBHOOK_VERIFY_TOKEN }}
+          BUNDLE_PUBLIC_URL: ${{ secrets.PUBLIC_URL }}
+          BUNDLE_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          BUNDLE_DEEPGRAM_API_KEY: ${{ secrets.DEEPGRAM_API_KEY }}
+          BUNDLE_ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          BUNDLE_SARVAM_API_KEY: ${{ secrets.SARVAM_API_KEY }}
+          BUNDLE_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          BUNDLE_ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BUNDLE_UPDATE_GITHUB_TOKEN: ${{ secrets.UPDATE_GITHUB_TOKEN }}
         run: |
           pnpm --filter @flowforge/desktop build
           pnpm --filter @flowforge/desktop resources
@@ -78,6 +93,8 @@ jobs:
 
       - name: Build the installer
         working-directory: apps/desktop
+        env:
+          RELEASES_PRIVATE: ${{ github.event.repository.private }}
         run: pnpm exec electron-builder --config electron-builder.config.cjs --win nsis --publish never
 
       - name: Install, launch and uninstall

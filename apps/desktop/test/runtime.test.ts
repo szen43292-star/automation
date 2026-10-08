@@ -3,7 +3,7 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { checkResources, loadSecrets } from '../src/runtime';
+import { checkResources, loadBundledConfig, loadSecrets } from '../src/runtime';
 import { freePort, isPortFree, rotateLog, run, tail } from '../src/runtime/util';
 
 const dirs: string[] = [];
@@ -80,5 +80,30 @@ describe('log rotation', () => {
     expect(readFileSync(`${file}.1`, 'utf8')).toHaveLength(2000);
     rotateLog(file, 1000); // nothing to rotate now
     expect(tail(`${file}.1`)).toHaveLength(2000);
+  });
+});
+
+describe('private builds', () => {
+  it('passes only known keys to the server and keeps the update token for the updater', () => {
+    const dir = tempDir();
+    expect(loadBundledConfig(dir)).toEqual({ env: {}, updateToken: null });
+    writeFileSync(
+      join(dir, 'config.json'),
+      JSON.stringify({
+        env: {
+          META_APP_ID: '123',
+          META_APP_SECRET: ' secret ',
+          OPENAI_API_KEY: '',
+          DATABASE_URL: 'postgresql://evil',
+          UPDATE_GITHUB_TOKEN: 'github_pat_x',
+        },
+      }),
+    );
+    expect(loadBundledConfig(dir)).toEqual({
+      env: { META_APP_ID: '123', META_APP_SECRET: 'secret' },
+      updateToken: 'github_pat_x',
+    });
+    writeFileSync(join(dir, 'config.json'), '{ broken');
+    expect(loadBundledConfig(dir).env).toEqual({});
   });
 });

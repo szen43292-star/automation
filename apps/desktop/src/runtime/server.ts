@@ -13,6 +13,8 @@ export interface ServerOptions {
   jwtSecret: string;
   encryptionKey: string;
   preferredPort: number;
+  /** Keys built into a private build (e.g. META_APP_SECRET), passed to the server as variables. */
+  bundledEnv?: Record<string, string>;
   log: Logger;
 }
 
@@ -31,9 +33,12 @@ export class ServerProcess {
   }
 
   private env(): NodeJS.ProcessEnv {
-    const { databaseUrl, jwtSecret, encryptionKey, editorDir } = this.options;
+    const { databaseUrl, jwtSecret, encryptionKey, editorDir, bundledEnv } = this.options;
     return {
       ...process.env,
+      // A bundled PUBLIC_URL (e.g. a tunnel) is applied below; the runtime's own values come after.
+      PUBLIC_URL: this.url,
+      ...bundledEnv,
       // Electron sets this for its own helpers; it must not leak into a plain Node child.
       ELECTRON_RUN_AS_NODE: undefined,
       NODE_ENV: 'production',
@@ -43,7 +48,6 @@ export class ServerProcess {
       EDITOR_DIST: editorDir,
       HOST: '127.0.0.1',
       PORT: String(this.port),
-      PUBLIC_URL: this.url,
       EXECUTIONS_MODE: 'regular',
       DEFAULT_TIMEZONE: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
       LOG_LEVEL: 'info',

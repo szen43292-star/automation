@@ -37,6 +37,45 @@ export function loadSecrets(dataDir: string): Secrets {
   return secrets;
 }
 
+/** Variables a private build may carry; anything else in config.json is ignored. */
+export const BUNDLED_KEYS = [
+  'META_APP_ID',
+  'META_APP_SECRET',
+  'META_EMBEDDED_SIGNUP_CONFIG_ID',
+  'WHATSAPP_WEBHOOK_VERIFY_TOKEN',
+  'PUBLIC_URL',
+  'OPENAI_API_KEY',
+  'DEEPGRAM_API_KEY',
+  'ELEVENLABS_API_KEY',
+  'SARVAM_API_KEY',
+  'GEMINI_API_KEY',
+  'ANTHROPIC_API_KEY',
+] as const;
+
+/**
+ * `config.json` next to the runtime: keys built into a private build from the repository's
+ * GitHub secrets, so the app needs no setup. Missing or unreadable means none.
+ */
+export function loadBundledConfig(resourcesDir: string): {
+  env: Record<string, string>;
+  updateToken: string | null;
+} {
+  try {
+    const raw = JSON.parse(readFileSync(join(resourcesDir, 'config.json'), 'utf8')) as {
+      env?: Record<string, unknown>;
+    };
+    const env: Record<string, string> = {};
+    for (const key of BUNDLED_KEYS) {
+      const value = raw.env?.[key];
+      if (typeof value === 'string' && value.trim()) env[key] = value.trim();
+    }
+    const token = raw.env?.UPDATE_GITHUB_TOKEN;
+    return { env, updateToken: typeof token === 'string' && token.trim() ? token.trim() : null };
+  } catch {
+    return { env: {}, updateToken: null };
+  }
+}
+
 export function checkResources(resourcesDir: string): void {
   const required = [
     join('node', exe('node')),
@@ -92,6 +131,7 @@ export class LocalRuntime {
       jwtSecret: secrets.jwtSecret,
       encryptionKey: secrets.encryptionKey,
       preferredPort: this.options.preferredPort ?? 5678,
+      bundledEnv: loadBundledConfig(resourcesDir).env,
       log,
     });
     await this.server.start();

@@ -2,7 +2,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } fr
 import { join } from 'node:path';
 import { app, BrowserWindow, Menu, Notification, Tray, nativeImage, shell } from 'electron';
 import { autoUpdater } from 'electron-updater';
-import { LocalRuntime } from './runtime';
+import { LocalRuntime, loadBundledConfig } from './runtime';
 
 const APP_ID = 'com.flowforge.desktop';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
@@ -259,10 +259,13 @@ function applyLoginItem() {
 }
 
 // ---- Updates ----------------------------------------------------------------------------------
-// Updates come from the public GitHub Releases of this repository: no account or key needed.
+// Updates come from this repository's GitHub Releases (public, or private with a built-in token).
 
 function setupAutoUpdates() {
   if (!app.isPackaged) return;
+  // Private repository: a read-only token built into this private build lets the updater see releases.
+  const { updateToken } = loadBundledConfig(resourcesDir);
+  if (updateToken) process.env.GH_TOKEN = updateToken;
   autoUpdater.logger = { info: log, warn: log, error: log, debug: () => undefined };
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;

@@ -17,7 +17,8 @@ const downloadSchema = z.object({
   arch: z.string().default('x64'),
   kind: z.string().default('installer'),
   label: z.string().min(1),
-  url: z.url(),
+  /** Absolute URL, or /download/windows for private repositories. */
+  url: z.string().regex(/^(https?:\/\/|\/)/),
   size: z.number().int().nonnegative(),
   sha256: z
     .string()
@@ -98,8 +99,70 @@ type Fetcher = (
   init?: RequestInit & { next?: { revalidate?: number } },
 ) => Promise<Response>;
 
+/** Server-side token for a private releases repository (never sent to browsers). */
+export function githubToken(): string | null {
+  return process.env.RELEASES_GITHUB_TOKEN?.trim() || null;
+}
+
+/**
+ * Private repository: read the latest release through the API with the server's token. Download
+ * links point at /download/windows, which hands the browser a short-lived signed URL.
+ */
+async function privateRelease(
+  fetcher: Fetcher,
+  repo: string,
+  token: string,
+): Promise<Release | null> {
+  const headers = {
+    authorization: `Bearer ${token}`,
+    'user-agent': 'flowforge-website',
+    'x-github-api-version': '2022-11-28',
+  };
+  const latest = await fetcher(`https://api.github.com/repos/${repo}/releases/latest`, {
+    next: { revalidate: REVALIDATE_SECONDS },
+    headers: { ...headers, accept: 'application/vnd.github+json' },
+  });
+  if (!latest.ok) {
+    console.warn(`GitHub releases API answered ${latest.status} for ${repo}`);
+    return null;
+  }
+  const data = (await latest.json()) as { assets?: Array<{ id: number; name: string }> };
+  const manifest = data.assets?.find((asset) => asset.name === 'release.json');
+  let release: Release | null = null;
+  if (manifest) {
+    const file = await fetcher(
+      `https://api.github.com/repos/${repo}/releases/assets/${manifest.id}`,
+      {
+        next: { revalidate: REVALIDATE_SECONDS },
+        headers: { ...headers, accept: 'application/octet-stream' },
+      },
+    );
+    if (file.ok) {
+      const parsed = releaseSchema.safeParse(await file.json());
+      if (parsed.success) release = parsed.data;
+    }
+  }
+  release ??= fromGithubRelease(data, repo);
+  if (!release) return null;
+  return {
+    ...release,
+    downloads: release.downloads.map((d) =>
+      d.platform === 'windows' ? { ...d, url: '/download/windows' } : d,
+    ),
+  };
+}
+
 export async function getLatestRelease(fetcher: Fetcher = fetch): Promise<Release | null> {
   const repo = releasesRepo();
+  const token = githubToken();
+  if (token && !process.env.RELEASE_MANIFEST_URL) {
+    try {
+      return await privateRelease(fetcher, repo, token);
+    } catch (error) {
+      console.warn('Could not load the private release:', (error as Error).message);
+      return null;
+    }
+  }
   const options = {
     next: { revalidate: REVALIDATE_SECONDS },
     headers: { accept: 'application/json' },
@@ -124,6 +187,34 @@ export async function getLatestRelease(fetcher: Fetcher = fetch): Promise<Releas
     console.warn('Could not load the latest GitHub release:', (error as Error).message);
   }
   return null;
+}
+
+/**
+ * A short-lived download link for a release file of a private repository: GitHub answers the
+ * authenticated asset request with a redirect to a signed URL, which is safe to give the browser.
+ */
+export async function signedAssetUrl(
+  fileName: string,
+  fetcher: Fetcher = fetch,
+): Promise<string | null> {
+  const token = githubToken();
+  if (!token) return null;
+  const repo = releasesRepo();
+  const headers = { authorization: `Bearer ${token}`, 'user-agent': 'flowforge-website' };
+  const latest = await fetcher(`https://api.github.com/repos/${repo}/releases/latest`, {
+    cache: 'no-store',
+    headers: { ...headers, accept: 'application/vnd.github+json' },
+  });
+  if (!latest.ok) return null;
+  const { assets } = (await latest.json()) as { assets?: Array<{ id: number; name: string }> };
+  const asset = assets?.find((a) => a.name === fileName);
+  if (!asset) return null;
+  const file = await fetcher(`https://api.github.com/repos/${repo}/releases/assets/${asset.id}`, {
+    cache: 'no-store',
+    redirect: 'manual',
+    headers: { ...headers, accept: 'application/octet-stream' },
+  });
+  return file.headers.get('location');
 }
 
 export function windowsDownload(release: Release | null): Download | null {

@@ -1,4 +1,6 @@
+import { NextRequest } from 'next/server';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { proxy } from '@/proxy';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Markdown } from '@/lib/markdown';
 import { detectPlatform } from '@/lib/platform';
@@ -9,6 +11,7 @@ import {
   getLatestRelease,
   manifestUrl,
   releasesRepo,
+  signedAssetUrl,
   windowsDownload,
 } from '@/lib/releases';
 
@@ -172,5 +175,65 @@ describe('release notes markdown', () => {
   it('does not turn javascript: URLs into links', () => {
     const html = renderToStaticMarkup(<Markdown source={'[x](javascript:alert(1))'} />);
     expect(html).not.toContain('href');
+  });
+});
+
+describe('private repository', () => {
+  it('reads the release through the API with the server token and links downloads to /download/windows', async () => {
+    vi.stubEnv('RELEASES_GITHUB_TOKEN', 'github_pat_test');
+    const seen: Array<{ url: string; auth: string | null; accept: string | null }> = [];
+    const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
+      const headers = new Headers(init?.headers);
+      seen.push({ url, auth: headers.get('authorization'), accept: headers.get('accept') });
+      if (url.endsWith('/releases/latest'))
+        return json({
+          tag_name: 'v0.3.0',
+          assets: [
+            { id: 7, name: 'release.json' },
+            { id: 8, name: 'FlowForge-Setup.exe' },
+          ],
+        });
+      if (url.endsWith('/releases/assets/7')) return json(manifest);
+      return new Response('nope', { status: 404 });
+    });
+    const release = await getLatestRelease(fetcher);
+    expect(release?.version).toBe('0.3.0');
+    expect(windowsDownload(release)?.url).toBe('/download/windows');
+    expect(seen.every((s) => s.auth === 'Bearer github_pat_test')).toBe(true);
+    expect(seen[1]!.accept).toBe('application/octet-stream');
+  });
+
+  it('turns the installer into a short-lived signed link without exposing the token', async () => {
+    vi.stubEnv('RELEASES_GITHUB_TOKEN', 'github_pat_test');
+    const fetcher = vi.fn(async (url: string) => {
+      if (url.endsWith('/releases/latest'))
+        return json({ assets: [{ id: 8, name: 'FlowForge-Setup.exe' }] });
+      return new Response(null, {
+        status: 302,
+        headers: { location: 'https://objects.githubusercontent.com/signed?x=1' },
+      });
+    });
+    expect(await signedAssetUrl('FlowForge-Setup.exe', fetcher)).toBe(
+      'https://objects.githubusercontent.com/signed?x=1',
+    );
+    expect(await signedAssetUrl('missing.exe', fetcher)).toBeNull();
+  });
+});
+
+describe('site password', () => {
+  const request = (auth?: string) =>
+    new NextRequest(
+      'https://flowforge.example/download',
+      auth ? { headers: { authorization: auth } } : undefined,
+    );
+
+  it('is open without SITE_PASSWORD and asks for it when set', () => {
+    expect(proxy(request()).status).toBe(200);
+    vi.stubEnv('SITE_PASSWORD', 'open-sesame');
+    const denied = proxy(request());
+    expect(denied.status).toBe(401);
+    expect(denied.headers.get('www-authenticate')).toContain('Basic');
+    expect(proxy(request(`Basic ${btoa('me:wrong')}`)).status).toBe(401);
+    expect(proxy(request(`Basic ${btoa('me:open-sesame')}`)).status).toBe(200);
   });
 });
