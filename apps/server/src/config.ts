@@ -49,10 +49,22 @@ const envSchema = z.object({
     .string()
     .regex(/^v\d+\.\d+$/)
     .default('v23.0'),
+  /** Folder for call recordings and greetings (default: ./data). */
+  DATA_DIR: z.string().optional(),
+  /** UDP ports for call audio, e.g. "40000-40199" - open them in the firewall. Default: any. */
+  MEDIA_PORT_RANGE: z
+    .string()
+    .regex(/^\d+-\d+$/, 'MEDIA_PORT_RANGE looks like 40000-40199')
+    .optional(),
+  /** Public IP to announce for call audio (servers behind 1:1 NAT, e.g. cloud VMs). */
+  MEDIA_PUBLIC_IP: z.ipv4().optional(),
+  /** Comma-separated STUN/TURN URLs used to find the public address. */
+  MEDIA_ICE_SERVERS: z.string().default('stun:stun.l.google.com:19302'),
 });
 
 export type Config = z.infer<typeof envSchema> & {
   editorDist: string | null;
+  dataDir: string;
   corsOrigins: string[];
 };
 
@@ -94,6 +106,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return {
     ...cfg,
     editorDist,
+    dataDir: resolve(cfg.DATA_DIR ?? 'data'),
     corsOrigins: cfg.CORS_ORIGINS.split(',')
       .map((o) => o.trim())
       .filter(Boolean),

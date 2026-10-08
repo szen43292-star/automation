@@ -30,6 +30,9 @@ import { WhatsAppPlatform } from './whatsapp/platform';
 import { whatsappRoutes, whatsappWebhookRoutes } from './whatsapp/routes';
 import { WhatsAppService } from './whatsapp/WhatsAppService';
 import { badRequest } from './lib/errors';
+import { CallService } from './calls/CallService';
+import { callRoutes } from './calls/routes';
+import type { MediaConfig } from '@flowforge/media';
 
 export const VERSION = '0.2.0';
 
@@ -53,6 +56,7 @@ declare module 'fastify' {
     whatsapp: WhatsAppService;
     whatsappPlatform: WhatsAppPlatform;
     whatsappGraphVersion: string;
+    calls: CallService;
     flowforgeVersion: string;
     /** Start schedules, webhooks, the wait tracker and queue relays (not done in tests unless asked). */
     startBackgroundServices(): Promise<void>;
@@ -67,6 +71,21 @@ export interface BuildOptions {
   queuePrefix?: string;
   /** Delays of simulated WhatsApp "delivered" / "read" receipts (tests use short ones). */
   whatsappReceiptDelays?: [number, number];
+  /** Call audio network settings (tests use a local STUN server). */
+  media?: MediaConfig;
+}
+
+/** Call audio settings from MEDIA_* variables. */
+export function mediaConfigFrom(config: Config): MediaConfig {
+  const range = config.MEDIA_PORT_RANGE?.split('-').map(Number) as [number, number] | undefined;
+  return {
+    iceServers: config.MEDIA_ICE_SERVERS.split(',')
+      .map((url) => url.trim())
+      .filter(Boolean)
+      .map((urls) => ({ urls })),
+    ...(range ? { portRange: range } : {}),
+    ...(config.MEDIA_PUBLIC_IP ? { additionalHostAddresses: [config.MEDIA_PUBLIC_IP] } : {}),
+  };
 }
 
 export async function buildApp(
@@ -139,6 +158,19 @@ export async function buildApp(
   whatsapp.onEvent = async (event, item) => {
     await activeWorkflows.dispatchEvent(event, item);
   };
+  const calls = new CallService({
+    prisma,
+    whatsapp,
+    push,
+    logger: app.log,
+    dataDir: config.dataDir,
+    media: options.media ?? mediaConfigFrom(config),
+    defaultTimezone: config.DEFAULT_TIMEZONE,
+    onEvent: async (event, item) => {
+      await activeWorkflows.dispatchEvent(event, item);
+    },
+  });
+  whatsapp.onCalls = (account, value) => calls.handleWebhook(account, value);
   const waitTracker = new WaitTracker(prisma, executions, app.log, options.waitTrackerIntervalMs);
 
   app.decorate('prisma', prisma);
@@ -152,6 +184,7 @@ export async function buildApp(
   app.decorate('whatsapp', whatsapp);
   app.decorate('whatsappPlatform', whatsappPlatform);
   app.decorate('whatsappGraphVersion', config.META_GRAPH_VERSION);
+  app.decorate('calls', calls);
   app.decorate('startBackgroundServices', async () => {
     if (queue) {
       // Relay live events from workers to WebSocket clients.
@@ -221,6 +254,7 @@ export async function buildApp(
     await api.register(credentialRoutes, { config });
     await api.register(variableRoutes);
     await api.register(whatsappRoutes);
+    await api.register(callRoutes);
   });
 
   // --- Editor (single page app) ---------------------------------------------
@@ -251,6 +285,7 @@ export async function buildApp(
   app.addHook('onClose', async () => {
     waitTracker.stop();
     activeWorkflows.shutdown();
+    await calls.shutdown();
     whatsapp.close();
     await executions.shutdown();
     push.closeAll();

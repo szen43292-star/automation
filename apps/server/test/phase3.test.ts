@@ -541,7 +541,9 @@ describe('receiving and replying', () => {
         app.whatsapp.handleWebhook(statusUpdate(messageId, 'delivered')),
         app.whatsapp.handleWebhook(statusUpdate(messageId, 'sent')),
       ]);
-      const row = await prisma.whatsAppMessage.findUniqueOrThrow({ where: { waMessageId: messageId } });
+      const row = await prisma.whatsAppMessage.findUniqueOrThrow({
+        where: { waMessageId: messageId },
+      });
       expect(row.status).toBe('read');
     }
   });
@@ -786,7 +788,7 @@ describe('test numbers (simulator) - no Meta account or keys', () => {
       receive: 'done',
       send: 'done',
       workflow: 'done',
-      calls: 'soon',
+      calls: 'todo',
     });
   });
 });

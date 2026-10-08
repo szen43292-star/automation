@@ -37,7 +37,7 @@ test('WhatsApp page: checklist, add a test number', async ({ page }) => {
   await page.goto('/whatsapp');
   await expect(page.getByRole('heading', { name: 'WhatsApp', exact: true })).toBeVisible();
   await expect(page.getByText('Setup checklist')).toBeVisible();
-  await expect(page.getByTestId('step-calls')).toHaveAttribute('data-status', 'soon');
+  await expect(page.getByTestId('step-calls')).toBeVisible();
   const before = await page.getByTestId('whatsapp-account').count();
   await page.getByRole('button', { name: 'Add test number' }).click();
   await expect(page.getByText('Test number added')).toBeVisible();

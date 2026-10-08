@@ -15,6 +15,23 @@ export interface CloudChangeValue {
   contacts?: Array<{ wa_id?: string; profile?: { name?: string } }>;
   messages?: CloudMessage[];
   statuses?: CloudStatus[];
+  calls?: CloudCall[];
+}
+
+/** A voice call event (webhook field "calls"). */
+export interface CloudCall {
+  id: string;
+  from: string;
+  to: string;
+  /** connect = a call arrives (with the caller's SDP offer); terminate = it ended. */
+  event: 'connect' | 'terminate' | string;
+  timestamp: string;
+  direction?: 'USER_INITIATED' | 'BUSINESS_INITIATED' | string;
+  session?: { sdp_type?: string; sdp?: string };
+  status?: string;
+  duration?: number;
+  start_time?: string;
+  end_time?: string;
 }
 
 export interface CloudMessage {

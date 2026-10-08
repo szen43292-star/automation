@@ -127,6 +127,7 @@ export class LocalRuntime {
       serverDir: join(resourcesDir, 'server'),
       editorDir: join(resourcesDir, 'editor'),
       logDir,
+      filesDir: join(dataDir, 'files'),
       databaseUrl: this.postgres.databaseUrl,
       jwtSecret: secrets.jwtSecret,
       encryptionKey: secrets.encryptionKey,

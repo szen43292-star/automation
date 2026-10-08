@@ -329,9 +329,11 @@ export async function whatsappRoutes(app: FastifyInstance) {
         ),
         step(
           'calls',
-          'Answer calls with AI',
-          'soon',
-          'Coming in the next update: answer WhatsApp calls 24/7.',
+          'Answer calls',
+          accounts.some((a) => a.callingEnabled) ? 'done' : 'todo',
+          accounts.some((a) => a.callingEnabled)
+            ? 'Calling is on - calls ring in the app, go to voicemail, the AI agent, or are rejected, as you set.'
+            : 'Open "Calls" on a number, choose how calls are answered and switch calling on.',
         ),
       ],
       simulators,

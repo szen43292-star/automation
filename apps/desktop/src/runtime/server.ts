@@ -9,6 +9,8 @@ export interface ServerOptions {
   serverDir: string;
   editorDir: string;
   logDir: string;
+  /** Call recordings and greetings. */
+  filesDir: string;
   databaseUrl: string;
   jwtSecret: string;
   encryptionKey: string;
@@ -46,6 +48,7 @@ export class ServerProcess {
       JWT_SECRET: jwtSecret,
       ENCRYPTION_KEY: encryptionKey,
       EDITOR_DIST: editorDir,
+      DATA_DIR: this.options.filesDir,
       HOST: '127.0.0.1',
       PORT: String(this.port),
       EXECUTIONS_MODE: 'regular',

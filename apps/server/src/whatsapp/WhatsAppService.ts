@@ -25,6 +25,7 @@ import {
   type AccountRef,
   type CloudMessage,
   type CloudStatus,
+  type CloudChangeValue,
   type CloudWebhook,
 } from './events';
 import { GraphApiError, type GraphClient } from './graph';
@@ -47,6 +48,7 @@ export interface WhatsAppAccountDTO {
   status: 'connected' | 'error' | 'disconnected';
   lastError: string | null;
   lastEventAt: string | null;
+  callingEnabled: boolean;
   createdAt: string;
 }
 
@@ -89,6 +91,7 @@ export const toAccountDTO = (a: WhatsAppAccount): WhatsAppAccountDTO => ({
   status: a.status,
   lastError: a.lastError,
   lastEventAt: a.lastEventAt?.toISOString() ?? null,
+  callingEnabled: a.callingEnabled,
   createdAt: a.createdAt.toISOString(),
 });
 
@@ -177,7 +180,11 @@ export class WhatsAppService {
     return rows.map(toAccountDTO);
   }
 
-  private async row(id: string): Promise<WhatsAppAccount> {
+  /** Incoming call events (set by the call service). */
+  onCalls?: (account: WhatsAppAccount, value: CloudChangeValue) => Promise<void>;
+
+  /** The account row, or a 404 that explains the number is gone. */
+  async row(id: string): Promise<WhatsAppAccount> {
     const account = await this.deps.prisma.whatsAppAccount.findUnique({ where: { id } });
     if (!account) {
       throw new HttpError(
@@ -191,6 +198,14 @@ export class WhatsAppService {
 
   async get(id: string): Promise<WhatsAppAccountDTO> {
     return toAccountDTO(await this.row(id));
+  }
+
+  /** Graph API request with the number's token (cloud numbers only). */
+  async graphRequest<T = Record<string, unknown>>(
+    account: WhatsAppAccount,
+    request: Omit<Parameters<GraphClient['request']>[0], 'token'>,
+  ): Promise<T> {
+    return this.deps.graph.request<T>({ ...request, token: this.secrets(account).accessToken });
   }
 
   private secrets(account: WhatsAppAccount): AccountSecrets {
@@ -598,7 +613,7 @@ export class WhatsAppService {
     let handled = 0;
     for (const entry of body.entry ?? []) {
       for (const change of entry.changes ?? []) {
-        if (change.field !== 'messages' || !change.value) continue;
+        if ((change.field !== 'messages' && change.field !== 'calls') || !change.value) continue;
         const phoneNumberId = change.value.metadata?.phone_number_id;
         if (!phoneNumberId) continue;
         const account = await this.deps.prisma.whatsAppAccount.findUnique({
@@ -609,6 +624,16 @@ export class WhatsAppService {
             { phoneNumberId },
             'WhatsApp webhook for a number that is not connected here',
           );
+          continue;
+        }
+        if (change.field === 'calls') {
+          // Voice calls are handled by the call service (Phase 4).
+          if (this.onCalls) {
+            await this.onCalls(account, change.value).catch((error: unknown) =>
+              this.deps.logger.error({ err: error }, 'WhatsApp call handling failed'),
+            );
+            handled += change.value.calls?.length ?? 0;
+          }
           continue;
         }
         const names = new Map((change.value.contacts ?? []).map((c) => [c.wa_id, c.profile?.name]));

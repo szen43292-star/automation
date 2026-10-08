@@ -778,6 +778,8 @@ export const WhatsAppTrigger: INodeType = {
         options: [
           { name: 'Message Received', value: 'message' },
           { name: 'Message Status (sent, delivered, read, failed)', value: 'status' },
+          { name: 'Call Started (ringing)', value: 'call_started' },
+          { name: 'Call Ended (with recording and transcript)', value: 'call_ended' },
         ],
       },
       {

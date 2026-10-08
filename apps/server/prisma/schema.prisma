@@ -30,6 +30,7 @@ model User {
   executions       Execution[]
   credentials      Credential[]
   whatsAppAccounts WhatsAppAccount[]
+  answeredCalls    Call[]
 }
 
 model Workflow {
@@ -217,10 +218,15 @@ model WhatsAppAccount {
   lastEventAt            DateTime?
   createdById            String?
   createdBy              User?                 @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  /// How incoming calls are handled (CallSettings JSON); null = calling not set up.
+  callSettings           Json?
+  /// Calling switched on for this number at Meta.
+  callingEnabled         Boolean               @default(false)
   createdAt              DateTime              @default(now())
   updatedAt              DateTime              @updatedAt
 
   messages WhatsAppMessage[]
+  calls    Call[]
 }
 
 enum WhatsAppDirection {
@@ -259,4 +265,52 @@ model WhatsAppMessage {
 
   @@index([accountId, contact, timestamp])
   @@index([accountId, timestamp])
+}
+
+enum CallDirection {
+  inbound
+  outbound
+}
+
+enum CallStatus {
+  ringing
+  answered
+  ended
+  missed
+  rejected
+  failed
+}
+
+/// A WhatsApp voice call (call log).
+model Call {
+  id              String          @id @default(cuid())
+  accountId       String
+  account         WhatsAppAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  /// Meta's call id.
+  waCallId        String?         @unique
+  direction       CallDirection
+  /// The customer's WhatsApp id (digits).
+  contact         String
+  contactName     String?
+  status          CallStatus      @default(ringing)
+  /// person | voicemail | ai | rejected | none
+  handledBy       String?
+  answeredById    String?
+  answeredBy      User?           @relation(fields: [answeredById], references: [id], onDelete: SetNull)
+  startedAt       DateTime        @default(now())
+  answeredAt      DateTime?
+  endedAt         DateTime?
+  durationSeconds Int?
+  endReason       String?
+  /// Relative path of the WAV recording in the data folder.
+  recordingPath   String?
+  recordingBytes  Int?
+  /// [{ role: 'caller' | 'agent', text, at }]
+  transcript      Json?
+  summary         String?
+  metadata        Json?
+
+  @@index([accountId, startedAt(sort: Desc)])
+  @@index([startedAt(sort: Desc)])
+  @@index([status])
 }

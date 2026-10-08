@@ -1,5 +1,6 @@
 import type { WebSocket } from 'ws';
 import type { FastifyBaseLogger } from 'fastify';
+import type { CallDTO } from '../calls/CallService';
 import type { WhatsAppMessageDTO } from '../whatsapp/WhatsAppService';
 
 /** Events pushed to editor / desktop / mobile clients. */
@@ -41,7 +42,22 @@ export type PushEvent =
       data: { workflowId: string; executionId: string; nodeId: string };
     }
   | { type: 'whatsappMessage'; data: WhatsAppMessageDTO }
-  | { type: 'whatsappAccountUpdated'; data: { accountId: string } };
+  | { type: 'whatsappAccountUpdated'; data: { accountId: string } }
+  | {
+      type: 'incomingCall';
+      data: {
+        callId: string;
+        accountId: string;
+        accountNumber: string;
+        from: string;
+        contactName: string | null;
+        ringSeconds: number;
+      };
+    }
+  | { type: 'callUpdated'; data: CallDTO & { note?: string } }
+  | { type: 'callAnswered'; data: { callId: string; userId: string } }
+  | { type: 'callTranscript'; data: { callId: string; role: 'caller' | 'agent'; text: string } }
+  | { type: 'simulatedCallAction'; data: { waCallId: string; action: string } };
 
 interface Client {
   socket: WebSocket;

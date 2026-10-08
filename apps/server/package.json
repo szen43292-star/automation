@@ -25,6 +25,7 @@
     "@fastify/static": "^10.1.5",
     "@fastify/websocket": "^11.3.3",
     "@flowforge/engine": "workspace:*",
+    "@flowforge/media": "workspace:*",
     "@flowforge/nodes": "workspace:*",
     "@flowforge/workflow": "workspace:*",
     "@prisma/client": "6.19.3",
@@ -34,9 +35,11 @@
     "ioredis": "^5.11.1",
     "isolated-vm": "^6.2.0",
     "luxon": "^3.7.2",
+    "opusscript": "0.1.1",
+    "pino": "^10.1.0",
     "prisma": "6.19.3",
-    "zod": "^4.1.12",
-    "pino": "^10.1.0"
+    "werift": "0.24.4",
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "@types/ws": "^8.18.1",

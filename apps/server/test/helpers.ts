@@ -72,7 +72,10 @@ export const manualTrigger = {
 };
 
 /** Poll until `check` returns a truthy value (for work that happens after a response). */
-export async function eventually<T>(check: () => Promise<T | null | undefined | false>, timeoutMs = 8_000): Promise<T> {
+export async function eventually<T>(
+  check: () => Promise<T | null | undefined | false>,
+  timeoutMs = 8_000,
+): Promise<T> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     const value = await check();
