@@ -81,7 +81,7 @@ export function CallBar() {
 
   return (
     <div
-      className="fixed right-4 bottom-4 z-50 flex w-80 flex-col gap-2"
+      className="fixed inset-x-3 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-50 flex flex-col gap-2 sm:inset-x-auto sm:right-4 sm:w-80 md:bottom-4"
       role="region"
       aria-label="Calls"
     >

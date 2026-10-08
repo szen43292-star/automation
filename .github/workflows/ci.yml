@@ -72,8 +72,19 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @flowforge/editor build && pnpm --filter @flowforge/server build
       - run: pnpm --filter @flowforge/server db:deploy
-      - name: Start server
+      - name: Start server (with fake AI providers and a local STUN responder)
+        env:
+          MEDIA_ICE_SERVERS: stun:127.0.0.1:3478
+          OPENAI_BASE_URL: http://127.0.0.1:5700/v1
+          ANTHROPIC_BASE_URL: http://127.0.0.1:5700
+          DEEPGRAM_BASE_URL: http://127.0.0.1:5700
+          ELEVENLABS_BASE_URL: http://127.0.0.1:5700
+          SARVAM_BASE_URL: http://127.0.0.1:5700
+          AUTH_RATE_LIMIT: '1000'
         run: |
+          (cd apps/server && npx tsx test/stun-server.ts > ../../stun.log 2>&1 &)
+          (cd apps/server && npx tsx test/fake-ai-server.ts > ../../fake-ai.log 2>&1 &)
+          sleep 3
           node apps/server/dist/index.js > server.log 2>&1 &
           for i in $(seq 1 30); do curl -sf http://localhost:5678/readyz && break; sleep 1; done
       - run: pnpm --filter @flowforge/e2e exec playwright install --with-deps chromium

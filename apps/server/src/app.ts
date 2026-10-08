@@ -38,6 +38,7 @@ import { AgentService } from './agent/AgentService';
 import { agentRoutes } from './agent/routes';
 import { inviteRoutes, userRoutes } from './users/routes';
 import { dashboardRoutes } from './dashboard/routes';
+import { PhoneNotifications, deviceRoutes, readServiceAccount } from './push/PhoneNotifications';
 
 export const VERSION = '0.2.0';
 
@@ -200,6 +201,13 @@ export async function buildApp(
   };
   whatsapp.onCallStatus = (account, status) => calls.handleCallStatus(account, status);
   calls.summarize = agents.summarizeCall;
+  const phones = new PhoneNotifications(
+    prisma,
+    app.log,
+    readServiceAccount(config.FCM_SERVICE_ACCOUNT),
+    config.FCM_API_URL,
+  );
+  push.observers.add(phones.observe);
   const waitTracker = new WaitTracker(prisma, executions, app.log, options.waitTrackerIntervalMs);
 
   app.decorate('prisma', prisma);
@@ -254,7 +262,10 @@ export async function buildApp(
         config.corsOrigins.includes(origin) ||
         /^(tauri|capacitor|ionic):\/\//.test(origin) ||
         origin === 'http://tauri.localhost' ||
-        origin === 'https://tauri.localhost';
+        origin === 'https://tauri.localhost' ||
+        // The Android app (Capacitor) loads the editor from https://localhost.
+        origin === 'https://localhost' ||
+        origin === 'http://localhost';
       cb(null, allowed);
     },
     credentials: false,
@@ -307,6 +318,7 @@ export async function buildApp(
     await api.register(agentRoutes);
     await api.register(userRoutes, { publicUrl: config.PUBLIC_URL });
     await api.register(dashboardRoutes, { defaultTimezone: config.DEFAULT_TIMEZONE });
+    await api.register(deviceRoutes, { notifications: phones });
   });
 
   // --- Editor (single page app) ---------------------------------------------

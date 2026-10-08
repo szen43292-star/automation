@@ -1,7 +1,9 @@
 import { createSocket, type Socket } from 'node:dgram';
 
 /** A minimal STUN binding responder (RFC 5389) for tests: answers with the sender's address. */
-export async function startStunServer(): Promise<{ url: string; close: () => Promise<void> }> {
+export async function startStunServer(
+  port = 0,
+): Promise<{ url: string; close: () => Promise<void> }> {
   const socket: Socket = createSocket('udp4');
   socket.on('message', (msg, remote) => {
     if (msg.length < 20 || msg.readUInt16BE(0) !== 0x0001 || msg.readUInt32BE(4) !== 0x2112a442)
@@ -23,7 +25,7 @@ export async function startStunServer(): Promise<{ url: string; close: () => Pro
     msg.copy(header, 4, 4, 20); // magic cookie + transaction id
     socket.send(Buffer.concat([header, attribute]), remote.port, remote.address);
   });
-  await new Promise<void>((resolve) => socket.bind(0, '127.0.0.1', resolve));
+  await new Promise<void>((resolve) => socket.bind(port, '127.0.0.1', resolve));
   return {
     url: `stun:127.0.0.1:${socket.address().port}`,
     close: () => new Promise((resolve) => socket.close(() => resolve())),

@@ -22,7 +22,8 @@ apps/
   server/      Fastify API + execution engine host, Prisma/PostgreSQL, WebSocket push
   editor/      React + Vite + React Flow editor (later shared by desktop & mobile)
   desktop/     Windows app (Electron): bundles Node.js, the server, the editor and PostgreSQL
-  website/     Next.js landing + download site (Vercel), reads public GitHub Releases
+  website/     Next.js landing + download site (Vercel): Windows, Android and iPhone downloads, release admin
+  mobile/      Android and iPhone app (Capacitor) around the editor, connected to your server
 packages/
   workflow/    Shared types, Zod schemas, graph utilities, expressions, filter conditions
   engine/      Workflow executor, isolated-vm Code sandbox, HTTP helper
@@ -189,7 +190,7 @@ The Phase 2 browser tests check:
 ## Testing Phases 3–5
 
 ```bash
-pnpm test        # workflow 22, engine 32, nodes 57, media 5, server 70, editor 10, website 18, desktop 7
+pnpm test        # workflow 22, engine 32, nodes 57, media 5, server 72, editor 10, website 24, desktop 7, mobile 3
 ```
 
 - **Real calls in the tests.** The server suite runs real calls over WebRTC on localhost. It uses a local STUN responder, a fake Graph API for Meta, and fake AI providers (`apps/server/test/fakeAi.ts`).
@@ -274,6 +275,59 @@ The outbound call tests run real WebRTC calls:
 5. **API:** go to **Settings → API keys → Create key**, then:
    `curl localhost:5678/api/dashboard?days=7 -H "X-API-Key: ff_…"`
 
+## Phases 7–8: phone apps (Android APK, iPhone IPA), releases and CI
+
+**The phone app (`apps/mobile`)** is a Capacitor app around the editor, built for phones:
+
+- **Tabs:** Home, Calls, Chats, Agents and More.
+- **Calls:** answer and make WhatsApp calls with the phone's microphone.
+- **Notifications:** incoming and missed calls, and AI call summaries.
+
+It connects to **your FlowForge server**, i.e. the Windows app or a server. The private build puts your `PUBLIC_URL` into the app, so there is nothing to type. **The phone app contains no API keys.** It signs in like the browser, and all keys stay on the server.
+
+**One release for everything.** _Actions → Release → Run workflow_ (or a `v*` tag, or the website's admin page) runs:
+
+- the Windows build (`desktop.yml`);
+- the Android build on Linux and the iPhone build on macOS (`mobile.yml`);
+- one GitHub Release with `FlowForge-Setup.exe`, `FlowForge.apk`, `FlowForge.ipa`, `release.json` (for the website) and `latest.yml` (Windows auto-update).
+
+Every push still builds each app as a test.
+
+**Secrets for the phone apps** (all optional):
+
+| Secret                                                                                              | What happens without it                                                                                                                                                                                                                                                                                            |
+| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` | The APK is signed with a throw-away key, and each new version needs an uninstall first. Create your key once and keep a backup: `keytool -genkeypair -keystore flowforge.jks -alias flowforge -keyalg RSA -keysize 2048 -validity 10000`, then `base64 -w0 flowforge.jks` → `ANDROID_KEYSTORE_BASE64`.             |
+| `IOS_CERTIFICATE_P12_BASE64`, `IOS_CERTIFICATE_PASSWORD`, `IOS_PROVISIONING_PROFILE_BASE64`         | The IPA is **unsigned**. Install it with [AltStore](https://altstore.io) or [Sideloadly](https://sideloadly.io) and a free Apple ID (re-sign every 7 days). With an Apple Developer account, export your distribution certificate (.p12) and an ad-hoc profile listing your iPhone, and the IPA installs directly. |
+| `GOOGLE_SERVICES_JSON` (the Firebase Android config) + `FCM_SERVICE_ACCOUNT` **on the server**      | No phone notifications. The app still works while open, and calls nobody answers still go to the AI agent or voicemail. For iPhone notifications, add your APNs key to the same Firebase project.                                                                                                                  |
+
+**Try the app before setting anything up:** build an APK locally with `pnpm --filter @flowforge/mobile android:debug` (needs the Android SDK and JDK 21). Or download one from the _Phone apps_ workflow run, install it, and enter your server address on the sign-in screen (e.g. `http://192.168.1.20:5678`, the Windows app on your Wi-Fi).
+
+**Download website.**
+
+- `/download` now offers the Android and iPhone apps. A phone visitor gets its own app first.
+- Short links: `/download/windows`, `/download/android`, `/download/ios`.
+- **Release admin:** `/admin` exists only when `ADMIN_PASSWORD` is set. It shows the latest builds and published releases with download counts, and **Build and publish** starts the Release workflow. It needs `RELEASES_GITHUB_TOKEN` with _Contents: read_ and _Actions: read & write_.
+
+## Testing Phases 7–8
+
+```bash
+pnpm test                    # incl. server phase7 (phone notifications via a fake Firebase), mobile, website admin & downloads
+pnpm --filter @flowforge/e2e test:e2e   # 19 browser tests, incl. the phone layout (Pixel 7)
+```
+
+- **Android:** the APK was built and checked with `apksigner` / `aapt2`. That covers the package name, version from CI, permissions (microphone, notifications) and signing with a release keystore.
+- **CI:** the workflows build the APK on Ubuntu and the IPA on macOS for every change to the app.
+
+**Manual check on a phone (about 10 minutes):**
+
+1. Start FlowForge (Windows app) and note its address on your Wi-Fi, e.g. `http://192.168.1.20:5678`.
+2. Install the APK (from the workflow run or a release). Open it, enter the address, and sign in.
+3. **Chats:** open a test number and send a message as the customer.
+4. **Calls:** call the test number from a laptop's simulator. The phone rings in the app; answer it and talk.
+5. **Notifications:** with Firebase configured (secrets above), close the app and call again. A notification arrives; tap it to open Calls.
+6. **Website:** open `/download` on the phone. It offers the Android app first. Then go to `/admin` → **Build and publish** and watch the three builds appear.
+
 ## Deployment
 
 FlowForge has two kinds of parts:
@@ -352,9 +406,10 @@ For your own private use, the app can carry your keys, so nothing has to be type
    | `WHATSAPP_WEBHOOK_VERIFY_TOKEN`                                                                                     | Optional fixed verify token for the Meta webhook                                                                               |
    | `PUBLIC_URL`                                                                                                        | Public HTTPS address of the app's server (e.g. a tunnel), needed for Meta to deliver messages                                  |
    | `OPENAI_API_KEY`, `DEEPGRAM_API_KEY`, `ELEVENLABS_API_KEY`, `SARVAM_API_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY` | AI voice agent providers (Phase 5)                                                                                             |
+   | `ANDROID_KEYSTORE_*`, `IOS_*`, `GOOGLE_SERVICES_JSON`                                                               | Phone apps: signing and notifications (see "Phases 7–8")                                                                       |
    | `UPDATE_GITHUB_TOKEN`                                                                                               | Lets the app auto-update from your **private** releases. Use a fine-grained token, this repository only, _Contents: Read-only_ |
 
-2. **Build.** Run _Actions → Windows app → Run workflow_ with a version.
+2. **Build.** Run _Actions → Release → Run workflow_ with a version. It builds the Windows app and the phone apps; the phone apps only get `PUBLIC_URL`, never keys.
    - The build writes the secrets into `resources/runtime/config.json` inside the installer.
    - The app's server reads them as environment variables, which take precedence over anything entered on the WhatsApp page.
 3. **Download.** Get the installer from the private GitHub Release while signed in, or from your own download site (next step).

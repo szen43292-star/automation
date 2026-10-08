@@ -15,9 +15,11 @@ import {
   Sun,
   Workflow as WorkflowIcon,
   Zap,
+  Menu as Menu2,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { startNative } from '../lib/native';
 import { CallBar } from './calls/CallBar';
 import { push } from '../lib/push';
 import { useTheme, type ThemeMode } from '../lib/theme';
@@ -63,6 +65,9 @@ export function ThemeSwitch() {
 
 export function Layout() {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  // In the phone app: notifications, back button.
+  useEffect(() => void startNative((path) => navigate(path)), [navigate]);
   const link = ({ isActive }: { isActive: boolean }) =>
     clsx(
       'flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium',
@@ -133,10 +138,87 @@ export function Layout() {
           />
         </div>
       </aside>
-      <main className="min-w-0 flex-1">
+      <main className="min-w-0 flex-1 pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0">
         <Outlet />
         <CallBar />
       </main>
+      <MobileNav onLogout={logout} />
     </div>
+  );
+}
+
+/** Phones (and the mobile app): a bottom tab bar instead of the sidebar. */
+function MobileNav({ onLogout }: { onLogout: () => void }) {
+  const [more, setMore] = useState(false);
+  const tab = ({ isActive }: { isActive: boolean }) =>
+    clsx(
+      'flex flex-1 flex-col items-center gap-0.5 pt-1.5 text-[10.5px] font-medium',
+      isActive ? 'text-accent' : 'text-muted',
+    );
+  const extra: Array<[string, string, typeof Bot]> = [
+    ['/workflows', 'Workflows', WorkflowIcon],
+    ['/executions', 'Executions', History],
+    ['/templates', 'Templates', LayoutTemplate],
+    ['/credentials', 'Credentials', KeyRound],
+    ['/variables', 'Variables', Braces],
+    ['/settings', 'Settings', Settings],
+  ];
+  return (
+    <>
+      {more && (
+        <div className="fixed inset-0 z-40 bg-black/30 md:hidden" onClick={() => setMore(false)}>
+          <div
+            className="absolute inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] rounded-t-2xl border-t border-line bg-panel p-3 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="grid grid-cols-3 gap-2">
+              {extra.map(([to, label, Icon]) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  onClick={() => setMore(false)}
+                  className="flex flex-col items-center gap-1 rounded-lg p-3 text-xs text-muted hover:bg-panel-2"
+                >
+                  <Icon size={20} /> {label}
+                </NavLink>
+              ))}
+            </div>
+            <div className="mt-3 flex items-center gap-2 border-t border-line pt-3">
+              <ThemeSwitch />
+              <button
+                className="ml-auto flex items-center gap-1.5 text-xs text-muted"
+                onClick={onLogout}
+              >
+                <LogOut size={14} /> Sign out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <nav
+        className="fixed inset-x-0 bottom-0 z-40 flex h-[calc(3.5rem+env(safe-area-inset-bottom))] border-t border-line bg-panel pb-[env(safe-area-inset-bottom)] md:hidden"
+        aria-label="Main"
+      >
+        <NavLink to="/dashboard" className={tab}>
+          <LayoutDashboard size={20} /> Home
+        </NavLink>
+        <NavLink to="/calls" className={tab}>
+          <Phone size={20} /> Calls
+        </NavLink>
+        <NavLink to="/whatsapp" className={tab}>
+          <MessageCircle size={20} /> Chats
+        </NavLink>
+        <NavLink to="/agents" className={tab}>
+          <Bot size={20} /> Agents
+        </NavLink>
+        <button
+          className={tab({ isActive: more })}
+          onClick={() => setMore(!more)}
+          aria-expanded={more}
+        >
+          <Menu2 size={20} /> More
+        </button>
+      </nav>
+    </>
   );
 }

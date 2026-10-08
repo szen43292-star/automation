@@ -64,13 +64,61 @@ export function manifestUrl(repo = releasesRepo()): string {
   );
 }
 
+export const APP_PLATFORMS = ['windows', 'android', 'ios'] as const;
+export type AppPlatform = (typeof APP_PLATFORMS)[number];
+
+/** Release files per platform (names written by the release workflow). */
+export const ASSETS: Record<
+  AppPlatform,
+  { file: string; match: RegExp; label: string; arch: string; requirements: string }
+> = {
+  windows: {
+    file: 'FlowForge-Setup.exe',
+    match: /\.exe$/i,
+    label: 'Windows installer (.exe)',
+    arch: 'x64',
+    requirements: 'Windows 10 or 11, 64-bit',
+  },
+  android: {
+    file: 'FlowForge.apk',
+    match: /\.apk$/i,
+    label: 'Android app (.apk)',
+    arch: 'universal',
+    requirements: 'Android 7 or newer',
+  },
+  ios: {
+    file: 'FlowForge.ipa',
+    match: /\.ipa$/i,
+    label: 'iPhone app (.ipa)',
+    arch: 'arm64',
+    requirements: 'iOS 15 or newer',
+  },
+};
+
 /** Maps a GitHub API release to our manifest shape (no checksums available this way). */
 export function fromGithubRelease(data: unknown, repo: string): Release | null {
   const parsed = githubReleaseSchema.safeParse(data);
   if (!parsed.success) return null;
   const release = parsed.data;
-  const installer = release.assets.find((asset) => /\.exe$/i.test(asset.name));
-  if (!installer) return null;
+  const downloads: Download[] = [];
+  for (const [platform, info] of Object.entries(ASSETS) as Array<
+    [AppPlatform, (typeof ASSETS)[AppPlatform]]
+  >) {
+    const asset = release.assets.find((a) => info.match.test(a.name));
+    if (!asset) continue;
+    downloads.push({
+      file: asset.name,
+      platform,
+      arch: info.arch,
+      kind: platform === 'windows' ? 'installer' : 'app',
+      label: info.label,
+      url: asset.browser_download_url,
+      size: asset.size,
+      sha256: null,
+      requirements: info.requirements,
+    });
+  }
+  if (!downloads.length) return null;
   return {
     name: 'FlowForge',
     version: release.tag_name.replace(/^v/, ''),
@@ -78,19 +126,7 @@ export function fromGithubRelease(data: unknown, repo: string): Release | null {
     publishedAt: release.published_at ?? new Date(0).toISOString(),
     repo,
     notes: release.body ?? '',
-    downloads: [
-      {
-        file: installer.name,
-        platform: 'windows',
-        arch: 'x64',
-        kind: 'installer',
-        label: 'Windows installer (.exe)',
-        url: installer.browser_download_url,
-        size: installer.size,
-        sha256: null,
-        requirements: 'Windows 10 or 11, 64-bit',
-      },
-    ],
+    downloads,
   };
 }
 
@@ -147,7 +183,9 @@ async function privateRelease(
   return {
     ...release,
     downloads: release.downloads.map((d) =>
-      d.platform === 'windows' ? { ...d, url: '/download/windows' } : d,
+      (APP_PLATFORMS as readonly string[]).includes(d.platform)
+        ? { ...d, url: `/download/${d.platform}` }
+        : d,
     ),
   };
 }
@@ -217,8 +255,12 @@ export async function signedAssetUrl(
   return file.headers.get('location');
 }
 
+export function platformDownload(release: Release | null, platform: string): Download | null {
+  return release?.downloads.find((d) => d.platform === platform) ?? null;
+}
+
 export function windowsDownload(release: Release | null): Download | null {
-  return release?.downloads.find((d) => d.platform === 'windows') ?? null;
+  return platformDownload(release, 'windows');
 }
 
 export function formatSize(bytes: number): string {

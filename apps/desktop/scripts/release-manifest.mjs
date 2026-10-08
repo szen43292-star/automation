@@ -1,4 +1,5 @@
-// Writes release/release.json and release/SHA256SUMS.txt for a GitHub Release.
+// Writes release/release.json and release/SHA256SUMS.txt for a GitHub Release: the Windows
+// installer, the Android APK and the iPhone IPA, whichever are in the folder.
 // The download website reads release.json from https://github.com/<repo>/releases/latest/download/release.json,
 // a plain file download: no GitHub API, no token, no rate limit.
 //   node scripts/release-manifest.mjs --version 0.3.0 --repo owner/name [--notes-file notes.md]
@@ -28,6 +29,7 @@ const notes =
     ? readFileSync(values['notes-file'], 'utf8').trim()
     : '';
 
+const iosSigned = process.env.IOS_SIGNED === 'true';
 const artifacts = [
   {
     file: 'FlowForge-Setup.exe',
@@ -36,6 +38,24 @@ const artifacts = [
     kind: 'installer',
     label: 'Windows installer (.exe)',
     requirements: 'Windows 10 or 11, 64-bit',
+  },
+  {
+    file: 'FlowForge.apk',
+    platform: 'android',
+    arch: 'universal',
+    kind: 'app',
+    label: 'Android app (.apk)',
+    requirements: 'Android 7 or newer - allow "Install unknown apps" for your browser',
+  },
+  {
+    file: 'FlowForge.ipa',
+    platform: 'ios',
+    arch: 'arm64',
+    kind: 'app',
+    label: 'iPhone app (.ipa)',
+    requirements: iosSigned
+      ? 'iOS 15 or newer - for the iPhones registered in your Apple developer account'
+      : 'iOS 15 or newer - unsigned: install with AltStore or Sideloadly using your Apple ID',
   },
 ];
 

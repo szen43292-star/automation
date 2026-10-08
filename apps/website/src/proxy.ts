@@ -3,10 +3,21 @@ import { NextResponse, type NextRequest } from 'next/server';
 /**
  * Optional password for the whole site (SITE_PASSWORD). Use it when the installer is a private
  * build - for example one with your own API keys built in - so only you can download it.
+ * /admin (release admin) always needs ADMIN_PASSWORD.
  */
 export function proxy(request: NextRequest) {
+  // The release admin has its own password and does not exist without one.
+  if (request.nextUrl.pathname === '/admin' || request.nextUrl.pathname.startsWith('/admin/')) {
+    const admin = process.env.ADMIN_PASSWORD;
+    if (!admin) return new NextResponse('Not found', { status: 404 });
+    return passwordGate(request, admin, 'FlowForge admin');
+  }
   const password = process.env.SITE_PASSWORD;
   if (!password) return NextResponse.next();
+  return passwordGate(request, password, 'FlowForge');
+}
+
+function passwordGate(request: NextRequest, password: string, realm: string) {
   const header = request.headers.get('authorization') ?? '';
   const [scheme, encoded] = header.split(' ');
   if (scheme === 'Basic' && encoded) {
@@ -16,7 +27,7 @@ export function proxy(request: NextRequest) {
   }
   return new NextResponse('Password required', {
     status: 401,
-    headers: { 'WWW-Authenticate': 'Basic realm="FlowForge", charset="UTF-8"' },
+    headers: { 'WWW-Authenticate': `Basic realm="${realm}", charset="UTF-8"` },
   });
 }
 

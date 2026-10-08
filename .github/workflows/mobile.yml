@@ -1,0 +1,218 @@
+name: Phone apps
+
+# Builds the Android APK (Linux) and the iPhone IPA (macOS) on every push that touches them, and
+# as part of a release (release.yml). Private builds: the PUBLIC_URL secret becomes the app's
+# server, so nobody types an address. Signing secrets are optional (see README "Phone apps").
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'apps/mobile/**'
+      - 'apps/editor/**'
+      - 'packages/workflow/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/mobile.yml'
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
+    outputs:
+      ios-signed:
+        description: 'true when the IPA is signed with your Apple certificate'
+        value: ${{ jobs.ios.outputs.signed }}
+
+concurrency:
+  group: mobile-${{ github.ref }}-${{ inputs.version }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: pnpm install --frozen-lockfile
+
+      - name: Version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          version="${INPUT_VERSION:-$(node -p "require('./apps/mobile/package.json').version")}"
+          echo "version=${version#v}" >> "$GITHUB_OUTPUT"
+          # Each build gets a higher version code, so phones accept it as an update.
+          echo "code=$((GITHUB_RUN_NUMBER + 100))" >> "$GITHUB_OUTPUT"
+
+      - name: Build the app's web part (server address from the PUBLIC_URL secret)
+        env:
+          BUNDLE_PUBLIC_URL: ${{ secrets.PUBLIC_URL }}
+        run: pnpm --filter @flowforge/mobile web && pnpm --filter @flowforge/mobile exec cap sync android
+
+      - name: Signing key and Firebase config (optional secrets)
+        working-directory: apps/mobile/android
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [[ -n "$ANDROID_KEYSTORE_BASE64" ]]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > release.jks
+            {
+              echo "storeFile=release.jks"
+              echo "storePassword=$ANDROID_KEYSTORE_PASSWORD"
+              echo "keyAlias=${ANDROID_KEY_ALIAS:-flowforge}"
+              echo "keyPassword=${ANDROID_KEY_PASSWORD:-$ANDROID_KEYSTORE_PASSWORD}"
+            } > keystore.properties
+            echo "Signing with your release key"
+          else
+            echo "::warning::No ANDROID_KEYSTORE_BASE64 secret: the APK is signed with a temporary key. Installing a later build will need an uninstall first."
+          fi
+          if [[ -n "$GOOGLE_SERVICES_JSON" ]]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+            echo "Push notifications: enabled"
+          fi
+
+      - name: Build the APK
+        working-directory: apps/mobile/android
+        env:
+          MOBILE_VERSION: ${{ steps.version.outputs.version }}
+          MOBILE_VERSION_CODE: ${{ steps.version.outputs.code }}
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon --console=plain
+          mkdir -p ../release
+          cp app/build/outputs/apk/release/app-release.apk ../release/FlowForge.apk
+          "$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/apksigner" verify --print-certs ../release/FlowForge.apk
+          rm -f release.jks keystore.properties app/google-services.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FlowForge-Android-${{ steps.version.outputs.version }}
+          retention-days: 14
+          path: apps/mobile/release/FlowForge.apk
+
+  ios:
+    name: iPhone IPA
+    runs-on: macos-15
+    timeout-minutes: 60
+    outputs:
+      signed: ${{ steps.sign.outputs.signed }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          version="${INPUT_VERSION:-$(node -p "require('./apps/mobile/package.json').version")}"
+          echo "version=${version#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build the app's web part
+        env:
+          BUNDLE_PUBLIC_URL: ${{ secrets.PUBLIC_URL }}
+        run: pnpm --filter @flowforge/mobile web && pnpm --filter @flowforge/mobile exec cap sync ios
+
+      - name: Apple signing (optional secrets)
+        id: sign
+        env:
+          IOS_CERTIFICATE_P12_BASE64: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          if [[ -z "$IOS_CERTIFICATE_P12_BASE64" || -z "$IOS_PROVISIONING_PROFILE_BASE64" ]]; then
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No Apple signing secrets: building an unsigned IPA (install it with AltStore or Sideloadly)."
+            exit 0
+          fi
+          keychain="$RUNNER_TEMP/build.keychain-db"
+          security create-keychain -p ci "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p ci "$keychain"
+          echo "$IOS_CERTIFICATE_P12_BASE64" | base64 -d > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -P "$IOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security list-keychain -d user -s "$keychain"
+          security set-key-partition-list -S apple-tool:,apple: -k ci "$keychain" > /dev/null
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          echo "$IOS_PROVISIONING_PROFILE_BASE64" | base64 -d > "$RUNNER_TEMP/profile.mobileprovision"
+          security cms -D -i "$RUNNER_TEMP/profile.mobileprovision" > "$RUNNER_TEMP/profile.plist"
+          uuid=$(/usr/libexec/PlistBuddy -c 'Print UUID' "$RUNNER_TEMP/profile.plist")
+          team=$(/usr/libexec/PlistBuddy -c 'Print TeamIdentifier:0' "$RUNNER_TEMP/profile.plist")
+          app_id=$(/usr/libexec/PlistBuddy -c 'Print Entitlements:application-identifier' "$RUNNER_TEMP/profile.plist")
+          cp "$RUNNER_TEMP/profile.mobileprovision" "$HOME/Library/MobileDevice/Provisioning Profiles/$uuid.mobileprovision"
+          method=ad-hoc
+          if /usr/libexec/PlistBuddy -c 'Print Entitlements:get-task-allow' "$RUNNER_TEMP/profile.plist" 2>/dev/null | grep -q true; then method=development; fi
+          {
+            echo "signed=true"
+            echo "uuid=$uuid"
+            echo "team=$team"
+            echo "bundle=${app_id#*.}"
+            echo "method=$method"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build the IPA
+        working-directory: apps/mobile/ios/App
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          SIGNED: ${{ steps.sign.outputs.signed }}
+          PROFILE_UUID: ${{ steps.sign.outputs.uuid }}
+          TEAM_ID: ${{ steps.sign.outputs.team }}
+          BUNDLE_ID: ${{ steps.sign.outputs.bundle }}
+          METHOD: ${{ steps.sign.outputs.method }}
+        run: |
+          mkdir -p ../../release
+          common=(-project App.xcodeproj -scheme App -configuration Release -destination 'generic/platform=iOS'
+            -archivePath "$RUNNER_TEMP/App.xcarchive" MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER")
+          if [[ "$SIGNED" == "true" ]]; then
+            xcodebuild archive "${common[@]}" CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM="$TEAM_ID" \
+              PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" PROVISIONING_PROFILE_SPECIFIER="$PROFILE_UUID" CODE_SIGN_IDENTITY="Apple Distribution"
+            cat > "$RUNNER_TEMP/export.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>$METHOD</string>
+            <key>teamID</key><string>$TEAM_ID</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>provisioningProfiles</key><dict><key>$BUNDLE_ID</key><string>$PROFILE_UUID</string></dict>
+          </dict></plist>
+          PLIST
+            xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/App.xcarchive" -exportOptionsPlist "$RUNNER_TEMP/export.plist" -exportPath "$RUNNER_TEMP/export"
+            cp "$RUNNER_TEMP"/export/*.ipa ../../release/FlowForge.ipa
+          else
+            xcodebuild archive "${common[@]}" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+            mkdir -p "$RUNNER_TEMP/ipa/Payload"
+            cp -R "$RUNNER_TEMP/App.xcarchive/Products/Applications/App.app" "$RUNNER_TEMP/ipa/Payload/"
+            (cd "$RUNNER_TEMP/ipa" && zip -qry FlowForge.ipa Payload)
+            cp "$RUNNER_TEMP/ipa/FlowForge.ipa" ../../release/FlowForge.ipa
+          fi
+          ls -la ../../release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FlowForge-iOS-${{ steps.version.outputs.version }}
+          retention-days: 14
+          path: apps/mobile/release/FlowForge.ipa

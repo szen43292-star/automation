@@ -1,13 +1,11 @@
 name: Windows app
 
-# Builds the Windows installer on every push that touches it, and publishes a GitHub Release when
-# run manually with a version (Actions → Windows app → Run workflow) or when a v* tag is pushed.
-# Only the built-in GITHUB_TOKEN is used - no secrets to configure.
+# Builds the Windows installer on every push that touches it. Releases (with the phone apps) are
+# published by release.yml, which calls this workflow.
 
 on:
   push:
     branches: ['**']
-    tags: ['v*']
     paths:
       - 'apps/desktop/**'
       - 'apps/server/**'
@@ -16,20 +14,18 @@ on:
       - 'pnpm-lock.yaml'
       - '.github/workflows/desktop.yml'
   workflow_dispatch:
+  workflow_call:
     inputs:
       version:
-        description: 'Release version, e.g. 0.3.0 (leave empty to only build)'
-        required: false
-      notes:
-        description: 'Release notes (Markdown). Empty = list of commits since the last release'
-        required: false
+        type: string
+        required: true
 
 concurrency:
-  group: desktop-${{ github.ref }}
+  group: desktop-${{ github.ref }}-${{ inputs.version }}
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   windows:
@@ -53,9 +49,7 @@ jobs:
         env:
           INPUT_VERSION: ${{ inputs.version }}
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            version="${GITHUB_REF_NAME#v}"; release=true
-          elif [[ -n "$INPUT_VERSION" ]]; then
+          if [[ -n "$INPUT_VERSION" ]]; then
             version="${INPUT_VERSION#v}"; release=true
           else
             version="$(node -p "require('./apps/desktop/package.json').version")-ci.${GITHUB_RUN_NUMBER}"; release=false
@@ -127,21 +121,9 @@ jobs:
           if (Test-Path "$dir\FlowForge.exe") { throw 'Uninstall left the app behind' }
           Write-Host 'Install, launch and uninstall: ok'
 
-      - name: Release notes and manifest
+      - name: Manifest (for this build's artifact)
         shell: bash
-        env:
-          INPUT_NOTES: ${{ inputs.notes }}
-        run: |
-          notes_file="$RUNNER_TEMP/notes.md"
-          if [[ -n "$INPUT_NOTES" ]]; then
-            printf '%s\n' "$INPUT_NOTES" > "$notes_file"
-          else
-            previous="$(git describe --tags --abbrev=0 --match 'v*' HEAD^ 2>/dev/null || true)"
-            range="${previous:+$previous..}HEAD"
-            { echo "### Changes"; git log --no-merges --pretty='- %s' $range | head -40; } > "$notes_file"
-          fi
-          node apps/desktop/scripts/release-manifest.mjs --version "${{ steps.version.outputs.version }}" --notes-file "$notes_file"
-          cp "$notes_file" apps/desktop/release/notes.md
+        run: node apps/desktop/scripts/release-manifest.mjs --version "${{ steps.version.outputs.version }}"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -153,14 +135,3 @@ jobs:
             apps/desktop/release/latest.yml
             apps/desktop/release/release.json
             apps/desktop/release/SHA256SUMS.txt
-
-      - name: Publish GitHub Release
-        if: steps.version.outputs.release == 'true'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        working-directory: apps/desktop/release
-        run: |
-          tag="v${{ steps.version.outputs.version }}"
-          gh release create "$tag" --target "$GITHUB_SHA" --title "FlowForge ${{ steps.version.outputs.version }}" --notes-file notes.md --latest \
-            FlowForge-Setup.exe FlowForge-Setup.exe.blockmap latest.yml release.json SHA256SUMS.txt

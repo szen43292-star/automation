@@ -87,6 +87,8 @@ interface Client {
  */
 export class PushHub {
   private readonly clients = new Set<Client>();
+  /** Also told about every event (phone notifications). */
+  readonly observers = new Set<(topics: string[], event: PushEvent) => void>();
 
   constructor(private readonly logger: FastifyBaseLogger) {}
 
@@ -107,6 +109,13 @@ export class PushHub {
   }
 
   publish(topics: string[], event: PushEvent) {
+    for (const observer of this.observers) {
+      try {
+        observer(topics, event);
+      } catch (error) {
+        this.logger.warn({ err: error }, 'push observer failed');
+      }
+    }
     const payload = JSON.stringify(event);
     for (const client of this.clients) {
       if (!topics.some((t) => client.topics.has(t))) continue;

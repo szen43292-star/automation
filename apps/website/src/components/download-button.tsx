@@ -22,6 +22,8 @@ interface Props {
   showDetailsLink?: boolean;
   /** Hide the "not on Windows" notices (e.g. in a compact call to action). */
   hideNotices?: boolean;
+  /** Phone apps of the same release: phone visitors get their app first. */
+  phones?: { android?: DownloadInfo | null; ios?: DownloadInfo | null };
 }
 
 export function DownloadButton({
@@ -31,10 +33,34 @@ export function DownloadButton({
   size = 'lg',
   showDetailsLink,
   hideNotices,
+  phones,
 }: Props) {
   const platform = usePlatform();
   const big = size === 'lg';
   const buttonClass = `inline-flex items-center justify-center gap-2.5 rounded-xl bg-accent font-semibold text-white shadow-[0_8px_24px_-8px_rgb(255_109_58/0.7)] transition hover:bg-accent-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${big ? 'h-13 px-7 text-[16px]' : 'h-11 px-5 text-[15px]'}`;
+
+  const phoneApp =
+    platform === 'android' ? phones?.android : platform === 'ios' ? phones?.ios : null;
+
+  if (phoneApp) {
+    return (
+      <div className="flex flex-col items-start gap-3">
+        <a
+          href={phoneApp.url}
+          className={buttonClass}
+          download
+          data-testid={`download-${platform}`}
+        >
+          <Smartphone size={20} /> Download for {platformNames[platform as 'android' | 'ios']}
+        </a>
+        <p className="text-[13px] text-muted">
+          {[`Version ${version}`, formatSize(phoneApp.size), phoneApp.requirements]
+            .filter(Boolean)
+            .join(' · ')}
+        </p>
+      </div>
+    );
+  }
 
   if (!download) {
     return (
@@ -62,15 +88,14 @@ export function DownloadButton({
   ].join(' · ');
   const mobile = platform === 'android' || platform === 'ios';
   const otherDesktop = platform === 'macos' || platform === 'linux';
-
   return (
     <div className="flex flex-col items-start gap-3">
       {mobile && !hideNotices && (
         <div className="flex max-w-md items-start gap-2.5 rounded-xl border border-line bg-panel px-4 py-3 text-sm text-muted">
           <Smartphone size={18} className="mt-0.5 shrink-0 text-accent" />
           <span>
-            Apps for {platformNames[platform]} are coming soon. FlowForge runs on a Windows PC -
-            open this page there to install it.
+            The {platformNames[platform]} app is not in this release yet. FlowForge runs on a
+            Windows PC - open this page there to install it.
           </span>
         </div>
       )}

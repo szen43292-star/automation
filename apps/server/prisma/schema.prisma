@@ -37,6 +37,21 @@ model User {
   answeredCalls    Call[]
   agents           Agent[]
   apiKeys          ApiKey[]
+  devices          Device[]
+}
+
+/// A phone with the FlowForge app, registered for push notifications (Firebase Cloud Messaging).
+model Device {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token      String   @unique
+  /// android | ios
+  platform   String
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 /// Key for the public API: acts as its user (same role and access). Only a sha256 hash is stored.

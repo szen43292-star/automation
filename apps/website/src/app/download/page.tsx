@@ -9,8 +9,10 @@ import {
   formatDate,
   formatSize,
   getLatestRelease,
+  platformDownload,
   releasesRepo,
   windowsDownload,
+  type Download,
 } from '@/lib/releases';
 
 // Re-check GitHub for a new release every 5 minutes (must be a literal for Next.js).
@@ -25,6 +27,8 @@ export const metadata: Metadata = {
 export default async function DownloadPage() {
   const release = await getLatestRelease();
   const download = windowsDownload(release);
+  const android = platformDownload(release, 'android');
+  const ios = platformDownload(release, 'ios');
   const repo = releasesRepo();
   const releasesUrl = `https://github.com/${repo}/releases`;
 
@@ -42,6 +46,7 @@ export default async function DownloadPage() {
               download={download}
               version={release?.version ?? null}
               releasesUrl={releasesUrl}
+              phones={{ android, ios }}
             />
           </div>
         </div>
@@ -51,12 +56,55 @@ export default async function DownloadPage() {
           <div className="text-sm">
             <div className="font-semibold">On your phone?</div>
             <p className="mt-1 leading-relaxed text-muted">
-              Scan to open this page. Android and iOS apps are on the way; until then, install on a
-              Windows PC.
+              Scan to open this page on your phone and install the app there.
             </p>
           </div>
         </aside>
       </div>
+
+      {(android || ios) && (
+        <section className="mt-14" aria-labelledby="phones-heading">
+          <h2 id="phones-heading" className="text-2xl font-bold tracking-tight">
+            Phone apps
+          </h2>
+          <p className="mt-2 max-w-2xl text-muted">
+            Answer WhatsApp calls, chat with customers and watch your AI agent from your phone. The
+            app connects to your FlowForge (the Windows app or your server).
+          </p>
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            {android && (
+              <PhoneCard
+                download={android}
+                title="Android"
+                steps={[
+                  'Download FlowForge.apk on your phone.',
+                  'Open it and allow your browser to install apps when asked.',
+                  'Sign in with your FlowForge account.',
+                ]}
+              />
+            )}
+            {ios && (
+              <PhoneCard
+                download={ios}
+                title="iPhone"
+                steps={
+                  ios.requirements?.includes('unsigned')
+                    ? [
+                        'Install AltStore or Sideloadly on your computer.',
+                        'Download FlowForge.ipa and install it with your Apple ID.',
+                        'Sign in with your FlowForge account.',
+                      ]
+                    : [
+                        'Download FlowForge.ipa on an iPhone registered in your Apple developer account.',
+                        'Open it to install, then trust the developer in Settings → General → VPN & Device Management.',
+                        'Sign in with your FlowForge account.',
+                      ]
+                }
+              />
+            )}
+          </div>
+        </section>
+      )}
 
       {release && download && (
         <section
@@ -248,5 +296,40 @@ function Faq({ q, children }: { q: string; children: ReactNode }) {
       </summary>
       <p className="mt-3 text-[15px] leading-relaxed text-muted">{children}</p>
     </details>
+  );
+}
+
+function PhoneCard({
+  download,
+  title,
+  steps,
+}: {
+  download: Download;
+  title: string;
+  steps: string[];
+}) {
+  return (
+    <div
+      className="rounded-2xl border border-line bg-panel p-6"
+      data-testid={`phone-${download.platform}`}
+    >
+      <div className="flex items-center gap-3">
+        <div className="text-lg font-semibold">{title}</div>
+        <span className="text-sm text-muted">{formatSize(download.size)}</span>
+        <a
+          href={download.url}
+          download
+          className="ml-auto inline-flex h-10 items-center gap-2 rounded-xl bg-accent px-4 text-sm font-semibold text-white hover:bg-accent-strong"
+        >
+          <FileDown size={16} /> {download.file}
+        </a>
+      </div>
+      <p className="mt-2 text-sm text-muted">{download.requirements}</p>
+      <ol className="mt-4 list-decimal space-y-1 pl-5 text-sm text-muted">
+        {steps.map((step) => (
+          <li key={step}>{step}</li>
+        ))}
+      </ol>
+    </div>
   );
 }

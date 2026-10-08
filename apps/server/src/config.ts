@@ -79,6 +79,12 @@ const envSchema = z.object({
   ELEVENLABS_BASE_URL: z.string().url().default('https://api.elevenlabs.io'),
   SARVAM_API_KEY: z.string().min(10).optional(),
   SARVAM_BASE_URL: z.string().url().default('https://api.sarvam.ai'),
+  /**
+   * Phone notifications (incoming / missed calls) for the Android and iOS apps: a Firebase
+   * service account JSON (or base64 of it). Optional.
+   */
+  FCM_SERVICE_ACCOUNT: z.string().min(20).optional(),
+  FCM_API_URL: z.string().url().default('https://fcm.googleapis.com'),
 });
 
 export type Config = z.infer<typeof envSchema> & {
