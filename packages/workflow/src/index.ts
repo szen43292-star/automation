@@ -11,3 +11,4 @@ export * from './nodeTypes';
 export * from './pairedItem';
 export * from './expressionRuntime';
 export * from './credentials';
+export * from './events';

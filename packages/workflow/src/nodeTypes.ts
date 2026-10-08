@@ -27,6 +27,55 @@ export interface INodeType {
   webhook?(this: IWebhookFunctions): Promise<IWebhookResult>;
   /** Schedule triggers: cron expressions (5 or 6 fields) derived from the parameters. */
   cronExpressions?(parameters: INodeParameters): string[];
+  /** Event triggers (triggerKind "event"): which events start the workflow. */
+  eventSubscription?(parameters: INodeParameters): IEventSubscription;
+}
+
+/**
+ * What an event trigger listens to, e.g. WhatsApp messages on one number:
+ * `{ source: 'whatsapp', scope: '<accountId>' | '*', events: ['message'], filter: { messageType: ['text'] } }`.
+ * See `matchesSubscription` for the matching rules.
+ */
+export interface IEventSubscription {
+  source: string;
+  scope: string;
+  events: string[];
+  filter?: Record<string, string[]>;
+}
+
+/** A WhatsApp message sent through a connected number. */
+export interface IWhatsAppSendResult {
+  messageId: string;
+  to: string;
+  accountId: string;
+  /** The business number it was sent from. */
+  from: string;
+  /** True for the built-in simulator (nothing went to WhatsApp). */
+  simulated: boolean;
+}
+
+export interface IWhatsAppMedia {
+  data: Buffer;
+  mimeType: string;
+  fileName?: string;
+  sha256?: string;
+}
+
+/**
+ * WhatsApp access for nodes. Tokens never reach the node: the server looks up the connected
+ * number by id and makes the Cloud API call itself.
+ */
+export interface IWhatsAppHelper {
+  /** Send a Cloud API message object (`{ type: 'text', text: { body } }`, templates, media, …). */
+  send(accountId: string, to: string, message: IDataObject): Promise<IWhatsAppSendResult>;
+  /** Mark a received message as read (blue ticks), optionally showing "typing…". */
+  markRead(accountId: string, messageId: string, options?: { typing?: boolean }): Promise<void>;
+  uploadMedia(
+    accountId: string,
+    media: { data: Buffer; mimeType: string; fileName?: string },
+  ): Promise<{ id: string }>;
+  downloadMedia(accountId: string, mediaId: string): Promise<IWhatsAppMedia>;
+  listTemplates(accountId: string): Promise<IDataObject[]>;
 }
 
 export interface IWebhookRequest {
@@ -216,4 +265,6 @@ export interface IExecuteHelpers {
   runCode(options: ICodeRunOptions): Promise<ICodeRunResult>;
   returnJsonArray(data: IDataObject | IDataObject[]): INodeExecutionData[];
   prepareBinaryData(data: Buffer, fileName?: string, mimeType?: string): IBinaryData;
+  /** Connected WhatsApp numbers (throws when the host has none configured). */
+  whatsapp: IWhatsAppHelper;
 }

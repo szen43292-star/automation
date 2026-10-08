@@ -65,6 +65,15 @@ export function registerErrorHandler(app: FastifyInstance) {
           .send({ error: 'Conflict', message: 'A record with these values already exists' });
       }
     }
+    // Meta (WhatsApp) rejected a request: show its message and our explanation.
+    if (error.name === 'GraphApiError') {
+      const { description } = error as Error & { description?: string };
+      return reply.status(502).send({
+        error: 'WhatsAppError',
+        message: error.message,
+        ...(description ? { description } : {}),
+      });
+    }
     const fastifyError = error as FastifyError;
     if (fastifyError.validation || (fastifyError.statusCode && fastifyError.statusCode < 500)) {
       const status = fastifyError.statusCode ?? 400;

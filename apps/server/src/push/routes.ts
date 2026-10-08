@@ -5,7 +5,7 @@ import { toAuthUser, type AuthUser } from '../auth/auth';
 const messageSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('subscribe'),
-    topic: z.string().regex(/^(workflow|execution):[\w-]+$/),
+    topic: z.string().regex(/^((workflow|execution):[\w-]+|whatsapp)$/),
   }),
   z.object({ type: z.literal('unsubscribe'), topic: z.string() }),
   z.object({ type: z.literal('ping') }),
@@ -31,6 +31,8 @@ export async function pushRoutes(app: FastifyInstance) {
 
     /** Only allow topics for workflows / executions the user can see. */
     const canAccess = async (topic: string) => {
+      // Connected WhatsApp numbers are shared by everyone on this instance.
+      if (topic === 'whatsapp') return true;
       const [kind, id] = topic.split(':') as [string, string];
       const scope = app.services.workflows.scope(user);
       if (kind === 'workflow')

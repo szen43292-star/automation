@@ -267,19 +267,15 @@ export async function webhookRoutes(app: FastifyInstance, opts: { config: Config
     }
     const run = outcome.run;
     if (run.status !== 'success') {
-      return reply
-        .status(500)
-        .send({
-          message: 'Error in workflow',
-          error: run.data.resultData.error?.message ?? run.status,
-        });
+      return reply.status(500).send({
+        message: 'Error in workflow',
+        error: run.data.resultData.error?.message ?? run.status,
+      });
     }
     if (responseMode === 'responseNode') {
-      return reply
-        .status(500)
-        .send({
-          message: 'The workflow finished without a "Respond to Webhook" node sending a response',
-        });
+      return reply.status(500).send({
+        message: 'The workflow finished without a "Respond to Webhook" node sending a response',
+      });
     }
     const items = lastNodeOutput(run);
     const data = String(node.parameters.responseData ?? 'firstEntryJson');
@@ -357,11 +353,9 @@ export async function webhookRoutes(app: FastifyInstance, opts: { config: Config
         include: { data: true },
       });
       if (!row || row.status !== 'waiting') {
-        return reply
-          .status(404)
-          .send({
-            message: 'This execution is not waiting (it may have finished or already been resumed)',
-          });
+        return reply.status(404).send({
+          message: 'This execution is not waiting (it may have finished or already been resumed)',
+        });
       }
       const data = row.data?.data as { waitingNode?: string } | undefined;
       const workflowData = row.data?.workflowData as unknown as IWorkflowBase;

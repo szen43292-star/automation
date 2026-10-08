@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { PrismaClient } from '@prisma/client';
-import { buildApp } from '../src/app';
+import { buildApp, type BuildOptions } from '../src/app';
 import { loadConfig } from '../src/config';
 
 export const TEST_DATABASE_URL =
@@ -8,7 +8,10 @@ export const TEST_DATABASE_URL =
 
 export const prisma = new PrismaClient({ datasources: { db: { url: TEST_DATABASE_URL } } });
 
-export async function createTestApp(): Promise<FastifyInstance> {
+export async function createTestApp(
+  env: Record<string, string> = {},
+  options: BuildOptions = {},
+): Promise<FastifyInstance> {
   const config = loadConfig({
     NODE_ENV: 'test',
     DATABASE_URL: TEST_DATABASE_URL,
@@ -17,9 +20,10 @@ export async function createTestApp(): Promise<FastifyInstance> {
     CODE_TIMEOUT_MS: '3000',
     AUTH_RATE_LIMIT: '1000',
     EDITOR_DIST: '/nonexistent',
+    ...env,
   });
   config.editorDist = null;
-  const app = await buildApp(config, { prisma, logger: false });
+  const app = await buildApp(config, { prisma, logger: false, ...options });
   await app.ready();
   return app;
 }
@@ -33,7 +37,7 @@ export async function resetDb() {
   for (let attempt = 1; ; attempt++) {
     try {
       await prisma.$executeRawUnsafe(
-        'TRUNCATE "ExecutionData", "Execution", "WebhookEntity", "WorkflowVersion", "Workflow", "Credential", "Variable", "User" RESTART IDENTITY CASCADE',
+        'TRUNCATE "ExecutionData", "Execution", "WebhookEntity", "WorkflowVersion", "Workflow", "Credential", "Variable", "WhatsAppMessage", "WhatsAppAccount", "Setting", "User" RESTART IDENTITY CASCADE',
       );
       return;
     } catch (error) {
@@ -66,3 +70,14 @@ export const manualTrigger = {
   position: [0, 0] as [number, number],
   parameters: {},
 };
+
+/** Poll until `check` returns a truthy value (for work that happens after a response). */
+export async function eventually<T>(check: () => Promise<T | null | undefined | false>, timeoutMs = 8_000): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const value = await check();
+    if (value) return value;
+    if (Date.now() > deadline) throw new Error('Timed out waiting for condition');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}

@@ -96,6 +96,8 @@ export interface INodePropertyTypeOptions {
   generateId?: boolean;
   /** Options loaded from the server: GET /api/node-options/<method> (e.g. "workflows"). */
   loadOptionsMethod?: string;
+  /** Other parameters sent along (as query string) and that reload the options when changed. */
+  loadOptionsDependsOn?: string[];
 }
 
 /** A fixedCollection groups repeated value sets, e.g. `sortFields.values[]`. */

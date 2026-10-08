@@ -22,6 +22,7 @@ import {
   type INodeType,
   type ITaskDataConnections,
   type IWaitOptions,
+  type IWhatsAppHelper,
   type NodeParameterValueType,
   type PairedItemResult,
   type Workflow,
@@ -114,6 +115,7 @@ export class ExecuteContext implements IExecuteFunctions {
       },
       returnJsonArray: (data) => toItems(data),
       prepareBinaryData,
+      whatsapp: additional.whatsapp ?? unavailableWhatsApp(node),
     };
   }
 
@@ -263,4 +265,14 @@ export class ExecuteContext implements IExecuteFunctions {
       vars: additional.variables ?? {},
     };
   }
+}
+
+/** Stand-in when the host has no WhatsApp support (e.g. a plain engine in tests). */
+function unavailableWhatsApp(node: INode): IWhatsAppHelper {
+  const fail = async (): Promise<never> => {
+    throw new NodeOperationError(node, 'WhatsApp is not available here', {
+      description: 'Run this workflow on a FlowForge server with a connected WhatsApp number.',
+    });
+  };
+  return { send: fail, markRead: fail, uploadMedia: fail, downloadMedia: fail, listTemplates: fail };
 }

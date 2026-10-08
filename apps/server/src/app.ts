@@ -25,6 +25,11 @@ import { VariablesService, variableRoutes } from './variables/routes';
 import { TestWebhooks, webhookRoutes } from './webhooks/webhooks';
 import { WorkflowService } from './workflows/WorkflowService';
 import { workflowRoutes } from './workflows/routes';
+import { GraphClient } from './whatsapp/graph';
+import { WhatsAppPlatform } from './whatsapp/platform';
+import { whatsappRoutes, whatsappWebhookRoutes } from './whatsapp/routes';
+import { WhatsAppService } from './whatsapp/WhatsAppService';
+import { badRequest } from './lib/errors';
 
 export const VERSION = '0.2.0';
 
@@ -45,6 +50,9 @@ declare module 'fastify' {
     testWebhooks: TestWebhooks;
     queue: QueueService | null;
     waitTracker: WaitTracker;
+    whatsapp: WhatsAppService;
+    whatsappPlatform: WhatsAppPlatform;
+    whatsappGraphVersion: string;
     flowforgeVersion: string;
     /** Start schedules, webhooks, the wait tracker and queue relays (not done in tests unless asked). */
     startBackgroundServices(): Promise<void>;
@@ -57,6 +65,8 @@ export interface BuildOptions {
   waitTrackerIntervalMs?: number;
   /** Prefix for Redis keys (tests use a unique one). */
   queuePrefix?: string;
+  /** Delays of simulated WhatsApp "delivered" / "read" receipts (tests use short ones). */
+  whatsappReceiptDelays?: [number, number];
 }
 
 export async function buildApp(
@@ -84,11 +94,20 @@ export async function buildApp(
       ? new QueueService(config.REDIS_URL, app.log, options.queuePrefix)
       : null;
   const workflows = new WorkflowService(prisma, nodeTypes);
-  const credentials = new CredentialsService(
+  const cipher = new Cipher(config.ENCRYPTION_KEY!);
+  const credentials = new CredentialsService(prisma, cipher, new CredentialTypeRegistry());
+  const whatsappPlatform = new WhatsAppPlatform(prisma, cipher, config);
+  const whatsapp = new WhatsAppService({
     prisma,
-    new Cipher(config.ENCRYPTION_KEY!),
-    new CredentialTypeRegistry(),
-  );
+    cipher,
+    graph: new GraphClient(config.META_GRAPH_URL, config.META_GRAPH_VERSION),
+    platform: whatsappPlatform,
+    push,
+    logger: app.log,
+    ...(options.whatsappReceiptDelays
+      ? { simulatorReceiptDelays: options.whatsappReceiptDelays }
+      : {}),
+  });
   const variables = new VariablesService(prisma);
   const executions = new ExecutionService({
     prisma,
@@ -99,6 +118,7 @@ export async function buildApp(
     push,
     config,
     logger: app.log,
+    whatsapp: whatsapp.helper(),
     ...(queue ? { queue } : {}),
   });
   const activeWorkflows = new ActiveWorkflowManager(
@@ -109,6 +129,16 @@ export async function buildApp(
     config.DEFAULT_TIMEZONE,
   );
   workflows.activation = activeWorkflows;
+  activeWorkflows.push = push;
+  activeWorkflows.eventValidators.set('whatsapp', async (subscription, node) => {
+    if (subscription.scope === '*') return;
+    const exists = await prisma.whatsAppAccount.count({ where: { id: subscription.scope } });
+    if (!exists)
+      throw badRequest(`"${node.name}": the selected WhatsApp number is not connected any more`);
+  });
+  whatsapp.onEvent = async (event, item) => {
+    await activeWorkflows.dispatchEvent(event, item);
+  };
   const waitTracker = new WaitTracker(prisma, executions, app.log, options.waitTrackerIntervalMs);
 
   app.decorate('prisma', prisma);
@@ -119,6 +149,9 @@ export async function buildApp(
   app.decorate('queue', queue);
   app.decorate('waitTracker', waitTracker);
   app.decorate('flowforgeVersion', VERSION);
+  app.decorate('whatsapp', whatsapp);
+  app.decorate('whatsappPlatform', whatsappPlatform);
+  app.decorate('whatsappGraphVersion', config.META_GRAPH_VERSION);
   app.decorate('startBackgroundServices', async () => {
     if (queue) {
       // Relay live events from workers to WebSocket clients.
@@ -169,6 +202,7 @@ export async function buildApp(
   await app.register(pushRoutes);
   await app.register(oauthCallbackRoutes, { config });
   await app.register(webhookRoutes, { config });
+  await app.register(whatsappWebhookRoutes);
 
   // --- Authenticated API -----------------------------------------------------
   await app.register(async (api) => {
@@ -186,6 +220,7 @@ export async function buildApp(
     await api.register(executionRoutes);
     await api.register(credentialRoutes, { config });
     await api.register(variableRoutes);
+    await api.register(whatsappRoutes);
   });
 
   // --- Editor (single page app) ---------------------------------------------
@@ -216,6 +251,7 @@ export async function buildApp(
   app.addHook('onClose', async () => {
     waitTracker.stop();
     activeWorkflows.shutdown();
+    whatsapp.close();
     await executions.shutdown();
     push.closeAll();
     await queue?.close();

@@ -1,5 +1,6 @@
 import type { WebSocket } from 'ws';
 import type { FastifyBaseLogger } from 'fastify';
+import type { WhatsAppMessageDTO } from '../whatsapp/WhatsAppService';
 
 /** Events pushed to editor / desktop / mobile clients. */
 export type PushEvent =
@@ -38,7 +39,9 @@ export type PushEvent =
   | {
       type: 'testWebhookReceived';
       data: { workflowId: string; executionId: string; nodeId: string };
-    };
+    }
+  | { type: 'whatsappMessage'; data: WhatsAppMessageDTO }
+  | { type: 'whatsappAccountUpdated'; data: { accountId: string } };
 
 interface Client {
   socket: WebSocket;
@@ -48,7 +51,7 @@ interface Client {
 
 /**
  * Topic based fan-out over WebSockets.
- * Topics: `workflow:<id>`, `execution:<id>`, `user:<id>`.
+ * Topics: `workflow:<id>`, `execution:<id>`, `user:<id>`, `whatsapp` (messages on connected numbers).
  */
 export class PushHub {
   private readonly clients = new Set<Client>();

@@ -9,6 +9,9 @@ import { ExecutionService } from './executions/ExecutionService';
 import { QueueService } from './queue/QueueService';
 import { VariablesService } from './variables/routes';
 import { WorkflowService } from './workflows/WorkflowService';
+import { GraphClient } from './whatsapp/graph';
+import { WhatsAppPlatform } from './whatsapp/platform';
+import { WhatsAppService } from './whatsapp/WhatsAppService';
 
 /**
  * Queue worker: runs production executions from BullMQ.
@@ -33,17 +36,25 @@ export async function startWorker(
   const queue = new QueueService(config.REDIS_URL, logger, options.queuePrefix);
   const nodeTypes = createNodeTypes();
   const workflows = new WorkflowService(prisma, nodeTypes);
+  const cipher = new Cipher(config.ENCRYPTION_KEY!);
+  const push = queue.pushPublisher();
+  // Workers send WhatsApp messages; incoming webhooks are handled by the main server.
+  const whatsapp = new WhatsAppService({
+    prisma,
+    cipher,
+    graph: new GraphClient(config.META_GRAPH_URL, config.META_GRAPH_VERSION),
+    platform: new WhatsAppPlatform(prisma, cipher, config),
+    push,
+    logger,
+  });
   const executions = new ExecutionService({
     prisma,
     nodeTypes,
     workflows,
-    credentials: new CredentialsService(
-      prisma,
-      new Cipher(config.ENCRYPTION_KEY!),
-      new CredentialTypeRegistry(),
-    ),
+    credentials: new CredentialsService(prisma, cipher, new CredentialTypeRegistry()),
+    whatsapp: whatsapp.helper(),
     variables: new VariablesService(prisma),
-    push: queue.pushPublisher(),
+    push,
     config,
     logger,
     queue,
@@ -64,6 +75,7 @@ export async function startWorker(
     async close() {
       await worker.close();
       await executions.shutdown();
+      whatsapp.close();
       await queue.close();
       if (!options.prisma) await prisma.$disconnect();
     },

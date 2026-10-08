@@ -14,6 +14,7 @@ import type {
   IRunData,
   IRunExecutionData,
   ITaskData,
+  IWhatsAppHelper,
 } from '@flowforge/workflow';
 import type { CodeSandbox } from './sandbox/CodeSandbox';
 
@@ -70,6 +71,8 @@ export interface WorkflowExecuteAdditionalData {
     headers?: Record<string, string>;
   }): boolean;
   publicUrl?: string;
+  /** Connected WhatsApp numbers (server and workers). */
+  whatsapp?: IWhatsAppHelper;
 }
 
 export interface WorkflowRunOptions {

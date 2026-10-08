@@ -34,6 +34,21 @@ const envSchema = z.object({
   WEBHOOK_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
   /** Maximum webhook request body size. */
   WEBHOOK_MAX_BODY_MB: z.coerce.number().positive().default(16),
+  /**
+   * WhatsApp Business platform (your Meta app). Optional here: the owner can also enter them on the
+   * WhatsApp page. They stay on the server - never in the editor, desktop or mobile apps.
+   */
+  META_APP_ID: z.string().regex(/^\d+$/, 'META_APP_ID is the numeric App ID').optional(),
+  META_APP_SECRET: z.string().min(16).optional(),
+  /** "Embedded Signup" configuration id (Facebook Login for Business). */
+  META_EMBEDDED_SIGNUP_CONFIG_ID: z.string().regex(/^\d+$/).optional(),
+  /** Verify token for the webhook in the Meta app (generated automatically when not set). */
+  WHATSAPP_WEBHOOK_VERIFY_TOKEN: z.string().min(8).optional(),
+  META_GRAPH_URL: z.string().url().default('https://graph.facebook.com'),
+  META_GRAPH_VERSION: z
+    .string()
+    .regex(/^v\d+\.\d+$/)
+    .default('v23.0'),
 });
 
 export type Config = z.infer<typeof envSchema> & {

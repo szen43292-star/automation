@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { whatsappNodeOptions } from '../whatsapp/routes';
 import {
   workflowCreateSchema,
   workflowImportSchema,
@@ -164,10 +165,27 @@ export async function workflowRoutes(app: FastifyInstance, opts: { config: Confi
       pinData: body.workflowData?.pinData ?? stored.pinData,
       active: stored.active,
     };
+    // Event triggers (e.g. WhatsApp): the next matching event runs this workflow.
+    const eventTrigger = app.services.activeWorkflows
+      .eventsOf(workflowData.nodes)
+      .find((r) => r.nodeId === body.nodeId);
+    if (eventTrigger) {
+      app.services.activeWorkflows.listenForEvent({
+        workflowId: id,
+        nodeId: body.nodeId,
+        userId: request.currentUser.id,
+        workflowData,
+      });
+      return {
+        kind: 'event' as const,
+        source: eventTrigger.subscription.source,
+        expiresInSeconds: 120,
+      };
+    }
     const hook = app.services.activeWorkflows
       .webhooksOf(workflowData.nodes)
       .find((h) => h.nodeId === body.nodeId);
-    if (!hook) throw badRequest('This node does not receive webhooks');
+    if (!hook) throw badRequest('This node does not receive webhooks or events');
     if (!hook.path) throw badRequest('Set a path on the Webhook node first');
     app.testWebhooks.register({
       workflowId: id,
@@ -179,6 +197,7 @@ export async function workflowRoutes(app: FastifyInstance, opts: { config: Confi
     });
     const base = config.PUBLIC_URL.replace(/\/+$/, '');
     return {
+      kind: 'webhook' as const,
       testUrl: `${base}/webhook-test/${hook.path}`,
       method: hook.method,
       expiresInSeconds: 120,
@@ -189,12 +208,19 @@ export async function workflowRoutes(app: FastifyInstance, opts: { config: Confi
     const { id } = parse(idParams, request.params);
     await workflows.get(request.currentUser, id);
     app.testWebhooks.cancelForWorkflow(id);
+    app.services.activeWorkflows.cancelEventTest(id);
     return reply.status(204).send();
   });
 
   /** Options for parameters with typeOptions.loadOptionsMethod. */
   app.get('/api/node-options/:method', async (request) => {
     const { method } = parse(z.object({ method: z.string() }), request.params);
+    const whatsapp = await whatsappNodeOptions(
+      app,
+      method,
+      request.query as Record<string, string | undefined>,
+    );
+    if (whatsapp) return { data: whatsapp };
     if (method === 'workflows') {
       const { data } = await workflows.list(request.currentUser, { limit: 250, offset: 0 });
       return { data: data.map((w) => ({ name: w.name, value: w.id })) };

@@ -16,9 +16,10 @@ import { ErrorTrigger, ExecuteWorkflow, ExecuteWorkflowTrigger } from './nodes/S
 import { Switch } from './nodes/Switch';
 import { Wait } from './nodes/Wait';
 import { RespondToWebhook, Webhook } from './nodes/Webhook';
+import { WhatsApp, WhatsAppTrigger, normalisePhone, sampleMessage } from './nodes/WhatsApp';
 
 export * from './credentials';
-export { scheduleToCron };
+export { scheduleToCron, normalisePhone, sampleMessage };
 
 export {
   ErrorTrigger,
@@ -31,6 +32,8 @@ export {
   Switch,
   Wait,
   Webhook,
+  WhatsApp,
+  WhatsAppTrigger,
   Aggregate,
   Code,
   DateTimeNode,
@@ -52,9 +55,11 @@ export const builtinNodes: INodeType[] = [
   ManualTrigger,
   Webhook,
   ScheduleTrigger,
+  WhatsAppTrigger,
   ExecuteWorkflowTrigger,
   ErrorTrigger,
   RespondToWebhook,
+  WhatsApp,
   Merge,
   Switch,
   LoopOverItems,
