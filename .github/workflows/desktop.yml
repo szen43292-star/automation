@@ -85,7 +85,12 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           Start-Process -Wait -FilePath apps/desktop/release/FlowForge-Setup.exe -ArgumentList '/S'
-          $dir = Join-Path $env:LOCALAPPDATA 'Programs\FlowForge'
+          # Find the install folder the way Windows does: from the app's uninstall entry.
+          $entry = Get-ChildItem HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall |
+            Get-ItemProperty | Where-Object { $_.DisplayName -like 'FlowForge*' } | Select-Object -First 1
+          if (-not $entry) { throw 'No FlowForge entry in Apps & features after installing' }
+          $entry | Select-Object DisplayName, DisplayVersion, InstallLocation, UninstallString | Format-List
+          $dir = if ($entry.InstallLocation) { $entry.InstallLocation.TrimEnd('\') } else { Split-Path ($entry.UninstallString -replace '^"([^"]+)".*$', '$1') }
           if (-not (Test-Path "$dir\FlowForge.exe")) { throw "FlowForge.exe was not installed to $dir" }
           $app = Start-Process -FilePath "$dir\FlowForge.exe" -PassThru
           $ready = $false

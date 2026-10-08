@@ -8,6 +8,8 @@ module.exports = {
   productName: 'FlowForge',
   executableName: 'FlowForge',
   copyright: 'FlowForge',
+  // The workspace name (@flowforge/desktop) would become the install folder; use a clean one.
+  extraMetadata: { name: 'flowforge' },
   directories: { output: 'release', buildResources: 'build' },
   // main.cjs bundles everything except Electron, so the app needs no node_modules
   // (the PostgreSQL packages are copied into resources/runtime by scripts/prepare-resources.mjs).
