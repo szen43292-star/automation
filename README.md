@@ -189,7 +189,7 @@ The Phase 2 browser tests check:
 ## Testing Phases 3–5
 
 ```bash
-pnpm test        # workflow 22, engine 32, nodes 57, media 5, server 59, editor 10, website 18, desktop 7
+pnpm test        # workflow 22, engine 32, nodes 57, media 5, server 70, editor 10, website 18, desktop 7
 ```
 
 - **Real calls in the tests.** The server suite runs real calls over WebRTC on localhost. It uses a local STUN responder, a fake Graph API for Meta, and fake AI providers (`apps/server/test/fakeAi.ts`).
@@ -221,6 +221,58 @@ pnpm --filter @flowforge/e2e test:e2e
 5. **Voice:** set the test number's **Calls** to _AI voice agent_, pick the agent, then **Call** from the simulator and talk. Try Hindi or Hinglish, interrupt the agent mid-sentence, ask for "a human" (it rings the app; answer to take over), and say "bye". The call log shows the transcript and summary.
 6. **Workflow tool:** create a workflow _Execute Workflow Trigger → Code_ (`return [{ json: { booking: 'B-1', day: $json.day } }]`). In the agent's **Tools**, add it as `book_appointment` with the detail `day`, then ask the agent to book.
 7. **Real number:** connect your number with **Connect WhatsApp**, enable calling in its **Calls** settings, and call it from your phone. It needs `PUBLIC_URL` reachable from the internet and UDP ports open for audio (`MEDIA_PORT_RANGE`, plus `MEDIA_PUBLIC_IP` behind NAT).
+
+## What's in Phase 6: outbound calls, dashboard, templates, team, API
+
+- **Outbound calls.**
+  - WhatsApp lets a business call only customers who allowed it. **Call customer → Ask permission to call** sends an _Allow calls_ message, and permission lasts 7 days.
+  - Then either **you** call from the app or desktop/phone, or **the AI agent** calls with a purpose (e.g. _"Remind Asha of her 4 pm appointment and confirm"_). The agent speaks first, knows the customer's history, and the call lands in the call log with transcript and summary.
+  - In workflows, the WhatsApp node has _Ask Permission to Call_ and _Call with AI Agent_. See the template **AI reminder calls**.
+- **Dashboard** (home page):
+  - calls answered, missed, by AI and by people;
+  - answer rate and talk time;
+  - messages and workflow runs per day in your timezone;
+  - busiest hours, top callers, agents;
+  - missed calls to call back.
+- **Templates:**
+  - WhatsApp auto-reply menu;
+  - missed call → WhatsApp follow-up;
+  - call summaries to a sheet/CRM;
+  - booking tool for the AI agent;
+  - website lead → WhatsApp;
+  - daily reminders;
+  - AI reminder calls.
+- **Team:** **Settings → Team → Invite** creates a one-time link (7 days), and the person chooses their own password. Roles:
+  - **Owner:** everything, including AI keys and the Meta app.
+  - **Admin:** numbers, agents, all workflows and the team.
+  - **Member:** their own workflows, answering calls and chats.
+- **API keys** (**Settings → API keys**): each key acts as its user on the whole API (`X-API-Key: ff_…`). It is shown once and stored hashed, can expire, shows when it was last used, and can be revoked. The page shows `curl` examples for running workflows, sending WhatsApp messages, starting AI calls and reading calls.
+
+## Testing Phase 6
+
+```bash
+pnpm --filter @flowforge/server test        # 70 tests incl. phase6 (team, keys, dashboard, templates) and phase6-calls
+pnpm --filter @flowforge/e2e test:e2e       # 18 browser tests (3 for Phase 6)
+```
+
+The outbound call tests run real WebRTC calls:
+
+- the AI agent calls a customer who allowed it, speaks first with the purpose, and hangs up when they say bye;
+- a person calls and the customer hears them;
+- a customer declines;
+- a workflow asks for permission and then has the agent call.
+
+**Manual walkthrough (about 5 minutes):**
+
+1. **Dashboard:** open FlowForge and you land on it. Switch between 7, 30 and 90 days.
+2. **Templates:** use _Missed call → WhatsApp follow-up_, choose your test number in both nodes, and activate. Call the test number from the simulator and decline in the app: the follow-up message appears in the chat.
+3. **Outbound:**
+   - In the simulator chat, click **Call customer → Ask permission to call**, then tap **Allow calls** in the chat (you are the customer).
+   - **Call from this device:** answer on the test customer's ringing card (a second browser window plays the customer).
+   - Or try **Start AI call** with a purpose.
+4. **Team:** go to **Settings → Team → Invite** and open the link in a private window to join as a member. As that member you can't change AI keys or invite people.
+5. **API:** go to **Settings → API keys → Create key**, then:
+   `curl localhost:5678/api/dashboard?days=7 -H "X-API-Key: ff_…"`
 
 ## Deployment
 

@@ -11,6 +11,8 @@ export interface IncomingCall {
   contactName: string | null;
   ringSeconds: number;
   receivedAt: number;
+  /** A test number's business calling the simulated customer (this browser is their phone). */
+  simulated?: { waCallId: string; sdp: string };
 }
 
 /** A call this app is on: answered in the app, or a test call to a test number. */
@@ -39,6 +41,8 @@ interface CallsState {
     caller: { number: string; name: string },
     label: string,
   ): Promise<void>;
+  /** Call a customer (they must have allowed calls); you talk from this browser. */
+  callCustomer(accountId: string, to: string, label: string): Promise<void>;
   toggleMute(): void;
   hangup(): Promise<void>;
   /** The other side ended the call. */
@@ -78,6 +82,34 @@ export const useCalls = create<CallsState>((set, get) => ({
     set({ busy: true });
     get().dismiss(callId);
     let leg: BrowserCallLeg | null = null;
+    if (call.simulated) {
+      try {
+        const answered = await BrowserCallLeg.answer(call.simulated.sdp);
+        leg = answered.leg;
+        await endpoints.simulateOutboundAnswer(
+          call.accountId,
+          call.simulated.waCallId,
+          answered.answer,
+        );
+        set({
+          current: {
+            kind: 'test',
+            id: call.simulated.waCallId,
+            accountId: call.accountId,
+            label: call.contactName ?? call.accountNumber,
+            leg,
+            startedAt: Date.now(),
+            muted: false,
+          },
+        });
+      } catch (error) {
+        leg?.close();
+        toast.error((error as Error).message);
+      } finally {
+        set({ busy: false });
+      }
+      return;
+    }
     try {
       const created = await BrowserCallLeg.create();
       leg = created.leg;
@@ -106,8 +138,47 @@ export const useCalls = create<CallsState>((set, get) => ({
   },
 
   async decline(callId) {
+    const call = get().incoming.find((c) => c.callId === callId);
     get().dismiss(callId);
-    await endpoints.declineCall(callId).catch(() => undefined);
+    if (call?.simulated)
+      await endpoints
+        .simulateOutboundDecline(call.accountId, call.simulated.waCallId)
+        .catch(() => undefined);
+    else await endpoints.declineCall(callId).catch(() => undefined);
+  },
+
+  async callCustomer(accountId, to, label) {
+    if (get().current) return;
+    set({ busy: true });
+    let leg: BrowserCallLeg | null = null;
+    try {
+      const created = await BrowserCallLeg.create();
+      leg = created.leg;
+      const result = await endpoints.outboundCall({
+        accountId,
+        to,
+        handler: 'person',
+        sdp: created.offer,
+      });
+      await leg.connect(result.sdp!);
+      set({
+        current: {
+          kind: 'answered',
+          id: result.callId,
+          accountId,
+          label,
+          leg,
+          startedAt: Date.now(),
+          muted: false,
+        },
+      });
+      toast.info(`Calling ${label}…`);
+    } catch (error) {
+      leg?.close();
+      toast.error((error as Error).message);
+    } finally {
+      set({ busy: false });
+    }
   },
 
   async callTestNumber(accountId, caller, label) {
@@ -171,5 +242,6 @@ export const useCalls = create<CallsState>((set, get) => ({
       toast.info('Call ended');
     }
     get().dismiss(id);
+    get().dismiss(`sim:${id}`);
   },
 }));

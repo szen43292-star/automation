@@ -11,6 +11,22 @@ export class BrowserCallLeg {
 
   /** Ask for the microphone and prepare an offer (complete, no trickle ICE). */
   static async create(): Promise<{ leg: BrowserCallLeg; offer: string }> {
+    const { pc, microphone, audio } = await BrowserCallLeg.setup();
+    await pc.setLocalDescription(await pc.createOffer());
+    await waitForCandidates(pc);
+    return { leg: new BrowserCallLeg(pc, microphone, audio), offer: pc.localDescription!.sdp };
+  }
+
+  /** Answer an offer (the simulated customer's phone picking up a call from the business). */
+  static async answer(offer: string): Promise<{ leg: BrowserCallLeg; answer: string }> {
+    const { pc, microphone, audio } = await BrowserCallLeg.setup();
+    await pc.setRemoteDescription({ type: 'offer', sdp: offer });
+    await pc.setLocalDescription(await pc.createAnswer());
+    await waitForCandidates(pc);
+    return { leg: new BrowserCallLeg(pc, microphone, audio), answer: pc.localDescription!.sdp };
+  }
+
+  private static async setup() {
     let microphone: MediaStream;
     try {
       microphone = await navigator.mediaDevices.getUserMedia({
@@ -29,9 +45,7 @@ export class BrowserCallLeg {
       audio.srcObject = event.streams[0] ?? new MediaStream([event.track]);
       void audio.play().catch(() => undefined);
     };
-    await pc.setLocalDescription(await pc.createOffer());
-    await waitForCandidates(pc);
-    return { leg: new BrowserCallLeg(pc, microphone, audio), offer: pc.localDescription!.sdp };
+    return { pc, microphone, audio };
   }
 
   async connect(answer: string) {

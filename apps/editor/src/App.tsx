@@ -21,6 +21,10 @@ import { ExecutionsPage } from './pages/ExecutionsPage';
 import { VariablesPage } from './pages/VariablesPage';
 import { WhatsAppPage } from './pages/WhatsAppPage';
 import { AgentEditorPage } from './pages/AgentEditorPage';
+import { DashboardPage } from './pages/DashboardPage';
+import { InvitePage } from './pages/InvitePage';
+import { SettingsPage } from './pages/SettingsPage';
+import { TemplatesPage } from './pages/TemplatesPage';
 import { AgentsPage } from './pages/AgentsPage';
 import { CallsPage } from './pages/CallsPage';
 import { WorkflowsPage } from './pages/WorkflowsPage';
@@ -48,13 +52,17 @@ function AuthGate() {
 }
 
 const routes: RouteObject[] = [
+  { path: 'invite/:token', element: <InvitePage /> },
   {
     element: <AuthGate />,
     children: [
       {
         element: <Layout />,
         children: [
-          { index: true, element: <Navigate to="/workflows" replace /> },
+          { index: true, element: <Navigate to="/dashboard" replace /> },
+          { path: 'dashboard', element: <DashboardPage /> },
+          { path: 'templates', element: <TemplatesPage /> },
+          { path: 'settings', element: <SettingsPage /> },
           { path: 'workflows', element: <WorkflowsPage /> },
           { path: 'executions', element: <ExecutionsPage /> },
           { path: 'credentials', element: <CredentialsPage /> },

@@ -336,6 +336,7 @@ export const endpoints = {
       reply?: { id: string; title: string; type: 'button' | 'list' };
       location?: { latitude: number; longitude: number; name?: string };
       media?: { base64: string; mimeType: string; fileName?: string; caption?: string };
+      callPermission?: 'accept' | 'reject';
     },
   ) => api<{ messageId: string }>(`/api/whatsapp/accounts/${id}/simulate`, { body }),
   // Calls
@@ -379,11 +380,64 @@ export const endpoints = {
     api<void>(`/api/whatsapp/accounts/${accountId}/simulate-call/${waCallId}/hangup`, {
       method: 'POST',
     }),
+  callPermission: (accountId: string, to: string) =>
+    api<{
+      status: 'none' | 'requested' | 'granted' | 'denied' | 'expired';
+      expiresAt: string | null;
+    }>(`/api/whatsapp/accounts/${accountId}/call-permission?to=${encodeURIComponent(to)}`),
+  requestCallPermission: (accountId: string, to: string, text?: string) =>
+    api<{ alreadyGranted: boolean }>(`/api/whatsapp/accounts/${accountId}/call-permission`, {
+      body: { to, text },
+    }),
+  outboundCall: (body: {
+    accountId: string;
+    to: string;
+    handler: 'agent' | 'person';
+    agentId?: string | null;
+    purpose?: string;
+    sdp?: string;
+  }) => api<{ callId: string; waCallId: string; sdp?: string }>('/api/calls/outbound', { body }),
+  simulateOutboundAnswer: (accountId: string, waCallId: string, sdp: string) =>
+    api<void>(`/api/whatsapp/accounts/${accountId}/simulate-call/${waCallId}/answer`, {
+      body: { sdp },
+    }),
+  simulateOutboundDecline: (accountId: string, waCallId: string) =>
+    api<void>(`/api/whatsapp/accounts/${accountId}/simulate-call/${waCallId}/decline`, {
+      method: 'POST',
+    }),
   setNumberAgent: (accountId: string, agentId: string | null) =>
     api<{ agentId: string | null }>(`/api/whatsapp/accounts/${accountId}/agent`, {
       method: 'PUT',
       body: { agentId },
     }),
+  // Dashboard, templates, team, API keys
+  dashboard: (days: number, timezone: string) =>
+    api<DashboardData>(`/api/dashboard?days=${days}&timezone=${encodeURIComponent(timezone)}`),
+  templates: () => api<{ data: WorkflowTemplate[] }>('/api/templates'),
+  useTemplate: (id: string) =>
+    api<{ id: string; name: string; setup: string[] }>(`/api/templates/${id}/use`, {
+      method: 'POST',
+    }),
+  users: () => api<{ data: TeamMember[] }>('/api/users'),
+  inviteUser: (body: { email: string; name: string; role: User['role'] }) =>
+    api<{ user: TeamMember; inviteUrl: string }>('/api/users', { body }),
+  reinviteUser: (id: string) =>
+    api<{ inviteUrl: string }>(`/api/users/${id}/invite`, { method: 'POST' }),
+  updateUser: (id: string, body: { name?: string; role?: User['role'] }) =>
+    api<TeamMember>(`/api/users/${id}`, { method: 'PATCH', body }),
+  removeUser: (id: string) => api<void>(`/api/users/${id}`, { method: 'DELETE' }),
+  updateMe: (body: { name?: string; currentPassword?: string; newPassword?: string }) =>
+    api<{ user: User }>('/api/auth/me', { method: 'PATCH', body }),
+  invitation: (token: string) =>
+    api<{ email: string; name: string; role: User['role'] }>(`/api/auth/invite/${token}`, {
+      auth: false,
+    }),
+  acceptInvitation: (token: string, body: { password: string; name?: string }) =>
+    api<{ token: string; user: User }>(`/api/auth/invite/${token}`, { body, auth: false }),
+  apiKeys: () => api<{ data: ApiKey[] }>('/api/api-keys'),
+  createApiKey: (body: { name: string; expiresInDays: number | null }) =>
+    api<ApiKey & { key: string }>('/api/api-keys', { body }),
+  deleteApiKey: (id: string) => api<void>(`/api/api-keys/${id}`, { method: 'DELETE' }),
   // AI providers and agents
   aiProviders: () => api<{ data: AiProvider[] }>('/api/ai/providers'),
   saveAiProviders: (keys: Partial<Record<AiProviderId, string | null>>) =>
@@ -610,4 +664,66 @@ export interface WhatsAppConversation {
   text: string | null;
   timestamp: string;
   count: number;
+}
+
+export interface DashboardData {
+  days: number;
+  timezone: string;
+  totals: {
+    calls: number;
+    answered: number;
+    missed: number;
+    answerRate: number | null;
+    handledByAi: number;
+    handledByPeople: number;
+    voicemail: number;
+    averageCallSeconds: number;
+    talkMinutes: number;
+    messagesReceived: number;
+    messagesSent: number;
+    workflowRuns: number;
+    workflowErrors: number;
+  };
+  series: {
+    calls: Array<{ day: string; answered: number; missed: number; other: number }>;
+    messages: Array<{ day: string; received: number; sent: number }>;
+    executions: Array<{ day: string; success: number; error: number }>;
+  };
+  busiestHours: Array<{ hour: number; count: number }>;
+  topCallers: Array<{ contact: string; contactName: string | null; calls: number }>;
+  agents: Array<{ agentId: string; name: string; calls: number; averageSeconds: number }>;
+  recentMissed: Array<{
+    id: string;
+    contact: string;
+    contactName: string | null;
+    startedAt: string;
+    status: string;
+  }>;
+}
+
+export interface WorkflowTemplate {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  setup: string[];
+  nodeTypes: string[];
+}
+
+export interface TeamMember extends User {
+  status: 'active' | 'invited';
+  inviteExpiresAt: string | null;
+  lastLoginAt: string | null;
+  createdAt: string;
+}
+
+export interface ApiKey {
+  id: string;
+  name: string;
+  prefix: string;
+  userId: string;
+  userName: string | null;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+  createdAt: string;
 }

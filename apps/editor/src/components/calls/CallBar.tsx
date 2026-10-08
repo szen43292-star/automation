@@ -25,6 +25,17 @@ export function CallBar() {
         const { id, status } = message.data;
         if (status !== 'ringing' && status !== 'answered') useCalls.getState().ended(id);
         else if (status === 'answered') useCalls.getState().dismiss(id);
+      } else if (message.type === 'simulatedOutboundCall') {
+        // A test number's business calls the simulated customer: this browser is their phone.
+        calls.ring({
+          callId: `sim:${message.data.waCallId}`,
+          accountId: message.data.accountId,
+          accountNumber: message.data.from,
+          from: message.data.to,
+          contactName: `${message.data.businessName} (calling the test customer)`,
+          ringSeconds: 45,
+          simulated: { waCallId: message.data.waCallId, sdp: message.data.sdp },
+        });
       } else if (
         message.type === 'simulatedCallAction' &&
         ['terminate', 'reject'].includes(message.data.action)
@@ -87,10 +98,14 @@ export function CallBar() {
             </span>
             <div className="min-w-0">
               <div className="text-xs text-muted">
-                Incoming WhatsApp call{call.accountNumber ? ` · ${call.accountNumber}` : ''}
+                {call.simulated
+                  ? `Test customer +${call.from} is being called`
+                  : `Incoming WhatsApp call${call.accountNumber ? ` · ${call.accountNumber}` : ''}`}
               </div>
               <div className="truncate font-semibold">{call.contactName ?? `+${call.from}`}</div>
-              {call.contactName && <div className="text-xs text-muted">+{call.from}</div>}
+              {call.contactName && !call.simulated && (
+                <div className="text-xs text-muted">+{call.from}</div>
+              )}
             </div>
             <span className="ml-auto text-xs text-muted tabular-nums">
               {Math.max(0, call.ringSeconds - Math.floor((Date.now() - call.receivedAt) / 1000))}s

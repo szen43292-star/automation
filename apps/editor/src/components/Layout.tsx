@@ -2,6 +2,9 @@ import { clsx } from 'clsx';
 import {
   Bot,
   Braces,
+  LayoutDashboard,
+  LayoutTemplate,
+  Settings,
   History,
   KeyRound,
   LogOut,
@@ -78,6 +81,9 @@ export function Layout() {
           </span>
         </div>
         <nav className="flex-1 space-y-0.5 px-2">
+          <NavLink to="/dashboard" className={link}>
+            <LayoutDashboard size={16} /> Dashboard
+          </NavLink>
           <NavLink to="/workflows" className={link}>
             <WorkflowIcon size={16} /> Workflows
           </NavLink>
@@ -98,6 +104,12 @@ export function Layout() {
           </NavLink>
           <NavLink to="/agents" className={link}>
             <Bot size={16} /> AI agents
+          </NavLink>
+          <NavLink to="/templates" className={link}>
+            <LayoutTemplate size={16} /> Templates
+          </NavLink>
+          <NavLink to="/settings" className={link}>
+            <Settings size={16} /> Settings
           </NavLink>
         </nav>
         <div className="space-y-3 border-t border-line p-3">

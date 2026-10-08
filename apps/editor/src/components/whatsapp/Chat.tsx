@@ -20,6 +20,7 @@ import { endpoints, type WhatsAppAccount, type WhatsAppMessage } from '../../lib
 import { formatDateTime } from '../../lib/format';
 import { useCalls } from '../../stores/calls';
 import { Button, EmptyState, Spinner } from '../ui';
+import { OutboundCall } from './OutboundCall';
 
 const DEFAULT_CUSTOMER = { number: '+91 98765 43210', name: 'Test customer' };
 const digits = (value: string) => value.replace(/[^\d]/g, '');
@@ -159,6 +160,11 @@ export function ChatPanel({ account }: { account: WhatsAppAccount }) {
               <div className="text-[13px] font-medium">{customerName}</div>
               <div className="text-[11.5px] text-muted">+{customerNumber}</div>
             </div>
+            {!simulator && (
+              <span className="ml-auto">
+                <OutboundCall account={account} contact={customerNumber} name={customerName} />
+              </span>
+            )}
             {simulator && (
               <>
                 <span className="ml-auto text-[11.5px] text-muted">
@@ -182,6 +188,7 @@ export function ChatPanel({ account }: { account: WhatsAppAccount }) {
                 >
                   Call
                 </Button>
+                <OutboundCall account={account} contact={customerNumber} name={customerName} />
               </>
             )}
           </div>
@@ -279,6 +286,9 @@ function Thread({
             message={m}
             simulator={simulator}
             onReply={(reply) => void asCustomer({ from: contact, name: customerName, reply })}
+            onPermission={(answer) =>
+              void asCustomer({ from: contact, name: customerName, callPermission: answer })
+            }
           />
         ))}
         <div ref={bottom} />
@@ -326,10 +336,12 @@ function Bubble({
   message,
   simulator,
   onReply,
+  onPermission,
 }: {
   message: WhatsAppMessage;
   simulator: boolean;
   onReply: (reply: Reply) => void;
+  onPermission: (answer: 'accept' | 'reject') => void;
 }) {
   const outbound = message.direction === 'outbound';
   const payload = message.payload ?? {};
@@ -405,6 +417,25 @@ function Bubble({
                 className="rounded-lg bg-panel py-1.5 text-[13px] font-medium text-sky-600 shadow-sm enabled:hover:bg-panel-2 disabled:cursor-default dark:text-sky-400"
               >
                 {b.title}
+              </button>
+            ))}
+          </div>
+        )}
+        {interactive?.type === 'call_permission_request' && (
+          <div className="mt-1 grid grid-cols-2 gap-1">
+            {(
+              [
+                ['accept', 'Allow calls'],
+                ['reject', 'Not now'],
+              ] as const
+            ).map(([answer, label]) => (
+              <button
+                key={answer}
+                disabled={!simulator}
+                onClick={() => onPermission(answer)}
+                className="rounded-lg bg-panel py-1.5 text-[13px] font-medium text-sky-600 shadow-sm enabled:hover:bg-panel-2 disabled:cursor-default dark:text-sky-400"
+              >
+                {label}
               </button>
             ))}
           </div>
