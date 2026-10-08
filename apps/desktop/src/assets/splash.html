@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'"
+    />
+    <title>FlowForge</title>
+    <style>
+      :root {
+        --bg: #f7f7f9;
+        --fg: #17181c;
+        --muted: #6b6f7a;
+        --panel: #fff;
+        --line: #e4e5ea;
+        --accent: #ff6d3a;
+        --danger: #d93025;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #131419;
+          --fg: #ecedf1;
+          --muted: #9a9eab;
+          --panel: #1b1d24;
+          --line: #2a2d36;
+          --danger: #ff7b72;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          14px/1.5 system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+      }
+      .card {
+        width: min(520px, calc(100% - 32px));
+        text-align: center;
+      }
+      img {
+        width: 64px;
+        height: 64px;
+      }
+      h1 {
+        font-size: 20px;
+        margin: 16px 0 4px;
+      }
+      #status {
+        color: var(--muted);
+        min-height: 21px;
+      }
+      .bar {
+        height: 3px;
+        width: 180px;
+        margin: 20px auto 0;
+        border-radius: 3px;
+        background: var(--line);
+        overflow: hidden;
+      }
+      .bar::after {
+        content: '';
+        display: block;
+        height: 100%;
+        width: 40%;
+        border-radius: 3px;
+        background: var(--accent);
+        animation: slide 1.1s ease-in-out infinite;
+      }
+      @keyframes slide {
+        from {
+          transform: translateX(-100%);
+        }
+        to {
+          transform: translateX(250%);
+        }
+      }
+      #error {
+        display: none;
+        margin-top: 20px;
+        text-align: left;
+      }
+      #error p {
+        color: var(--danger);
+        font-weight: 600;
+        margin: 0 0 8px;
+      }
+      pre {
+        max-height: 220px;
+        overflow: auto;
+        margin: 0;
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        font:
+          12px/1.45 ui-monospace,
+          Consolas,
+          monospace;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .actions {
+        display: flex;
+        gap: 8px;
+        justify-content: center;
+        margin-top: 14px;
+      }
+      a.button {
+        padding: 7px 14px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--fg);
+        text-decoration: none;
+        font-weight: 500;
+      }
+      a.button.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+      body.failed .bar {
+        display: none;
+      }
+      body.failed #error {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <img src="icon.png" alt="" />
+      <h1>FlowForge</h1>
+      <div id="status">Starting…</div>
+      <div class="bar"></div>
+      <div id="error">
+        <p>FlowForge could not start</p>
+        <pre id="details"></pre>
+        <div class="actions">
+          <a class="button primary" href="flowforge-action://retry">Try again</a>
+          <a class="button" href="flowforge-action://logs">Open logs folder</a>
+        </div>
+      </div>
+    </div>
+    <script>
+      window.setStatus = (text) => {
+        document.body.classList.remove('failed');
+        document.getElementById('status').textContent = text;
+      };
+      window.setError = (details) => {
+        document.body.classList.add('failed');
+        document.getElementById('status').textContent = '';
+        document.getElementById('details').textContent = details;
+      };
+    </script>
+  </body>
+</html>

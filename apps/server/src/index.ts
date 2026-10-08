@@ -28,6 +28,15 @@ async function main() {
   };
   process.on('SIGINT', () => void shutdown('SIGINT'));
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
+  // Started by the desktop app with an IPC channel: shut down when asked (Windows has no SIGTERM),
+  // or when the app goes away without asking (e.g. it crashed), so no orphan keeps the port.
+  if (process.send) {
+    process.on('message', (message) => {
+      if (message === 'shutdown') void shutdown('shutdown request');
+    });
+    process.on('disconnect', () => void shutdown('parent exit'));
+    process.send('ready');
+  }
 }
 
 main().catch((error: unknown) => {

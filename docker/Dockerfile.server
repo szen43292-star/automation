@@ -37,4 +37,4 @@ HEALTHCHECK --interval=15s --timeout=5s --start-period=30s \
   CMD node -e "fetch('http://127.0.0.1:5678/readyz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 ENTRYPOINT ["tini", "--"]
 # Apply pending migrations, then start.
-CMD ["sh", "-c", "node_modules/.bin/prisma migrate deploy && exec node dist/index.js"]
+CMD ["sh", "-c", "node_modules/.bin/prisma migrate deploy && exec node --no-node-snapshot dist/index.js"]

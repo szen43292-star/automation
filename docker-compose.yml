@@ -67,7 +67,7 @@ services:
     depends_on:
       server:
         condition: service_healthy
-    command: ['node', 'dist/worker.js']
+    command: ['node', '--no-node-snapshot', 'dist/worker.js']
     healthcheck:
       disable: true
     environment:

@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",
     "build": "tsup",
-    "start": "node dist/index.js",
+    "start": "node --no-node-snapshot dist/index.js",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
     "db:generate": "prisma generate",
@@ -16,7 +16,7 @@
     "db:deploy": "prisma migrate deploy",
     "postinstall": "prisma generate",
     "dev:worker": "tsx watch --env-file-if-exists=../../.env src/worker.ts",
-    "start:worker": "node dist/worker.js"
+    "start:worker": "node --no-node-snapshot dist/worker.js"
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",

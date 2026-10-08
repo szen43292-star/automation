@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+env:
+  # The Linux jobs only typecheck/test the desktop app; the Windows build lives in desktop.yml.
+  ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true

@@ -28,7 +28,10 @@
       "@prisma/client",
       "@prisma/engines",
       "esbuild",
-      "@tailwindcss/oxide"
+      "@tailwindcss/oxide",
+      "electron",
+      "@embedded-postgres/linux-x64",
+      "@embedded-postgres/windows-x64"
     ]
   }
 }
