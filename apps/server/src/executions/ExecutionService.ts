@@ -490,7 +490,7 @@ export class ExecutionService {
           json: {
             execution: {
               id: executionId,
-              url: `${this.deps.config.PUBLIC_URL.replace(/\/+$/, '')}/workflow/${options.workflowId}/executions/${executionId}`,
+              url: `${this.deps.config.editorUrl.replace(/\/+$/, '')}/workflow/${options.workflowId}/executions/${executionId}`,
               error: {
                 message: error?.message,
                 description: error?.description,

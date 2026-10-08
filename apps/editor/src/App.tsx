@@ -82,8 +82,14 @@ const routes: RouteObject[] = [
 ];
 
 // Desktop (Tauri) and mobile (Capacitor) builds load from a file/custom scheme, where hash routing is reliable.
+// On the web the editor may live under a path (FLOWFORGE_BASE=/app/ on Vercel), so routes start there.
+const basename = import.meta.env.BASE_URL.startsWith('/')
+  ? import.meta.env.BASE_URL.replace(/\/+$/, '') || '/'
+  : '/';
 const router =
-  import.meta.env.VITE_ROUTER === 'hash' ? createHashRouter(routes) : createBrowserRouter(routes);
+  import.meta.env.VITE_ROUTER === 'hash'
+    ? createHashRouter(routes)
+    : createBrowserRouter(routes, { basename });
 
 export function App() {
   const init = useAuth((s) => s.init);

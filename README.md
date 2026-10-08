@@ -330,21 +330,48 @@ pnpm --filter @flowforge/e2e test:e2e   # 19 browser tests, incl. the phone layo
 
 ## Deployment
 
-FlowForge has two kinds of parts:
+### Vercel: one project, three services
 
-- **Static parts** can be hosted on Vercel: the editor (`apps/editor`) and the download website (`apps/website`).
-- **Long-running parts** need a host that keeps processes running: the **server** (webhooks, schedules, WebSockets), the **worker** and, from Phase 4, the **media server**. Vercel can't run these because its functions stop after each request. Use Railway, Render, Fly.io or any VPS with `docker compose`.
+Import the repository on Vercel and press **Deploy**. The root `vercel.json` defines three
+[services](https://vercel.com/docs/services) on one domain:
 
-The simplest production setup:
+| Service   | Code                                   | Public paths                                                                                                                        |
+| --------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `website` | `apps/website` (Next.js)               | `/` (landing, `/download`, `/admin`, `/api/releases/*`)                                                                             |
+| `editor`  | `apps/editor` (Vite)                   | `/app` - the FlowForge app (workflows, WhatsApp, calls, agents)                                                                     |
+| `server`  | `docker/Dockerfile.vercel` (container) | `/api/*`, `/webhook/*`, `/webhook-test/*`, `/webhook-waiting/*`, `/webhooks/*` (WhatsApp), `/rest/*` (OAuth), `/healthz`, `/readyz` |
+
+The editor calls the server from the browser on the same domain, so there is no CORS setup and no
+server URL to enter.
+
+**Environment variables** (_Settings → Environment Variables_, then redeploy). Until the required
+ones are set, `/api/...` answers with a message that lists what is missing.
+
+- Required: `DATABASE_URL` (Postgres, e.g. Neon or Supabase; migrations run when the server starts),
+  `JWT_SECRET` (32+ random characters), `ENCRYPTION_KEY` (protects saved credentials - keep it forever).
+- Optional: `REDIS_URL` (Upstash) for queue mode, `PUBLIC_URL` if you use a custom domain (defaults
+  to the project's production `*.vercel.app` domain), and your provider keys (OpenAI, Meta, ...).
+- Website: see [the download website](#the-download-website-appswebsite) (`RELEASES_GITHUB_TOKEN`, `SITE_PASSWORD`, `ADMIN_PASSWORD`).
+
+**What does not work on Vercel**
+
+- **WhatsApp call audio.** Calls carry audio over WebRTC (UDP); Vercel accepts only HTTP. Messages,
+  webhooks, workflows and the editor work; for the AI voice agent run the server on the Windows
+  app or a VPS (below).
+- **Always-on work.** The server container stops after a few idle minutes, so schedules and waits
+  only run while it is awake (a webhook or an open editor wakes it).
+- **Files.** Uploads and recordings are kept in `/tmp` and disappear when the container stops.
+- Live updates use WebSockets (beta on Vercel); the editor reconnects on its own if one drops.
+
+### Always-on server (VPS, Railway, Render, Fly.io)
+
+The **server** (webhooks, schedules, WebSockets, call audio), the **worker** and the **media server**
+are long-running processes.
 
 1. **Server:** deploy `docker/Dockerfile.server` (Railway/Render/Fly) or run `docker compose up -d` on a VPS.
    - Set `DATABASE_URL` (e.g. Neon/Supabase Postgres), `REDIS_URL` (e.g. Upstash, needed for queue mode), `JWT_SECRET`, `ENCRYPTION_KEY` and `PUBLIC_URL`.
    - The server also serves the editor, so this alone is a complete deployment.
-2. **Optional: editor on Vercel.**
-   - Import the repo as a second Vercel project with **Root Directory** `apps/editor` (`vercel.json` is included).
-   - Set `VITE_DEFAULT_SERVER_URL=https://your-server.example.com`.
-   - Add the Vercel URL to the server's `CORS_ORIGINS`.
-3. **Download website on Vercel:** see [Windows app & download website](#windows-app--download-website).
+2. **Download website:** see [Windows app & download website](#windows-app--download-website).
 
 ## Windows app & download website
 
@@ -437,9 +464,8 @@ A Next.js site with a landing page and a download page. The download page:
 
 **Deploy on Vercel - just import the repository:**
 
-1. _Add New → Project_, import this repository and press **Deploy**. Change nothing: the
-   `vercel.json` at the root builds the download website (it installs only the website's
-   packages, so the server, Windows app and phone apps are not built on Vercel).
+1. _Add New → Project_, import this repository and press **Deploy**. Change nothing: the root
+   `vercel.json` serves the website at `/` (see [Vercel: one project, three services](#vercel-one-project-three-services)).
 2. The site finds its releases in the repository it was deployed from (Vercel tells it which).
 3. **Private repository** (yours): add these in _Settings → Environment Variables_, then redeploy:
    - `RELEASES_GITHUB_TOKEN` - a fine-grained GitHub token for this repository with
@@ -451,7 +477,6 @@ A Next.js site with a landing page and a download page. The download page:
 
 Optional: `FLOWFORGE_RELEASES_REPO=owner/name` (read releases from another repository) or
 `RELEASE_MANIFEST_URL` (a `release.json` hosted anywhere). Vercel deploys the `main` branch.
-Setting **Root Directory** to `apps/website` also works (it has its own `vercel.json`).
 
 **Develop and test locally:**
 

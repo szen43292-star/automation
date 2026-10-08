@@ -380,3 +380,24 @@ describe('dashboard', () => {
     expect(bad.json().timezone).toBe('UTC');
   });
 });
+
+describe('editor links on Vercel', () => {
+  it('point at the editor path on the project domain', async () => {
+    const { loadConfig } = await import('../src/config');
+    const base = {
+      DATABASE_URL: 'postgresql://x',
+      JWT_SECRET: 'test-secret-test-secret-test-secret-123',
+    };
+    const vercel = loadConfig({
+      ...base,
+      EDITOR_BASE_PATH: '/app',
+      VERCEL_PROJECT_PRODUCTION_URL: 'flowforge.vercel.app',
+    });
+    expect(vercel.PUBLIC_URL).toBe('https://flowforge.vercel.app');
+    expect(vercel.editorUrl).toBe('https://flowforge.vercel.app/app');
+    expect(loadConfig({ ...base, PUBLIC_URL: 'https://flow.example.com/' }).editorUrl).toBe(
+      'https://flow.example.com',
+    );
+    expect(() => loadConfig({ ...base, EDITOR_BASE_PATH: 'app/' })).toThrow(/EDITOR_BASE_PATH/);
+  });
+});

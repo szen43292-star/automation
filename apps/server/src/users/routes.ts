@@ -28,9 +28,9 @@ const roleSchema = z.enum(['owner', 'admin', 'member']);
  * - admin: manages workflows, numbers, agents and members/admins
  * - member: own workflows; answers calls; sees numbers, agents and the call log
  */
-export async function userRoutes(app: FastifyInstance, opts: { publicUrl: string }) {
+export async function userRoutes(app: FastifyInstance, opts: { editorUrl: string }) {
   const admin = { onRequest: requireRole('owner', 'admin') };
-  const inviteUrl = (token: string) => `${opts.publicUrl.replace(/\/+$/, '')}/invite/${token}`;
+  const inviteUrl = (token: string) => `${opts.editorUrl.replace(/\/+$/, '')}/invite/${token}`;
 
   /** Admins can't touch owners or make anyone an owner. */
   const checkCanManage = (actor: { role: Role }, target: { role: Role } | null, newRole?: Role) => {

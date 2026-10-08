@@ -305,6 +305,7 @@ export async function buildApp(
     }));
     api.get('/api/settings', async () => ({
       publicUrl: config.PUBLIC_URL.replace(/\/+$/, ''),
+      editorUrl: config.editorUrl,
       executionsMode: config.EXECUTIONS_MODE,
       oauthCallbackUrl: `${config.PUBLIC_URL.replace(/\/+$/, '')}/rest/oauth2-credential/callback`,
       version: VERSION,
@@ -316,7 +317,7 @@ export async function buildApp(
     await api.register(whatsappRoutes);
     await api.register(callRoutes);
     await api.register(agentRoutes);
-    await api.register(userRoutes, { publicUrl: config.PUBLIC_URL });
+    await api.register(userRoutes, { editorUrl: config.editorUrl });
     await api.register(dashboardRoutes, { defaultTimezone: config.DEFAULT_TIMEZONE });
     await api.register(deviceRoutes, { notifications: phones });
   });

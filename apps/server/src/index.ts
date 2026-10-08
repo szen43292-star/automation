@@ -1,8 +1,34 @@
+import Fastify from 'fastify';
 import { buildApp } from './app';
-import { loadConfig } from './config';
+import { loadConfig, type Config } from './config';
+
+/**
+ * Not configured yet (e.g. a fresh Vercel deploy without DATABASE_URL): answer every request
+ * with what is missing instead of crashing, so the rest of the deployment keeps working.
+ */
+async function setupRequired(problem: string) {
+  const app = Fastify({ logger: false });
+  const message = problem.replace(/^Invalid server configuration:\n/, '').split('\n');
+  app.all('/*', async (_request, reply) =>
+    reply.status(503).send({
+      error: 'SetupRequired',
+      message:
+        'The FlowForge server is not configured yet. Add these environment variables (on Vercel: Settings → Environment Variables) and redeploy.',
+      problems: message.filter((line) => line.trim().startsWith('-')).map((line) => line.trim()),
+    }),
+  );
+  await app.listen({ port: Number(process.env.PORT) || 5678, host: process.env.HOST ?? '0.0.0.0' });
+  console.error(`FlowForge is waiting for configuration:\n${problem}`);
+}
 
 async function main() {
-  const config = loadConfig();
+  let config: Config;
+  try {
+    config = loadConfig();
+  } catch (error) {
+    await setupRequired((error as Error).message);
+    return;
+  }
   const app = await buildApp(config);
 
   await app.listen({ port: config.PORT, host: config.HOST });

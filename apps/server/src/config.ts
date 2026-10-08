@@ -17,6 +17,14 @@ const envSchema = z.object({
   CORS_ORIGINS: z.string().default(''),
   /** Directory with the built editor (served at /). */
   EDITOR_DIST: z.string().optional(),
+  /**
+   * Path of the editor on PUBLIC_URL when it is served separately (Vercel: "/app"). Used for
+   * links the server sends out: invitations, error notifications.
+   */
+  EDITOR_BASE_PATH: z
+    .string()
+    .regex(/^(\/[\w-]+)*$/, 'EDITOR_BASE_PATH looks like /app')
+    .default(''),
   DEFAULT_TIMEZONE: z.string().default('UTC'),
   /** Max wall-clock time of a single Code node run (ms). */
   CODE_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
@@ -89,15 +97,19 @@ const envSchema = z.object({
 
 export type Config = z.infer<typeof envSchema> & {
   editorDist: string | null;
+  /** Where people open the editor, e.g. https://flow.example.com/app */
+  editorUrl: string;
   dataDir: string;
   corsOrigins: string[];
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   // Empty values (e.g. `KEY=` in .env or `${KEY:-}` in compose) mean "not set".
-  const parsed = envSchema.safeParse(
-    Object.fromEntries(Object.entries(env).filter(([, value]) => value !== '')),
-  );
+  const values = Object.fromEntries(Object.entries(env).filter(([, value]) => value !== ''));
+  // On Vercel the production domain is known: use it when PUBLIC_URL is not set.
+  if (!values.PUBLIC_URL && values.VERCEL_PROJECT_PRODUCTION_URL)
+    values.PUBLIC_URL = `https://${values.VERCEL_PROJECT_PRODUCTION_URL}`;
+  const parsed = envSchema.safeParse(values);
   if (!parsed.success) {
     const problems = parsed.error.issues
       .map((i) => `  - ${i.path.join('.')}: ${i.message}`)
@@ -131,6 +143,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return {
     ...cfg,
     editorDist,
+    editorUrl: `${cfg.PUBLIC_URL.replace(/\/+$/, '')}${cfg.EDITOR_BASE_PATH}`,
     dataDir: resolve(cfg.DATA_DIR ?? 'data'),
     corsOrigins: cfg.CORS_ORIGINS.split(',')
       .map((o) => o.trim())
