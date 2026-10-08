@@ -153,3 +153,22 @@ describe('release admin', () => {
     });
   });
 });
+
+describe('zero-config Vercel deploy', () => {
+  it('reads releases from the repository Vercel deployed', async () => {
+    const { releasesRepo, setupHint } = await import('@/lib/releases');
+    vi.stubEnv('VERCEL_GIT_PROVIDER', 'github');
+    vi.stubEnv('VERCEL_GIT_REPO_OWNER', 'someone');
+    vi.stubEnv('VERCEL_GIT_REPO_SLUG', 'my-flowforge');
+    expect(releasesRepo()).toBe('someone/my-flowforge');
+    vi.stubEnv('FLOWFORGE_RELEASES_REPO', 'acme/releases');
+    expect(releasesRepo()).toBe('acme/releases');
+    vi.stubEnv('FLOWFORGE_RELEASES_REPO', '');
+    vi.stubEnv('VERCEL_GIT_PROVIDER', 'gitlab');
+    expect(releasesRepo()).not.toBe('someone/my-flowforge');
+
+    expect(setupHint(null)).toContain('RELEASES_GITHUB_TOKEN');
+    vi.stubEnv('RELEASES_GITHUB_TOKEN', 'github_pat_x');
+    expect(setupHint(null)).toContain('Actions → Release');
+  });
+});

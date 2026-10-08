@@ -341,7 +341,7 @@ The simplest production setup:
    - Set `DATABASE_URL` (e.g. Neon/Supabase Postgres), `REDIS_URL` (e.g. Upstash, needed for queue mode), `JWT_SECRET`, `ENCRYPTION_KEY` and `PUBLIC_URL`.
    - The server also serves the editor, so this alone is a complete deployment.
 2. **Optional: editor on Vercel.**
-   - Import the repo with **Root Directory** `apps/editor` (`vercel.json` is included).
+   - Import the repo as a second Vercel project with **Root Directory** `apps/editor` (`vercel.json` is included).
    - Set `VITE_DEFAULT_SERVER_URL=https://your-server.example.com`.
    - Add the Vercel URL to the server's `CORS_ORIGINS`.
 3. **Download website on Vercel:** see [Windows app & download website](#windows-app--download-website).
@@ -413,7 +413,7 @@ For your own private use, the app can carry your keys, so nothing has to be type
    - The build writes the secrets into `resources/runtime/config.json` inside the installer.
    - The app's server reads them as environment variables, which take precedence over anything entered on the WhatsApp page.
 3. **Download.** Get the installer from the private GitHub Release while signed in, or from your own download site (next step).
-4. **Your download site (optional).** Deploy `apps/website` on Vercel with two environment variables:
+4. **Your download site (optional).** Import the repository on Vercel (no settings) and add two environment variables:
    - `RELEASES_GITHUB_TOKEN`: the same kind of read-only token, kept server-side. The site hands out short-lived signed download links, never the token.
    - `SITE_PASSWORD`: protects the whole site, because the installer contains your keys.
 
@@ -435,13 +435,23 @@ A Next.js site with a landing page and a download page. The download page:
 - `GET /api/releases/latest` returns the release as JSON. `/download/windows` always redirects to the newest installer.
 - Before the first public release, the button explains that the release is on its way.
 
-**Deploy on Vercel:**
+**Deploy on Vercel - just import the repository:**
 
-1. _Add New → Project_, then import this repository.
-2. Set **Root Directory** to `apps/website`. The framework is detected as Next.js.
-3. Deploy. **No environment variables are needed.**
-   - Optional: `FLOWFORGE_RELEASES_REPO=owner/name` to read releases from another (public) repository.
-   - Optional: `RELEASE_MANIFEST_URL` to point at a `release.json` hosted anywhere.
+1. _Add New → Project_, import this repository and press **Deploy**. Change nothing: the
+   `vercel.json` at the root builds the download website (it installs only the website's
+   packages, so the server, Windows app and phone apps are not built on Vercel).
+2. The site finds its releases in the repository it was deployed from (Vercel tells it which).
+3. **Private repository** (yours): add these in _Settings → Environment Variables_, then redeploy:
+   - `RELEASES_GITHUB_TOKEN` - a fine-grained GitHub token for this repository with
+     _Contents: read_ (add _Actions: read & write_ to start releases from `/admin`). The site
+     keeps it on the server and hands out short-lived download links.
+   - `SITE_PASSWORD` - recommended: the installers contain your keys.
+   - `ADMIN_PASSWORD` - turns on `/admin` (builds, releases, download counts, **Build and publish**).
+4. Until the first release exists, the download button says what is missing.
+
+Optional: `FLOWFORGE_RELEASES_REPO=owner/name` (read releases from another repository) or
+`RELEASE_MANIFEST_URL` (a `release.json` hosted anywhere). Vercel deploys the `main` branch.
+Setting **Root Directory** to `apps/website` also works (it has its own `vercel.json`).
 
 **Develop and test locally:**
 
@@ -459,9 +469,9 @@ pnpm --filter @flowforge/website build
    - FlowForge opens by itself. Create the owner account, build a workflow, and close the window. The tray icon remains, and an active schedule keeps running.
    - Right-click the tray icon to try _Open in browser_, _Start with Windows_ and _Quit FlowForge_.
 3. Run _Actions → Windows app → Run workflow_ with version `0.2.0` (with your secrets set for a private build). A release `v0.2.0` appears with the installer and `release.json`.
-4. Deploy `apps/website` on Vercel and open `/download`.
+4. Import the repository on Vercel (see above) and open `/download`.
    - Version, size and SHA-256 match the release. Compare with `Get-FileHash .\FlowForge-Setup.exe -Algorithm SHA256`.
-   - On a phone you get the "coming soon" note, and on a desktop the QR code.
+   - On a phone you get the phone app first, and on a desktop the QR code.
 5. Publish `0.2.1` the same way. The installed app downloads it in the background, and the tray menu offers _Restart to install version 0.2.1_.
 
 ## Running locally

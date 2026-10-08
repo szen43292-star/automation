@@ -22,6 +22,8 @@ interface Props {
   showDetailsLink?: boolean;
   /** Hide the "not on Windows" notices (e.g. in a compact call to action). */
   hideNotices?: boolean;
+  /** Why there is nothing to download yet (from the server). */
+  setupHint?: string | null;
   /** Phone apps of the same release: phone visitors get their app first. */
   phones?: { android?: DownloadInfo | null; ios?: DownloadInfo | null };
 }
@@ -34,6 +36,7 @@ export function DownloadButton({
   showDetailsLink,
   hideNotices,
   phones,
+  setupHint,
 }: Props) {
   const platform = usePlatform();
   const big = size === 'lg';
@@ -68,6 +71,11 @@ export function DownloadButton({
         <span className={`${buttonClass} cursor-not-allowed opacity-60`} aria-disabled="true">
           <WindowsIcon /> Download for Windows
         </span>
+        {setupHint && (
+          <p className="max-w-md text-sm text-muted" data-testid="setup-hint">
+            {setupHint}
+          </p>
+        )}
         <p className="text-sm text-muted">
           The first release is on its way.{' '}
           <a

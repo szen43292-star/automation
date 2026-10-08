@@ -17,7 +17,13 @@ import {
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { DownloadButton } from '@/components/download-button';
-import { getLatestRelease, releasesRepo, windowsDownload } from '@/lib/releases';
+import {
+  getLatestRelease,
+  platformDownload,
+  releasesRepo,
+  setupHint,
+  windowsDownload,
+} from '@/lib/releases';
 
 // Re-check GitHub for a new release every 5 minutes (must be a literal for Next.js).
 export const revalidate = 300;
@@ -85,6 +91,11 @@ export default async function HomePage() {
                 version={release?.version ?? null}
                 releasesUrl={releasesUrl}
                 showDetailsLink
+                setupHint={setupHint(release)}
+                phones={{
+                  android: platformDownload(release, 'android'),
+                  ios: platformDownload(release, 'ios'),
+                }}
               />
             </div>
           </div>

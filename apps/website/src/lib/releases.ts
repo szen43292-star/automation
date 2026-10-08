@@ -52,9 +52,20 @@ const githubReleaseSchema = z.object({
   ),
 });
 
+const REPO_PATTERN = /^[\w.-]+\/[\w.-]+$/;
+
+/**
+ * Where releases come from: FLOWFORGE_RELEASES_REPO, else the GitHub repository Vercel deployed
+ * this site from (Vercel sets VERCEL_GIT_REPO_OWNER / _SLUG), else the project repository.
+ */
 export function releasesRepo(): string {
   const repo = process.env.FLOWFORGE_RELEASES_REPO?.trim();
-  return repo && /^[\w.-]+\/[\w.-]+$/.test(repo) ? repo : DEFAULT_REPO;
+  if (repo && REPO_PATTERN.test(repo)) return repo;
+  const { VERCEL_GIT_PROVIDER, VERCEL_GIT_REPO_OWNER, VERCEL_GIT_REPO_SLUG } = process.env;
+  const deployed = `${VERCEL_GIT_REPO_OWNER ?? ''}/${VERCEL_GIT_REPO_SLUG ?? ''}`;
+  if ((!VERCEL_GIT_PROVIDER || VERCEL_GIT_PROVIDER === 'github') && REPO_PATTERN.test(deployed))
+    return deployed;
+  return DEFAULT_REPO;
 }
 
 export function manifestUrl(repo = releasesRepo()): string {
@@ -277,4 +288,12 @@ export function formatDate(iso: string): string {
     day: 'numeric',
     timeZone: 'UTC',
   }).format(date);
+}
+
+/** Shown instead of the download button when no release could be read: what to do about it. */
+export function setupHint(release: Release | null): string | null {
+  if (release) return null;
+  if (!githubToken())
+    return 'Private repository? Add RELEASES_GITHUB_TOKEN in Vercel (Settings → Environment Variables), then redeploy. Otherwise run Actions → Release on GitHub to publish the apps.';
+  return 'No release yet: run Actions → Release on GitHub (or open /admin) to build and publish the apps.';
 }

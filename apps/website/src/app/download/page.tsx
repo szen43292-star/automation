@@ -11,6 +11,7 @@ import {
   getLatestRelease,
   platformDownload,
   releasesRepo,
+  setupHint,
   windowsDownload,
   type Download,
 } from '@/lib/releases';
@@ -47,6 +48,7 @@ export default async function DownloadPage() {
               version={release?.version ?? null}
               releasesUrl={releasesUrl}
               phones={{ android, ios }}
+              setupHint={setupHint(release)}
             />
           </div>
         </div>
