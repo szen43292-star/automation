@@ -1,5 +1,6 @@
 import { clsx } from 'clsx';
 import {
+  Bot,
   Braces,
   History,
   KeyRound,
@@ -94,6 +95,9 @@ export function Layout() {
           </NavLink>
           <NavLink to="/calls" className={link}>
             <Phone size={16} /> Calls
+          </NavLink>
+          <NavLink to="/agents" className={link}>
+            <Bot size={16} /> AI agents
           </NavLink>
         </nav>
         <div className="space-y-3 border-t border-line p-3">

@@ -142,6 +142,86 @@ The Phase 2 browser tests check:
 6. **Error workflow:** create a workflow with _Error Trigger_ → _No-Op_. In another workflow's **Settings**, choose it as the _Error workflow_. When an active run of the second workflow fails, the error workflow runs with the error details.
 7. **Queue mode:** `docker compose up -d --build` starts the server plus a `worker`. Production runs (webhook/schedule) then appear in the worker's logs: `docker compose logs -f worker`.
 
+## What's in Phases 3–5: WhatsApp, calls and the AI voice agent
+
+**Phase 3: WhatsApp Business.**
+
+- **Connecting numbers:** customers click **Connect WhatsApp** and log in with Facebook (Meta Embedded Signup). The owner sets up the Meta app once, on the WhatsApp page or with `META_*` variables.
+- **Webhook** at `/webhooks/whatsapp`, with verify token and `X-Hub-Signature-256` checks.
+- **WhatsApp node:** text, templates, media, buttons, lists, location, reactions, mark as read, media download.
+- **WhatsApp Trigger:** starts workflows on messages, statuses and calls.
+- **Test numbers (simulator):** chat as the customer without a Meta account or any keys.
+
+**Phase 4: WhatsApp voice calls.**
+
+- Calls are answered over WebRTC by the server itself (werift + Opus).
+- **Per-number modes:**
+  - _ring in the app_: whoever answers in the browser, desktop or phone app is bridged to the caller;
+  - _voicemail_: greeting + beep, recorded;
+  - _decline_: sends a WhatsApp message instead;
+  - _AI voice agent_.
+- Business hours with timezone, ring time and a fallback when nobody answers.
+- Call log with recordings (WAV) and transcripts.
+- "Call started" / "call ended" workflow triggers.
+- Test numbers can be **called from the browser** with your microphone.
+
+**Phase 5: AI voice agent.** The agent answers calls 24/7.
+
+- **Personas:** templates plus a persona builder; greeting; languages. Hindi, English and Hinglish are understood, and the agent replies in the caller's language.
+- **Knowledge:** paste or upload price lists and FAQs. They are searched with BM25, which works in any script.
+- **Two engines:**
+  - **Realtime** (OpenAI Realtime, speech-to-speech): the lowest latency. When the caller interrupts, playback stops and the model is told how much of its reply was actually heard.
+  - **Pipeline**: speech-to-text (OpenAI / Deepgram / Sarvam) → LLM (Claude `claude-opus-5-5` by default, OpenAI or Gemini) → voice (OpenAI / ElevenLabs / Sarvam). Replies are spoken sentence by sentence while the LLM writes, and the caller can interrupt at any time.
+- **Tools:**
+  - search knowledge;
+  - transfer to a person (rings the app with a ringback tone, then the person takes over);
+  - end the call;
+  - send the caller a WhatsApp message;
+  - **your workflows as tools** (book in a calendar, check an order…) through an _Execute Workflow Trigger_.
+- **Caller recognition:** the agent knows returning callers from earlier calls and chats.
+- **After each call:** a summary in the call log, in "call ended" workflows, and optionally on your WhatsApp.
+- **Test chat:** talk to the agent in text with the same persona, knowledge and tools.
+- **Fallback:** without working keys, calls go to voicemail instead of failing.
+- **Keys:** AI keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `DEEPGRAM_API_KEY`, `ELEVENLABS_API_KEY`, `SARVAM_API_KEY`) come from the server environment, or are built into your private app (see _Private build_). Otherwise enter them in **AI agents → AI providers**, where they are stored encrypted. They never reach the apps or browsers.
+
+> Claude requests use `fallbacks: "default"` (beta `server-side-fallback-2026-07-01`): if Claude declines a request, the API retries it on Anthropic's recommended fallback model instead of failing the call. They also use `output_config.effort: "low"` for fast voice replies.
+
+## Testing Phases 3–5
+
+```bash
+pnpm test        # workflow 22, engine 32, nodes 57, media 5, server 59, editor 10, website 18, desktop 7
+```
+
+- **Real calls in the tests.** The server suite runs real calls over WebRTC on localhost. It uses a local STUN responder, a fake Graph API for Meta, and fake AI providers (`apps/server/test/fakeAi.ts`).
+- **How the fake speech works.** "Speech" is encoded as tone pitch: the caller plays 400 Hz and the fake speech-to-text hears _"What is the price of a haircut?"_.
+- **What the AI tests cover:**
+  - greeting;
+  - knowledge lookup with tool use (Claude's thinking blocks are passed back unchanged);
+  - hang-up, summary and the owner's WhatsApp note;
+  - realtime barge-in truncation;
+  - transfer to a person;
+  - workflows as tools;
+  - the voicemail fallback.
+
+**Browser tests (15)** need a running server pointed at the fake providers:
+
+```bash
+cd apps/server && npx tsx test/fake-ai-server.ts &          # fake AI on :5700
+F=http://127.0.0.1:5700 OPENAI_BASE_URL=$F/v1 ANTHROPIC_BASE_URL=$F DEEPGRAM_BASE_URL=$F \
+  ELEVENLABS_BASE_URL=$F SARVAM_BASE_URL=$F pnpm --filter @flowforge/server start   # built server + editor
+pnpm --filter @flowforge/e2e test:e2e
+```
+
+**Manual walkthrough with real keys (about 10 minutes):**
+
+1. **WhatsApp page → Add test number → Open simulator.** Build a workflow _WhatsApp Trigger → WhatsApp (send text "Hi {{ $json.contactName }}!")_, activate it, and type "hello" as the customer. The reply arrives with ✓✓ ticks.
+2. **Calls without AI:** on the test number click **Calls** and choose _Ring in FlowForge_. Press **Call** in the simulator; the call rings at the bottom right. **Answer** and talk: open the app in a second browser or the desktop app to hear both sides. Then hang up and find the call and its recording under **Calls**. Try _Voicemail_ the same way.
+3. **AI keys:** **AI agents → AI providers.** Paste an OpenAI key (enough for everything) and/or an Anthropic key. Your private app build already has them.
+4. **Agent:** **New agent → Receptionist**, then **Persona builder** (your business name). In **Knowledge**, write your price list and use **Try a search**. In **Test chat**, ask "what does a haircut cost?". The tool call shows above the reply.
+5. **Voice:** set the test number's **Calls** to _AI voice agent_, pick the agent, then **Call** from the simulator and talk. Try Hindi or Hinglish, interrupt the agent mid-sentence, ask for "a human" (it rings the app; answer to take over), and say "bye". The call log shows the transcript and summary.
+6. **Workflow tool:** create a workflow _Execute Workflow Trigger → Code_ (`return [{ json: { booking: 'B-1', day: $json.day } }]`). In the agent's **Tools**, add it as `book_appointment` with the detail `day`, then ask the agent to book.
+7. **Real number:** connect your number with **Connect WhatsApp**, enable calling in its **Calls** settings, and call it from your phone. It needs `PUBLIC_URL` reachable from the internet and UDP ports open for audio (`MEDIA_PORT_RANGE`, plus `MEDIA_PUBLIC_IP` behind NAT).
+
 ## Deployment
 
 FlowForge has two kinds of parts:
@@ -171,15 +251,16 @@ The installer contains everything FlowForge needs, so it runs on any Windows 10/
 - **Secrets are generated** on first start (`%APPDATA%\FlowForge\secrets.json`): the JWT secret, the credentials encryption key and the database password. Nobody has to create or paste a key.
 - **Tray app:**
   - Closing the window keeps workflows running.
-  - Optional *Start with Windows* (on by default).
-  - *Open in browser*, *Open logs folder* and *Quit*.
-  - If the server stops unexpectedly, the window shows the error with *Try again*.
+  - Optional _Start with Windows_ (on by default).
+  - _Open in browser_, _Open logs folder_ and _Quit_.
+  - If the server stops unexpectedly, the window shows the error with _Try again_.
 - **Auto-update** from this repository's GitHub Releases (electron-updater, no token).
 - **Installer:** one-click, per user (no admin prompt), into `%LOCALAPPDATA%\Programs\flowforge`. The installer and uninstaller stop the app, its server and PostgreSQL first. Uninstalling keeps your data folder.
 
 The installer is about 150 MB: Electron, Node.js, PostgreSQL and the server.
 
 **Build it:** the **Windows app** workflow (`.github/workflows/desktop.yml`) runs on every push that touches the app, on a `windows-latest` runner:
+
 1. Builds the app and bundles the runtime (`scripts/prepare-resources.mjs`).
 2. Runs a smoke test of the bundled runtime: database, migrations, sign-up, a workflow with a Code node and an expression, an encrypted credential, then a restart.
 3. Builds `FlowForge-Setup.exe`.
@@ -187,7 +268,8 @@ The installer is about 150 MB: Electron, Node.js, PostgreSQL and the server.
 
 The installer is attached to the run as an artifact.
 
-**Publish a release:** *Actions → Windows app → Run workflow* with a version (e.g. `0.3.0`), or push a tag `v0.3.0`. The workflow creates the GitHub Release using only the built-in `GITHUB_TOKEN`. It attaches:
+**Publish a release:** _Actions → Windows app → Run workflow_ with a version (e.g. `0.3.0`), or push a tag `v0.3.0`. The workflow creates the GitHub Release using only the built-in `GITHUB_TOKEN`. It attaches:
+
 - `FlowForge-Setup.exe`
 - `latest.yml` and the `.blockmap`, for auto-update
 - `release.json`, for the website
@@ -210,17 +292,17 @@ On Linux, PostgreSQL refuses to run as root, so run the smoke test as a regular 
 
 For your own private use, the app can carry your keys, so nothing has to be typed into it.
 
-1. **Repository secrets.** In GitHub, go to *Settings → Secrets and variables → Actions → New repository secret*. Add the ones you have; missing ones are simply skipped.
+1. **Repository secrets.** In GitHub, go to _Settings → Secrets and variables → Actions → New repository secret_. Add the ones you have; missing ones are simply skipped.
 
-   | Secret | Used for |
-   | --- | --- |
-   | `META_APP_ID`, `META_APP_SECRET`, `META_EMBEDDED_SIGNUP_CONFIG_ID` | WhatsApp: your Meta app (one-click "Connect WhatsApp") |
-   | `WHATSAPP_WEBHOOK_VERIFY_TOKEN` | Optional fixed verify token for the Meta webhook |
-   | `PUBLIC_URL` | Public HTTPS address of the app's server (e.g. a tunnel), needed for Meta to deliver messages |
-   | `OPENAI_API_KEY`, `DEEPGRAM_API_KEY`, `ELEVENLABS_API_KEY`, `SARVAM_API_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY` | AI voice agent providers (Phase 5) |
-   | `UPDATE_GITHUB_TOKEN` | Lets the app auto-update from your **private** releases. Use a fine-grained token, this repository only, *Contents: Read-only* |
+   | Secret                                                                                                              | Used for                                                                                                                       |
+   | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+   | `META_APP_ID`, `META_APP_SECRET`, `META_EMBEDDED_SIGNUP_CONFIG_ID`                                                  | WhatsApp: your Meta app (one-click "Connect WhatsApp")                                                                         |
+   | `WHATSAPP_WEBHOOK_VERIFY_TOKEN`                                                                                     | Optional fixed verify token for the Meta webhook                                                                               |
+   | `PUBLIC_URL`                                                                                                        | Public HTTPS address of the app's server (e.g. a tunnel), needed for Meta to deliver messages                                  |
+   | `OPENAI_API_KEY`, `DEEPGRAM_API_KEY`, `ELEVENLABS_API_KEY`, `SARVAM_API_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY` | AI voice agent providers (Phase 5)                                                                                             |
+   | `UPDATE_GITHUB_TOKEN`                                                                                               | Lets the app auto-update from your **private** releases. Use a fine-grained token, this repository only, _Contents: Read-only_ |
 
-2. **Build.** Run *Actions → Windows app → Run workflow* with a version.
+2. **Build.** Run _Actions → Windows app → Run workflow_ with a version.
    - The build writes the secrets into `resources/runtime/config.json` inside the installer.
    - The app's server reads them as environment variables, which take precedence over anything entered on the WhatsApp page.
 3. **Download.** Get the installer from the private GitHub Release while signed in, or from your own download site (next step).
@@ -233,19 +315,22 @@ For your own private use, the app can carry your keys, so nothing has to be type
 ### The download website (`apps/website`)
 
 A Next.js site with a landing page and a download page. The download page:
+
 - Detects the visitor's OS. Windows gets the button; macOS/Linux/Android/iOS visitors get a note that their platform is coming.
 - Shows version, date, size and **SHA-256** (copy button plus the PowerShell command to verify it).
 - Shows release notes, install steps, a SmartScreen explanation, an FAQ and a QR code.
 - Supports dark and light themes.
 
 **It needs no API keys or secrets.**
+
 - Release data comes from `https://github.com/<repo>/releases/latest/download/release.json`. This is a plain public file download, not the GitHub API, so there is no token and no rate limit. If it's missing, the site falls back to the public releases API.
 - Pages are static and re-check every 5 minutes, so a new release shows up on its own.
 - `GET /api/releases/latest` returns the release as JSON. `/download/windows` always redirects to the newest installer.
 - Before the first public release, the button explains that the release is on its way.
 
 **Deploy on Vercel:**
-1. *Add New → Project*, then import this repository.
+
+1. _Add New → Project_, then import this repository.
 2. Set **Root Directory** to `apps/website`. The framework is detected as Next.js.
 3. Deploy. **No environment variables are needed.**
    - Optional: `FLOWFORGE_RELEASES_REPO=owner/name` to read releases from another (public) repository.
@@ -261,16 +346,16 @@ pnpm --filter @flowforge/website build
 
 ### Testing the Windows app and website
 
-1. Push to any branch, then open *Actions → Windows app*. All steps should be green. "Install, launch and uninstall" proves the installer works on a clean Windows machine.
+1. Push to any branch, then open _Actions → Windows app_. All steps should be green. "Install, launch and uninstall" proves the installer works on a clean Windows machine.
 2. Download the `FlowForge-Windows-…` artifact on a Windows PC and run `FlowForge-Setup.exe`.
-   - SmartScreen will say "Windows protected your PC" because the build is unsigned. Choose *More info → Run anyway*.
+   - SmartScreen will say "Windows protected your PC" because the build is unsigned. Choose _More info → Run anyway_.
    - FlowForge opens by itself. Create the owner account, build a workflow, and close the window. The tray icon remains, and an active schedule keeps running.
-   - Right-click the tray icon to try *Open in browser*, *Start with Windows* and *Quit FlowForge*.
-3. Run *Actions → Windows app → Run workflow* with version `0.2.0` (with your secrets set for a private build). A release `v0.2.0` appears with the installer and `release.json`.
+   - Right-click the tray icon to try _Open in browser_, _Start with Windows_ and _Quit FlowForge_.
+3. Run _Actions → Windows app → Run workflow_ with version `0.2.0` (with your secrets set for a private build). A release `v0.2.0` appears with the installer and `release.json`.
 4. Deploy `apps/website` on Vercel and open `/download`.
    - Version, size and SHA-256 match the release. Compare with `Get-FileHash .\FlowForge-Setup.exe -Algorithm SHA256`.
    - On a phone you get the "coming soon" note, and on a desktop the QR code.
-5. Publish `0.2.1` the same way. The installed app downloads it in the background, and the tray menu offers *Restart to install version 0.2.1*.
+5. Publish `0.2.1` the same way. The installed app downloads it in the background, and the tray menu offers _Restart to install version 0.2.1_.
 
 ## Running locally
 

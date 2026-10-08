@@ -70,11 +70,16 @@ export function CallSettingsModal({
     queryFn: () => endpoints.callSettings(account.id),
     enabled: open,
   });
+  const agents = useQuery({ queryKey: ['agents'], queryFn: endpoints.agents, enabled: open });
   const [draft, setDraft] = useState<CallSettings | null>(null);
+  const [agentId, setAgentId] = useState<string | null>(account.agentId);
   const [saving, setSaving] = useState(false);
   useEffect(() => {
     if (open && query.data) setDraft(query.data.settings);
   }, [open, query.data]);
+  useEffect(() => {
+    if (open) setAgentId(account.agentId);
+  }, [open, account.agentId]);
   const zones = useMemo(() => {
     try {
       return (Intl as unknown as { supportedValuesOf(k: string): string[] }).supportedValuesOf(
@@ -92,6 +97,7 @@ export function CallSettingsModal({
     setSaving(true);
     try {
       await endpoints.saveCallSettings(account.id, draft);
+      if (agentId !== account.agentId) await endpoints.setNumberAgent(account.id, agentId);
       if (!query.data?.callingEnabled) await endpoints.enableCalling(account.id);
       toast.success('Call settings saved');
       await refresh();
@@ -114,6 +120,11 @@ export function CallSettingsModal({
   };
 
   const hours = draft?.businessHours;
+  const usesAi =
+    draft &&
+    (draft.mode === 'ai' ||
+      (draft.mode === 'app' && draft.fallback === 'ai') ||
+      (draft.businessHours.enabled && draft.businessHours.outsideMode === 'ai'));
 
   return (
     <Modal
@@ -183,6 +194,39 @@ export function CallSettingsModal({
               ))}
             </div>
           </div>
+
+          {usesAi && (
+            <div className="rounded-lg border border-line p-3" data-testid="agent-picker">
+              <Field
+                label="AI agent for this number"
+                hint={
+                  agents.data?.data.length
+                    ? query.data?.aiAvailable === false
+                      ? 'The agent needs AI provider keys - until then calls go to voicemail.'
+                      : undefined
+                    : 'Create an agent on the "AI agents" page first.'
+                }
+              >
+                <select
+                  className="ff-input"
+                  value={agentId ?? ''}
+                  onChange={(e) => setAgentId(e.target.value || null)}
+                  aria-label="AI agent"
+                >
+                  <option value="">
+                    {agents.data?.data.length === 1
+                      ? `${agents.data.data[0]!.name} (only agent)`
+                      : 'Choose an agent…'}
+                  </option>
+                  {agents.data?.data.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+          )}
 
           {draft.mode === 'app' && (
             <div className="grid gap-4 sm:grid-cols-2">
@@ -393,13 +437,6 @@ export function CallSettingsModal({
               />
             </Field>
           </div>
-          <Field label="Greeting the AI agent says first">
-            <input
-              className="ff-input"
-              value={draft.greetingText}
-              onChange={(e) => setDraft({ ...draft, greetingText: e.target.value })}
-            />
-          </Field>
           <Field
             label="Message after a declined or missed call"
             hint="Sent on WhatsApp. Leave empty to send nothing."

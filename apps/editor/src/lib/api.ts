@@ -379,7 +379,123 @@ export const endpoints = {
     api<void>(`/api/whatsapp/accounts/${accountId}/simulate-call/${waCallId}/hangup`, {
       method: 'POST',
     }),
+  setNumberAgent: (accountId: string, agentId: string | null) =>
+    api<{ agentId: string | null }>(`/api/whatsapp/accounts/${accountId}/agent`, {
+      method: 'PUT',
+      body: { agentId },
+    }),
+  // AI providers and agents
+  aiProviders: () => api<{ data: AiProvider[] }>('/api/ai/providers'),
+  saveAiProviders: (keys: Partial<Record<AiProviderId, string | null>>) =>
+    api<{ data: AiProvider[] }>('/api/ai/providers', { method: 'PUT', body: keys }),
+  agentOptions: () => api<AgentOptions>('/api/agents/options'),
+  agents: () => api<{ data: AgentSummary[] }>('/api/agents'),
+  agent: (id: string) => api<AgentDetail>(`/api/agents/${id}`),
+  createAgent: (body: AgentInput) => api<AgentDetail>('/api/agents', { body }),
+  updateAgent: (id: string, body: AgentInput) =>
+    api<AgentDetail>(`/api/agents/${id}`, { method: 'PUT', body }),
+  deleteAgent: (id: string) => api<void>(`/api/agents/${id}`, { method: 'DELETE' }),
+  addDocument: (id: string, body: { title: string; content: string }) =>
+    api<{ id: string }>(`/api/agents/${id}/documents`, { body }),
+  document: (id: string, documentId: string) =>
+    api<{ id: string; title: string; content: string }>(
+      `/api/agents/${id}/documents/${documentId}`,
+    ),
+  updateDocument: (id: string, documentId: string, body: { title: string; content: string }) =>
+    api<{ id: string }>(`/api/agents/${id}/documents/${documentId}`, { method: 'PUT', body }),
+  deleteDocument: (id: string, documentId: string) =>
+    api<void>(`/api/agents/${id}/documents/${documentId}`, { method: 'DELETE' }),
+  searchKnowledge: (id: string, q: string) =>
+    api<{ data: Array<{ title: string; text: string; score: number }> }>(
+      `/api/agents/${id}/search?q=${encodeURIComponent(q)}`,
+    ),
+  agentChat: (id: string, messages: AgentChatMessage[]) =>
+    api<{
+      reply: string;
+      actions: Array<{ tool: string; input: unknown; output: string }>;
+      model: string;
+    }>(`/api/agents/${id}/chat`, { body: { messages } }),
 };
+
+export type AiProviderId = 'openai' | 'anthropic' | 'gemini' | 'deepgram' | 'elevenlabs' | 'sarvam';
+
+export interface AiProvider {
+  id: AiProviderId;
+  name: string;
+  usedFor: string;
+  keyUrl: string;
+  configured: boolean;
+  source: 'env' | 'settings' | null;
+  hint: string | null;
+}
+
+export type SttProvider = 'openai' | 'deepgram' | 'sarvam';
+export type LlmProvider = 'anthropic' | 'openai' | 'gemini';
+export type TtsProvider = 'openai' | 'elevenlabs' | 'sarvam';
+
+export interface AgentInput {
+  name: string;
+  instructions: string;
+  greeting: string;
+  languages: string[];
+  engine: 'realtime' | 'pipeline';
+  voice: {
+    realtime: { model: string; voice: string };
+    stt: { provider: SttProvider; model: string };
+    llm: { provider: LlmProvider; model: string };
+    tts: { provider: TtsProvider; model: string; voice: string };
+    language: string;
+  };
+  tools: {
+    knowledge: boolean;
+    transfer: boolean;
+    endCall: boolean;
+    whatsappMessage: boolean;
+    workflows: Array<{
+      workflowId: string;
+      name: string;
+      description: string;
+      parameters: Array<{ name: string; description: string }>;
+    }>;
+  };
+  notify: { summary: boolean; whatsappTo: string };
+}
+
+export interface AgentSummary extends AgentInput {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  numbers: Array<{ id: string; displayPhoneNumber: string; name: string }>;
+  documentCount: number;
+  callCount: number;
+}
+
+export interface AgentDetail extends AgentInput {
+  id: string;
+  documents: Array<{ id: string; title: string; characters: number; updatedAt: string }>;
+  numbers: Array<{ id: string; displayPhoneNumber: string; name: string }>;
+  missingProviders?: AiProviderId[];
+}
+
+export interface AgentOptions {
+  providers: AiProvider[];
+  sttProviders: SttProvider[];
+  llmProviders: LlmProvider[];
+  ttsProviders: TtsProvider[];
+  defaultModels: {
+    realtime: string;
+    stt: Record<SttProvider, string>;
+    llm: Record<LlmProvider, string>;
+    tts: Record<TtsProvider, string>;
+  };
+  defaultVoices: Record<TtsProvider | 'realtime', string>;
+  workflows: Array<{ id: string; name: string }>;
+}
+
+export interface AgentChatMessage {
+  role: 'caller' | 'agent';
+  text: string;
+}
 
 export interface CallDTO {
   id: string;
@@ -469,6 +585,7 @@ export interface WhatsAppAccount {
   lastError: string | null;
   lastEventAt: string | null;
   callingEnabled: boolean;
+  agentId: string | null;
   createdAt: string;
 }
 

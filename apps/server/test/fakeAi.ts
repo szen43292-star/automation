@@ -90,7 +90,7 @@ function decide(lastUserText: string, lastToolResult: string | null, toolNames: 
   return { text: `You said: ${lastUserText}` };
 }
 
-export async function startFakeAi() {
+export async function startFakeAi(port = 0) {
   const requests: FakeRequest[] = [];
   const realtimeEvents: any[] = [];
   /** Sentences sent to text-to-speech. */
@@ -504,7 +504,7 @@ export async function startFakeAi() {
     });
   }
 
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  await new Promise<void>((resolve) => server.listen(port, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   return {
     base,
