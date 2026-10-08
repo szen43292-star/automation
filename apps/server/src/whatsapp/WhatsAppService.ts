@@ -49,6 +49,8 @@ export interface WhatsAppAccountDTO {
   lastError: string | null;
   lastEventAt: string | null;
   callingEnabled: boolean;
+  /** AI agent answering calls (mode "AI agent"). */
+  agentId: string | null;
   createdAt: string;
 }
 
@@ -92,6 +94,7 @@ export const toAccountDTO = (a: WhatsAppAccount): WhatsAppAccountDTO => ({
   lastError: a.lastError,
   lastEventAt: a.lastEventAt?.toISOString() ?? null,
   callingEnabled: a.callingEnabled,
+  agentId: a.agentId,
   createdAt: a.createdAt.toISOString(),
 });
 

@@ -50,6 +50,10 @@ services:
         condition: service_healthy
     ports:
       - '${PORT:-5678}:5678'
+      # Call audio (WebRTC over UDP) - also open these ports in the firewall.
+      - '40000-40099:40000-40099/udp'
+    volumes:
+      - flowforge-data:/app/data
     environment: &env
       DATABASE_URL: postgresql://flowforge:${POSTGRES_PASSWORD:-flowforge}@postgres:5432/flowforge
       REDIS_URL: redis://redis:6379
@@ -60,6 +64,19 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       DEFAULT_TIMEZONE: ${DEFAULT_TIMEZONE:-UTC}
+      DATA_DIR: /app/data
+      MEDIA_PORT_RANGE: 40000-40099
+      MEDIA_PUBLIC_IP: ${MEDIA_PUBLIC_IP:-}
+      META_APP_ID: ${META_APP_ID:-}
+      META_APP_SECRET: ${META_APP_SECRET:-}
+      META_EMBEDDED_SIGNUP_CONFIG_ID: ${META_EMBEDDED_SIGNUP_CONFIG_ID:-}
+      WHATSAPP_WEBHOOK_VERIFY_TOKEN: ${WHATSAPP_WEBHOOK_VERIFY_TOKEN:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      DEEPGRAM_API_KEY: ${DEEPGRAM_API_KEY:-}
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+      SARVAM_API_KEY: ${SARVAM_API_KEY:-}
 
   worker:
     image: flowforge/server:latest
@@ -77,3 +94,4 @@ services:
 volumes:
   postgres-data:
   redis-data:
+  flowforge-data:

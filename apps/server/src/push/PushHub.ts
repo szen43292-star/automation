@@ -57,7 +57,11 @@ export type PushEvent =
   | { type: 'callUpdated'; data: CallDTO & { note?: string } }
   | { type: 'callAnswered'; data: { callId: string; userId: string } }
   | { type: 'callTranscript'; data: { callId: string; role: 'caller' | 'agent'; text: string } }
-  | { type: 'simulatedCallAction'; data: { waCallId: string; action: string } };
+  | { type: 'simulatedCallAction'; data: { waCallId: string; action: string } }
+  | {
+      type: 'callSummary';
+      data: { callId: string; summary: string; contact: string; contactName: string | null };
+    };
 
 interface Client {
   socket: WebSocket;

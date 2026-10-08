@@ -31,6 +31,7 @@ model User {
   credentials      Credential[]
   whatsAppAccounts WhatsAppAccount[]
   answeredCalls    Call[]
+  agents           Agent[]
 }
 
 model Workflow {
@@ -222,6 +223,9 @@ model WhatsAppAccount {
   callSettings           Json?
   /// Calling switched on for this number at Meta.
   callingEnabled         Boolean               @default(false)
+  /// The AI voice agent that answers calls to this number (call mode "ai").
+  agentId                String?
+  agent                  Agent?                @relation(fields: [agentId], references: [id], onDelete: SetNull)
   createdAt              DateTime              @default(now())
   updatedAt              DateTime              @updatedAt
 
@@ -309,8 +313,52 @@ model Call {
   transcript      Json?
   summary         String?
   metadata        Json?
+  /// The AI agent that talked to the caller.
+  agentId         String?
+  agent           Agent?          @relation(fields: [agentId], references: [id], onDelete: SetNull)
 
   @@index([accountId, startedAt(sort: Desc)])
   @@index([startedAt(sort: Desc)])
   @@index([status])
+}
+
+/// An AI voice agent: answers WhatsApp calls 24/7 with a persona, knowledge and tools.
+model Agent {
+  id           String   @id @default(cuid())
+  name         String
+  /// Who the agent is and how it should behave (the persona).
+  instructions String
+  /// What the agent says first on every call.
+  greeting     String
+  /// Languages the agent speaks, e.g. ["English", "Hindi", "Hinglish"].
+  languages    String[]
+  /// realtime (speech-to-speech model) | pipeline (speech-to-text → LLM → text-to-speech)
+  engine       String   @default("realtime")
+  /// Models and voice (AgentVoice JSON).
+  voice        Json
+  /// Built-in tools switched on and workflows the agent can run (AgentTools JSON).
+  tools        Json
+  /// What happens after a call: summary, WhatsApp note to the owner (AgentNotify JSON).
+  notify       Json
+  createdById  String?
+  createdBy    User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  documents KnowledgeDocument[]
+  accounts  WhatsAppAccount[]
+  calls     Call[]
+}
+
+/// Knowledge the agent can look up during calls (prices, opening hours, FAQs...).
+model KnowledgeDocument {
+  id        String   @id @default(cuid())
+  agentId   String
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  title     String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([agentId])
 }

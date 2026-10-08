@@ -30,7 +30,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-cert
 WORKDIR /app
 COPY --from=build --chown=node:node /out ./
 COPY --from=build --chown=node:node /repo/apps/editor/dist ./editor
-ENV NODE_ENV=production EDITOR_DIST=/app/editor PORT=5678 HOST=0.0.0.0
+RUN mkdir -p /app/data && chown node:node /app/data
+ENV NODE_ENV=production EDITOR_DIST=/app/editor PORT=5678 HOST=0.0.0.0 DATA_DIR=/app/data
 USER node
 EXPOSE 5678
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s \

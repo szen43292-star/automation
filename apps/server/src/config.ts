@@ -60,6 +60,25 @@ const envSchema = z.object({
   MEDIA_PUBLIC_IP: z.ipv4().optional(),
   /** Comma-separated STUN/TURN URLs used to find the public address. */
   MEDIA_ICE_SERVERS: z.string().default('stun:stun.l.google.com:19302'),
+  /**
+   * AI providers for the voice agent. Optional here: the owner can also enter keys in Settings →
+   * AI providers (stored encrypted). Private app builds bring them built in.
+   */
+  OPENAI_API_KEY: z.string().min(10).optional(),
+  OPENAI_BASE_URL: z.string().url().default('https://api.openai.com/v1'),
+  ANTHROPIC_API_KEY: z.string().min(10).optional(),
+  ANTHROPIC_BASE_URL: z.string().url().default('https://api.anthropic.com'),
+  GEMINI_API_KEY: z.string().min(10).optional(),
+  GEMINI_BASE_URL: z
+    .string()
+    .url()
+    .default('https://generativelanguage.googleapis.com/v1beta/openai'),
+  DEEPGRAM_API_KEY: z.string().min(10).optional(),
+  DEEPGRAM_BASE_URL: z.string().url().default('https://api.deepgram.com'),
+  ELEVENLABS_API_KEY: z.string().min(10).optional(),
+  ELEVENLABS_BASE_URL: z.string().url().default('https://api.elevenlabs.io'),
+  SARVAM_API_KEY: z.string().min(10).optional(),
+  SARVAM_BASE_URL: z.string().url().default('https://api.sarvam.ai'),
 });
 
 export type Config = z.infer<typeof envSchema> & {

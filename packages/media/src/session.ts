@@ -20,7 +20,8 @@ export interface MediaConfig {
   allowLoopback?: boolean;
 }
 
-export type SessionState = 'new' | 'connecting' | 'connected' | 'disconnected' | 'failed' | 'closed';
+export type SessionState =
+  'new' | 'connecting' | 'connected' | 'disconnected' | 'failed' | 'closed';
 
 type Listener<T> = (value: T) => void;
 
@@ -57,7 +58,12 @@ export class CallMediaSession {
     this.pc = new RTCPeerConnection({
       codecs: {
         audio: [
-          new RTCRtpCodecParameters({ mimeType: 'audio/opus', clockRate: 48_000, channels: 2, payloadType: 111 }),
+          new RTCRtpCodecParameters({
+            mimeType: 'audio/opus',
+            clockRate: 48_000,
+            channels: 2,
+            payloadType: 111,
+          }),
         ],
       },
       iceServers,
@@ -74,7 +80,15 @@ export class CallMediaSession {
     });
     this.pc.connectionStateChange.subscribe((state) => {
       const mapped: SessionState =
-        state === 'connected' ? 'connected' : state === 'failed' ? 'failed' : state === 'closed' ? 'closed' : state === 'disconnected' ? 'disconnected' : 'connecting';
+        state === 'connected'
+          ? 'connected'
+          : state === 'failed'
+            ? 'failed'
+            : state === 'closed'
+              ? 'closed'
+              : state === 'disconnected'
+                ? 'disconnected'
+                : 'connecting';
       if (mapped === 'connected' && this.state !== 'connected') this.startClock();
       this.setState(mapped);
     });
@@ -203,6 +217,11 @@ export class CallMediaSession {
 
   get playing(): boolean {
     return this.queue.length > 0;
+  }
+
+  /** Milliseconds of queued audio not played yet. */
+  get queuedMs(): number {
+    return this.queue.length * FRAME_MS;
   }
 
   /** Forward audio packets both ways between two sessions without re-encoding. */

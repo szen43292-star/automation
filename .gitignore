@@ -11,3 +11,4 @@ apps/server/storage/
 playwright-report/
 test-results/
 dump.rdb
+apps/server/data/

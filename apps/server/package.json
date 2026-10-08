@@ -19,6 +19,7 @@
     "start:worker": "node --no-node-snapshot dist/worker.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.132.1",
     "@fastify/cors": "^11.3.0",
     "@fastify/jwt": "^10.2.2",
     "@fastify/rate-limit": "^11.2.0",
@@ -39,14 +40,14 @@
     "pino": "^10.1.0",
     "prisma": "6.19.3",
     "werift": "0.24.4",
+    "ws": "^8.18.3",
     "zod": "^4.1.12"
   },
   "devDependencies": {
     "@types/ws": "^8.18.1",
     "pino-pretty": "^13.1.2",
     "tsup": "^8.5.1",
-    "tsx": "^4.20.6",
-    "ws": "^8.18.3"
+    "tsx": "^4.20.6"
   },
   "files": [
     "dist",

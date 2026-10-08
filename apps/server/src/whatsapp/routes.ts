@@ -264,6 +264,10 @@ export async function whatsappRoutes(app: FastifyInstance) {
     ]);
     const workflows = app.services.activeWorkflows.eventWorkflowIds('whatsapp').length;
     const simulators = accounts.length - cloud.length;
+    const agentRows = await app.prisma.agent.findMany();
+    let agentReady = false;
+    for (const agent of agentRows)
+      if (!(await app.agents.missingProviders(agent)).length) agentReady = true;
     type Status = 'done' | 'todo' | 'error' | 'soon';
     const step = (id: string, title: string, status: Status, detail: string) => ({
       id,
@@ -334,6 +338,14 @@ export async function whatsappRoutes(app: FastifyInstance) {
           accounts.some((a) => a.callingEnabled)
             ? 'Calling is on - calls ring in the app, go to voicemail, the AI agent, or are rejected, as you set.'
             : 'Open "Calls" on a number, choose how calls are answered and switch calling on.',
+        ),
+        step(
+          'agent',
+          'AI voice agent',
+          agentReady ? 'done' : 'todo',
+          agentReady
+            ? 'An AI agent is ready to answer calls 24/7 - choose "AI voice agent" in a number\'s call settings.'
+            : 'Add an AI provider key and create an agent on the "AI agents" page.',
         ),
       ],
       simulators,

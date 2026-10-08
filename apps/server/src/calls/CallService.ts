@@ -73,9 +73,20 @@ export type CallAgent = (call: {
   transcript: (role: 'caller' | 'agent', text: string) => void;
   /** End the call from our side. */
   hangup: (reason: string) => Promise<void>;
-  /** Hand the caller to a person in the app (rings them). */
+  /** Hand the caller to a person in the app (rings them); true when someone picked up. */
   transfer: () => Promise<boolean>;
+  /** Aborted when the call ends or a person takes over. */
+  signal: AbortSignal;
 }) => Promise<void>;
+
+/** Writes the call summary from the transcript (Phase 5). */
+export type CallSummarizer = (call: {
+  callId: string;
+  account: WhatsAppAccount;
+  contact: string;
+  contactName: string | null;
+  transcript: Array<{ role: 'caller' | 'agent'; text: string }>;
+}) => Promise<string | null>;
 
 interface ActiveCall {
   callId: string;
@@ -94,6 +105,10 @@ interface ActiveCall {
   recorder?: CallRecorder;
   ringTimer?: NodeJS.Timeout;
   maxTimer?: NodeJS.Timeout;
+  /** The AI agent talking to the caller. */
+  agentAbort?: AbortController;
+  /** The AI agent is ringing a person (transfer): resolves true when someone picks up. */
+  transferring?: (answered: boolean) => void;
   transcript: Array<{ role: 'caller' | 'agent'; text: string; at: string }>;
   finished: boolean;
 }
@@ -118,8 +133,11 @@ export class CallService {
   private readonly active = new Map<string, ActiveCall>();
   private readonly byWaCallId = new Map<string, string>();
   private readonly simulator = new Map<string, SimulatorHandshake>();
-  /** Set by Phase 5 when an AI agent is configured. */
+  /** The AI voice agent (Phase 5). */
   agent: CallAgent | null = null;
+  /** Whether the AI agent can take calls for this number (an agent with working keys). */
+  agentAvailable: (account: WhatsAppAccount) => Promise<boolean> = async () => this.agent !== null;
+  summarize: CallSummarizer | null = null;
 
   constructor(private readonly deps: CallServiceDeps) {}
 
@@ -139,7 +157,7 @@ export class CallService {
       settings: this.settingsOf(account),
       callingEnabled: account.callingEnabled,
       hasGreetingAudio: await this.greetingAudio(accountId).then((a) => a !== null),
-      aiAvailable: this.agent !== null,
+      aiAvailable: this.agent !== null && (await this.agentAvailable(account)),
     };
   }
 
@@ -294,7 +312,7 @@ export class CallService {
     await this.emit('call_started', account, row);
 
     let mode = chooseMode(settings);
-    if (mode === 'ai' && !this.agent) mode = 'voicemail';
+    if (mode === 'ai' && !(await this.aiReady(account))) mode = 'voicemail';
     if (mode === 'reject' || !offer) {
       await this.callAction(account, event.id, 'reject');
       await this.finishRow(row.id, {
@@ -362,8 +380,13 @@ export class CallService {
 
   // ---- Modes ------------------------------------------------------------------------------------
 
+  private async aiReady(account: WhatsAppAccount) {
+    if (!this.agent) return false;
+    return this.agentAvailable(account).catch(() => false);
+  }
+
   /** Ring everyone in the app; the fallback takes over if nobody answers in time. */
-  private ring(active: ActiveCall) {
+  private ring(active: ActiveCall, onTimeout?: () => void) {
     this.deps.push.publish(['whatsapp'], {
       type: 'incomingCall',
       data: {
@@ -376,7 +399,8 @@ export class CallService {
       },
     });
     active.ringTimer = setTimeout(() => {
-      void this.fallback(active, 'Nobody answered in the app');
+      if (onTimeout) onTimeout();
+      else void this.fallback(active, 'Nobody answered in the app');
     }, active.settings.ringSeconds * 1000);
     active.ringTimer.unref();
   }
@@ -389,7 +413,7 @@ export class CallService {
       data: { ...(await this.get(active.callId)), note: why },
     });
     let mode: CallMode = active.settings.fallback;
-    if (mode === 'ai' && !this.agent) mode = 'voicemail';
+    if (mode === 'ai' && !(await this.aiReady(active.account))) mode = 'voicemail';
     await this.handleWith(active, mode);
   }
 
@@ -448,7 +472,10 @@ export class CallService {
   private async runAgent(active: ActiveCall) {
     await this.accept(active, 'ai');
     await active.caller.connected(15_000);
+    const abort = new AbortController();
+    active.agentAbort = abort;
     await this.agent!({
+      signal: abort.signal,
       callId: active.callId,
       account: active.account,
       contact: active.contact,
@@ -463,10 +490,39 @@ export class CallService {
         });
       },
       hangup: (reason) => this.hangupActive(active, reason),
-      transfer: async () => {
-        this.ring(active);
-        return true;
-      },
+      transfer: () => this.transfer(active),
+    });
+  }
+
+  /** The AI agent hands the caller to a person: ring the app and play a ringback tone meanwhile. */
+  private transfer(active: ActiveCall): Promise<boolean> {
+    if (active.finished || active.personLeg) return Promise.resolve(false);
+    return new Promise<boolean>((resolve) => {
+      let done = false;
+      const settle = (answered: boolean) => {
+        if (done) return;
+        done = true;
+        active.transferring = undefined;
+        if (active.ringTimer) clearTimeout(active.ringTimer);
+        active.ringTimer = undefined;
+        if (!answered) {
+          active.caller.interrupt();
+          void this.get(active.callId).then((call) =>
+            this.deps.push.publish(['whatsapp'], {
+              type: 'callUpdated',
+              data: { ...call, note: 'Nobody answered the transfer' },
+            }),
+          );
+        }
+        resolve(answered);
+      };
+      active.transferring = settle;
+      this.ring(active, () => settle(false));
+      const ringback = concat(tone(425, 1000, 0.08), silence(2000));
+      const loop = async () => {
+        while (!done && !active.finished && !active.personLeg) await active.caller.play(ringback);
+      };
+      void loop();
     });
   }
 
@@ -497,7 +553,10 @@ export class CallService {
       .connected(20_000)
       .then(async () => {
         if (active.finished) return;
-        await this.accept(active, active.mode === 'ai' ? 'ai+person' : 'person', user.id);
+        const fromAgent = Boolean(active.agentAbort);
+        active.transferring?.(true);
+        active.agentAbort?.abort();
+        await this.accept(active, fromAgent ? 'ai+person' : 'person', user.id);
         active.unbridge = active.caller.bridge(leg);
         if (active.recorder) {
           const recorder = active.recorder;
@@ -519,6 +578,10 @@ export class CallService {
   async declineInApp(callId: string) {
     const active = this.active.get(callId);
     if (!active || active.finished) return;
+    if (active.transferring) {
+      active.transferring(false);
+      return;
+    }
     await this.fallback(active, 'Declined in the app');
   }
 
@@ -545,6 +608,8 @@ export class CallService {
     this.byWaCallId.delete(active.waCallId);
     if (active.ringTimer) clearTimeout(active.ringTimer);
     if (active.maxTimer) clearTimeout(active.maxTimer);
+    active.transferring?.(false);
+    active.agentAbort?.abort();
     active.unbridge?.();
     let recordingPath: string | null = null;
     let recordingBytes: number | null = null;
@@ -556,12 +621,32 @@ export class CallService {
       recordingBytes = wav.length;
     }
     await Promise.all([active.caller.close(), active.personLeg?.close()]);
+    let summary: string | null = null;
+    if (this.summarize && active.transcript.some((line) => line.role === 'caller')) {
+      summary = await Promise.race([
+        this.summarize({
+          callId: active.callId,
+          account: active.account,
+          contact: active.contact,
+          contactName: active.contactName,
+          transcript: active.transcript,
+        }),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 30_000).unref()),
+      ]).catch((error: Error) => {
+        this.deps.logger.warn(
+          { err: error, callId: active.callId },
+          'Could not summarize the call',
+        );
+        return null;
+      });
+    }
     await this.finishRow(active.callId, {
       status,
       endReason: reason,
       recordingPath,
       recordingBytes,
       ...(active.transcript.length ? { transcript: active.transcript } : {}),
+      ...(summary ? { summary } : {}),
     });
   }
 
@@ -574,6 +659,7 @@ export class CallService {
       recordingPath?: string | null;
       recordingBytes?: number | null;
       transcript?: unknown;
+      summary?: string;
     },
   ) {
     const existing = await this.deps.prisma.call.findUnique({ where: { id: callId } });
@@ -593,6 +679,7 @@ export class CallService {
           ? { recordingPath: data.recordingPath, recordingBytes: data.recordingBytes }
           : {}),
         ...(data.transcript ? { transcript: data.transcript as Prisma.InputJsonValue } : {}),
+        ...(data.summary ? { summary: data.summary } : {}),
       },
       include: { answeredBy: { select: { id: true, name: true } }, account: true },
     });

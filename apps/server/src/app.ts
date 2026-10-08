@@ -33,6 +33,9 @@ import { badRequest } from './lib/errors';
 import { CallService } from './calls/CallService';
 import { callRoutes } from './calls/routes';
 import type { MediaConfig } from '@flowforge/media';
+import { AiProviders } from './ai/providers';
+import { AgentService } from './agent/AgentService';
+import { agentRoutes } from './agent/routes';
 
 export const VERSION = '0.2.0';
 
@@ -57,6 +60,8 @@ declare module 'fastify' {
     whatsappPlatform: WhatsAppPlatform;
     whatsappGraphVersion: string;
     calls: CallService;
+    aiProviders: AiProviders;
+    agents: AgentService;
     flowforgeVersion: string;
     /** Start schedules, webhooks, the wait tracker and queue relays (not done in tests unless asked). */
     startBackgroundServices(): Promise<void>;
@@ -171,6 +176,19 @@ export async function buildApp(
     },
   });
   whatsapp.onCalls = (account, value) => calls.handleWebhook(account, value);
+  const aiProviders = new AiProviders(prisma, cipher, config);
+  const agents = new AgentService({
+    prisma,
+    providers: aiProviders,
+    whatsapp,
+    executions,
+    push,
+    logger: app.log,
+    defaultTimezone: config.DEFAULT_TIMEZONE,
+  });
+  calls.agent = agents.runCall;
+  calls.agentAvailable = (account) => agents.available(account);
+  calls.summarize = agents.summarizeCall;
   const waitTracker = new WaitTracker(prisma, executions, app.log, options.waitTrackerIntervalMs);
 
   app.decorate('prisma', prisma);
@@ -185,6 +203,8 @@ export async function buildApp(
   app.decorate('whatsappPlatform', whatsappPlatform);
   app.decorate('whatsappGraphVersion', config.META_GRAPH_VERSION);
   app.decorate('calls', calls);
+  app.decorate('aiProviders', aiProviders);
+  app.decorate('agents', agents);
   app.decorate('startBackgroundServices', async () => {
     if (queue) {
       // Relay live events from workers to WebSocket clients.
@@ -255,6 +275,7 @@ export async function buildApp(
     await api.register(variableRoutes);
     await api.register(whatsappRoutes);
     await api.register(callRoutes);
+    await api.register(agentRoutes);
   });
 
   // --- Editor (single page app) ---------------------------------------------

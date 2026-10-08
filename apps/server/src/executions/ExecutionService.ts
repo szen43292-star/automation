@@ -3,6 +3,7 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 import {
   Workflow,
   summariseTask,
+  type IDataObject,
   type IExecuteWorkflowResult,
   type IExecuteWorkflowSource,
   type ILogger,
@@ -411,6 +412,39 @@ export class ExecutionService {
     const runs = last ? run.data.resultData.runData[last] : undefined;
     const data = runs?.[runs.length - 1]?.data?.main ?? null;
     return { executionId, data: data ? data.map((items) => items ?? []) : null };
+  }
+
+  /**
+   * Run a saved workflow from its "Execute Workflow Trigger" with one item and return the last
+   * node's output (AI agent tools). Recorded as an internal execution.
+   */
+  async runWorkflowTool(workflowId: string, input: IDataObject): Promise<IDataObject[]> {
+    const row = await this.prisma.workflow.findUnique({ where: { id: workflowId } });
+    if (!row) throw new Error('The workflow for this tool was deleted');
+    const workflowData = toWorkflowDTO(row);
+    const trigger = workflowData.nodes.find(
+      (n) => n.type === 'flowforge.executeWorkflowTrigger' && !n.disabled,
+    );
+    if (!trigger)
+      throw new Error(`Workflow "${row.name}" needs an "Execute Workflow Trigger" node`);
+    const { run } = await this.runSync({
+      userId: null,
+      workflowId,
+      workflowData,
+      mode: 'internal',
+      startNode: trigger.id,
+      triggerItems: [{ json: input }],
+      inProcess: true,
+    });
+    if (run.status !== 'success') {
+      throw new Error(
+        `Workflow "${row.name}" failed: ${run.data.resultData.error?.message ?? run.status}`,
+      );
+    }
+    const last = run.data.resultData.lastNodeExecuted;
+    const runs = last ? run.data.resultData.runData[last] : undefined;
+    const items = runs?.[runs.length - 1]?.data?.main?.[0] ?? [];
+    return items.map((item) => item.json);
   }
 
   private async depthOf(executionId: string): Promise<number> {

@@ -789,6 +789,7 @@ describe('test numbers (simulator) - no Meta account or keys', () => {
       send: 'done',
       workflow: 'done',
       calls: 'todo',
+      agent: 'todo',
     });
   });
 });
