@@ -5,6 +5,7 @@ import {
   KeyRound,
   MessageCircle,
   MoreHorizontal,
+  Phone,
   RefreshCw,
   Trash2,
 } from 'lucide-react';
@@ -14,6 +15,7 @@ import { endpoints, type WhatsAppAccount, type WhatsAppPlatform } from '../../li
 import { runEmbeddedSignup } from '../../lib/embeddedSignup';
 import { useAuth } from '../../stores/auth';
 import { Badge, Button, Field, IconButton, Menu, Modal } from '../ui';
+import { CallSettingsModal } from './CallSettings';
 
 const LIMITS: Record<string, string> = {
   TIER_50: '50 new customers / day',
@@ -36,6 +38,7 @@ export function AccountCard({
   const queryClient = useQueryClient();
   const canManage = useAuth((s) => s.user?.role !== 'member');
   const [busy, setBusy] = useState(false);
+  const [callsOpen, setCallsOpen] = useState(false);
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['whatsapp'] });
   const test = account.mode === 'simulator';
 
@@ -91,6 +94,11 @@ export function AccountCard({
           )}
         </div>
         <div className="flex items-center gap-1">
+          {canManage && (
+            <Button size="sm" variant="ghost" icon={Phone} onClick={() => setCallsOpen(true)}>
+              Calls{account.callingEnabled ? '' : ' (off)'}
+            </Button>
+          )}
           <Button size="sm" variant={selected ? 'primary' : 'secondary'} onClick={onSelect}>
             {test ? 'Open simulator' : 'Messages'}
           </Button>
@@ -142,6 +150,7 @@ export function AccountCard({
         </div>
       </div>
       {busy && <div className="mt-2 text-xs text-muted">Checking with Meta…</div>}
+      <CallSettingsModal account={account} open={callsOpen} onClose={() => setCallsOpen(false)} />
     </div>
   );
 }

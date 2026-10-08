@@ -1,4 +1,4 @@
-import { getServerUrl, getToken, type WhatsAppMessage } from './api';
+import { getServerUrl, getToken, type CallDTO, type WhatsAppMessage } from './api';
 
 export type PushMessage =
   | { type: 'connected'; data: { userId: string } }
@@ -40,6 +40,21 @@ export type PushMessage =
     }
   | { type: 'whatsappMessage'; data: WhatsAppMessage }
   | { type: 'whatsappAccountUpdated'; data: { accountId: string } }
+  | {
+      type: 'incomingCall';
+      data: {
+        callId: string;
+        accountId: string;
+        accountNumber: string;
+        from: string;
+        contactName: string | null;
+        ringSeconds: number;
+      };
+    }
+  | { type: 'callUpdated'; data: CallDTO & { note?: string } }
+  | { type: 'callAnswered'; data: { callId: string; userId: string } }
+  | { type: 'callTranscript'; data: { callId: string; role: 'caller' | 'agent'; text: string } }
+  | { type: 'simulatedCallAction'; data: { waCallId: string; action: string } }
   | { type: 'error'; data: { message: string } }
   | { type: 'pong' };
 

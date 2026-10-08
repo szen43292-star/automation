@@ -104,6 +104,16 @@ export async function api<T>(
   return body as T;
 }
 
+/** Download a file with the session's token (e.g. a call recording) as a Blob. */
+export async function apiBlob(path: string): Promise<Blob> {
+  const token = getToken();
+  const response = await fetch(`${getServerUrl()}${path}`, {
+    headers: token ? { authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) throw new ApiError(response.status, `Download failed (${response.status})`);
+  return response.blob();
+}
+
 // --- DTOs -------------------------------------------------------------------
 
 export type Role = 'owner' | 'admin' | 'member';
@@ -328,7 +338,94 @@ export const endpoints = {
       media?: { base64: string; mimeType: string; fileName?: string; caption?: string };
     },
   ) => api<{ messageId: string }>(`/api/whatsapp/accounts/${id}/simulate`, { body }),
+  // Calls
+  calls: (query: { accountId?: string; status?: string; limit?: number } = {}) => {
+    const qs = new URLSearchParams(
+      Object.entries(query)
+        .filter(([, v]) => v !== undefined && v !== '')
+        .map(([k, v]) => [k, String(v)]),
+    ).toString();
+    return api<{ data: CallDTO[] }>(`/api/calls${qs ? `?${qs}` : ''}`);
+  },
+  activeCalls: () =>
+    api<{ data: Array<CallDTO & { ringSeconds: number; ringing: boolean }> }>('/api/calls/active'),
+  answerCall: (id: string, sdp: string) =>
+    api<{ sdp: string }>(`/api/calls/${id}/answer`, { body: { sdp } }),
+  declineCall: (id: string) => api<void>(`/api/calls/${id}/decline`, { method: 'POST' }),
+  hangupCall: (id: string) => api<void>(`/api/calls/${id}/hangup`, { method: 'POST' }),
+  deleteRecording: (id: string) => api<void>(`/api/calls/${id}/recording`, { method: 'DELETE' }),
+  callSettings: (accountId: string) =>
+    api<CallSettingsResponse>(`/api/whatsapp/accounts/${accountId}/calling`),
+  saveCallSettings: (accountId: string, settings: CallSettings) =>
+    api<CallSettingsResponse>(`/api/whatsapp/accounts/${accountId}/calling`, {
+      method: 'PUT',
+      body: settings,
+    }),
+  enableCalling: (accountId: string) =>
+    api<CallSettingsResponse>(`/api/whatsapp/accounts/${accountId}/calling/enable`, {
+      method: 'POST',
+    }),
+  setGreeting: (accountId: string, base64: string | null) =>
+    api<void>(`/api/whatsapp/accounts/${accountId}/calling/greeting`, {
+      method: 'PUT',
+      body: { base64 },
+    }),
+  simulateCall: (accountId: string, body: { from: string; name?: string; sdp: string }) =>
+    api<{ waCallId: string; sdp?: string; rejected?: boolean }>(
+      `/api/whatsapp/accounts/${accountId}/simulate-call`,
+      { body },
+    ),
+  simulateHangup: (accountId: string, waCallId: string) =>
+    api<void>(`/api/whatsapp/accounts/${accountId}/simulate-call/${waCallId}/hangup`, {
+      method: 'POST',
+    }),
 };
+
+export interface CallDTO {
+  id: string;
+  accountId: string;
+  waCallId: string | null;
+  direction: 'inbound' | 'outbound';
+  contact: string;
+  contactName: string | null;
+  status: 'ringing' | 'answered' | 'ended' | 'missed' | 'rejected' | 'failed';
+  handledBy: string | null;
+  answeredBy: { id: string; name: string } | null;
+  startedAt: string;
+  answeredAt: string | null;
+  endedAt: string | null;
+  durationSeconds: number | null;
+  endReason: string | null;
+  hasRecording: boolean;
+  transcript: Array<{ role: 'caller' | 'agent'; text: string; at: string }> | null;
+  summary: string | null;
+}
+
+export type CallMode = 'app' | 'voicemail' | 'ai' | 'reject';
+export type CallFallback = 'voicemail' | 'ai' | 'reject';
+
+export interface CallSettings {
+  mode: CallMode;
+  ringSeconds: number;
+  fallback: CallFallback;
+  businessHours: {
+    enabled: boolean;
+    timezone: string;
+    days: Array<{ day: number; open: string; close: string }>;
+    outsideMode: CallFallback;
+  };
+  voicemailMaxSeconds: number;
+  rejectMessage: string;
+  greetingText: string;
+  record: boolean;
+}
+
+export interface CallSettingsResponse {
+  settings: CallSettings;
+  callingEnabled: boolean;
+  hasGreetingAudio: boolean;
+  aiAvailable: boolean;
+}
 
 export interface WhatsAppPlatform {
   appId: string | null;
@@ -371,6 +468,7 @@ export interface WhatsAppAccount {
   status: 'connected' | 'error' | 'disconnected';
   lastError: string | null;
   lastEventAt: string | null;
+  callingEnabled: boolean;
   createdAt: string;
 }
 

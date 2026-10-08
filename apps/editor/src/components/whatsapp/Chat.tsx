@@ -8,6 +8,7 @@ import {
   List,
   MapPin,
   MessageCircle,
+  Phone,
   Plus,
   Send,
   UserRound,
@@ -17,6 +18,7 @@ import { toast } from 'sonner';
 import type { IDataObject } from '@flowforge/workflow';
 import { endpoints, type WhatsAppAccount, type WhatsAppMessage } from '../../lib/api';
 import { formatDateTime } from '../../lib/format';
+import { useCalls } from '../../stores/calls';
 import { Button, EmptyState, Spinner } from '../ui';
 
 const DEFAULT_CUSTOMER = { number: '+91 98765 43210', name: 'Test customer' };
@@ -59,6 +61,8 @@ export function ChatPanel({ account }: { account: WhatsAppAccount }) {
     setNewChat(false);
   }, [account.id]);
 
+  const callBusy = useCalls((s) => s.busy);
+  const onCall = useCalls((s) => s.current);
   const active = list.find((c) => c.contact === contact);
   const customerNumber = contact ?? digits(customer.number);
   const customerName = active?.contactName ?? customer.name;
@@ -156,9 +160,29 @@ export function ChatPanel({ account }: { account: WhatsAppAccount }) {
               <div className="text-[11.5px] text-muted">+{customerNumber}</div>
             </div>
             {simulator && (
-              <span className="ml-auto text-[11.5px] text-muted">
-                You are chatting as this customer
-              </span>
+              <>
+                <span className="ml-auto text-[11.5px] text-muted">
+                  You are chatting as this customer
+                </span>
+                <Button
+                  size="sm"
+                  icon={Phone}
+                  loading={callBusy}
+                  disabled={Boolean(onCall)}
+                  title="Call the test number with your microphone"
+                  onClick={() =>
+                    void useCalls
+                      .getState()
+                      .callTestNumber(
+                        account.id,
+                        { number: `+${customerNumber}`, name: customerName },
+                        account.displayPhoneNumber,
+                      )
+                  }
+                >
+                  Call
+                </Button>
+              </>
             )}
           </div>
         )}

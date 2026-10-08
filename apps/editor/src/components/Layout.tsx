@@ -7,12 +7,14 @@ import {
   MessageCircle,
   Monitor,
   Moon,
+  Phone,
   Sun,
   Workflow as WorkflowIcon,
   Zap,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
+import { CallBar } from './calls/CallBar';
 import { push } from '../lib/push';
 import { useTheme, type ThemeMode } from '../lib/theme';
 import { useAuth } from '../stores/auth';
@@ -90,6 +92,9 @@ export function Layout() {
           <NavLink to="/whatsapp" className={link}>
             <MessageCircle size={16} /> WhatsApp
           </NavLink>
+          <NavLink to="/calls" className={link}>
+            <Phone size={16} /> Calls
+          </NavLink>
         </nav>
         <div className="space-y-3 border-t border-line p-3">
           <ThemeSwitch />
@@ -114,6 +119,7 @@ export function Layout() {
       </aside>
       <main className="min-w-0 flex-1">
         <Outlet />
+        <CallBar />
       </main>
     </div>
   );
