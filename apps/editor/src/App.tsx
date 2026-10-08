@@ -19,6 +19,7 @@ import { AuthPage } from './pages/AuthPage';
 import { CredentialsPage } from './pages/CredentialsPage';
 import { ExecutionsPage } from './pages/ExecutionsPage';
 import { VariablesPage } from './pages/VariablesPage';
+import { WhatsAppPage } from './pages/WhatsAppPage';
 import { WorkflowsPage } from './pages/WorkflowsPage';
 import { EditorPage } from './pages/editor/EditorPage';
 
@@ -55,6 +56,7 @@ const routes: RouteObject[] = [
           { path: 'executions', element: <ExecutionsPage /> },
           { path: 'credentials', element: <CredentialsPage /> },
           { path: 'variables', element: <VariablesPage /> },
+          { path: 'whatsapp', element: <WhatsAppPage /> },
           { path: 'workflow/:id', element: <EditorPage /> },
           { path: 'workflow/:id/executions', element: <EditorPage /> },
           { path: 'workflow/:id/executions/:executionId', element: <EditorPage /> },

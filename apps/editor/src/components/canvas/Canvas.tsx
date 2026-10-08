@@ -354,14 +354,12 @@ export function Canvas() {
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <button
             onClick={() =>
-              useEditor
-                .getState()
-                .openCreator({
-                  position: flow.screenToFlowPosition({
-                    x: window.innerWidth / 2,
-                    y: window.innerHeight / 2,
-                  }),
-                })
+              useEditor.getState().openCreator({
+                position: flow.screenToFlowPosition({
+                  x: window.innerWidth / 2,
+                  y: window.innerHeight / 2,
+                }),
+              })
             }
             className="pointer-events-auto flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-line px-10 py-8 text-muted transition-colors hover:border-accent hover:text-accent"
           >

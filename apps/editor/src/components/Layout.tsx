@@ -4,6 +4,7 @@ import {
   History,
   KeyRound,
   LogOut,
+  MessageCircle,
   Monitor,
   Moon,
   Sun,
@@ -85,6 +86,9 @@ export function Layout() {
           </NavLink>
           <NavLink to="/variables" className={link}>
             <Braces size={16} /> Variables
+          </NavLink>
+          <NavLink to="/whatsapp" className={link}>
+            <MessageCircle size={16} /> WhatsApp
           </NavLink>
         </nav>
         <div className="space-y-3 border-t border-line p-3">

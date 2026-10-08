@@ -64,14 +64,12 @@ function typeLabel(value: unknown): string {
 
 function keyCompletions(value: unknown): Completion[] {
   if (Array.isArray(value)) {
-    return value
-      .slice(0, 5)
-      .map((v, i) => ({
-        label: `[${i}]`,
-        detail: typeLabel(v),
-        type: 'property',
-        apply: undefined,
-      }));
+    return value.slice(0, 5).map((v, i) => ({
+      label: `[${i}]`,
+      detail: typeLabel(v),
+      type: 'property',
+      apply: undefined,
+    }));
   }
   if (!isObject(value)) return [];
   return Object.entries(value).map(([key, v]) => ({

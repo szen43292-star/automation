@@ -17,6 +17,7 @@ import { useEditor } from '../../stores/editor';
 import { useServer } from '../../stores/server';
 import { NodeCredentials } from '../credentials/CredentialSelect';
 import { PinDataModal } from './PinDataModal';
+import { EventTriggerPanel } from './EventTriggerPanel';
 import { WebhookPanel } from './WebhookPanel';
 import { isTrigger, outputLabels, useNodeTypes } from '../../stores/nodeTypes';
 import { useCanvasActions } from '../canvas/actions';
@@ -312,6 +313,9 @@ function NdvInner({ node }: { node: INode }) {
                 ) : tab === 'parameters' ? (
                   <div className="space-y-4">
                     {description.webhook && <WebhookPanel node={node} description={description} />}
+                    {description.triggerKind === 'event' && !readOnly && (
+                      <EventTriggerPanel node={node} />
+                    )}
                     <NodeCredentials node={node} description={description} />
                     {description.properties.length === 0 ? (
                       <div className="text-[13px] text-muted">This node has no parameters.</div>

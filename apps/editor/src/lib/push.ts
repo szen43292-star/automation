@@ -1,4 +1,4 @@
-import { getServerUrl, getToken } from './api';
+import { getServerUrl, getToken, type WhatsAppMessage } from './api';
 
 export type PushMessage =
   | { type: 'connected'; data: { userId: string } }
@@ -38,6 +38,8 @@ export type PushMessage =
       type: 'testWebhookReceived';
       data: { workflowId: string; executionId: string; nodeId: string };
     }
+  | { type: 'whatsappMessage'; data: WhatsAppMessage }
+  | { type: 'whatsappAccountUpdated'; data: { accountId: string } }
   | { type: 'error'; data: { message: string } }
   | { type: 'pong' };
 

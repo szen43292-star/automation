@@ -299,6 +299,7 @@ function ValueInput({
         return (
           <RemoteOptionsInput
             method={property.typeOptions.loadOptionsMethod}
+            dependsOn={property.typeOptions.loadOptionsDependsOn}
             value={value}
             onChange={onChange}
           />
@@ -408,16 +409,25 @@ function ValueInput({
 /** Options fetched from the server (e.g. the list of workflows). */
 function RemoteOptionsInput({
   method,
+  dependsOn,
   value,
   onChange,
 }: {
   method: string;
+  dependsOn?: string[];
   value: Value;
   onChange: (v: Value) => void;
 }) {
+  const { parameters } = useNdv();
+  // Other parameters the options depend on (e.g. templates of the chosen WhatsApp number).
+  const params: Record<string, string> = {};
+  for (const name of dependsOn ?? []) {
+    const v = parameters[name];
+    if (typeof v === 'string' && v && !v.startsWith('=')) params[name] = v;
+  }
   const query = useQuery({
-    queryKey: ['node-options', method],
-    queryFn: () => endpoints.nodeOptions(method),
+    queryKey: ['node-options', method, params],
+    queryFn: () => endpoints.nodeOptions(method, params),
   });
   const options = query.data?.data ?? [];
   return (
@@ -426,7 +436,9 @@ function RemoteOptionsInput({
       value={String(value ?? '')}
       onChange={(e) => onChange(e.target.value)}
     >
-      <option value="">{query.isLoading ? 'Loading…' : 'Choose…'}</option>
+      <option value="">
+        {query.isLoading ? 'Loading…' : query.isError ? (query.error as Error).message : 'Choose…'}
+      </option>
       {options.map((o) => (
         <option key={o.value} value={o.value}>
           {o.name}

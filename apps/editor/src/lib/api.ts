@@ -273,16 +273,126 @@ export const endpoints = {
     api<{ ok: boolean; message: string }>('/api/credentials/test', { body }),
   oauthUrl: (id: string) =>
     api<{ url: string; redirectUri: string }>(`/api/credentials/${id}/oauth2/auth-url`),
-  nodeOptions: (method: string) =>
-    api<{ data: Array<{ name: string; value: string }> }>(`/api/node-options/${method}`),
+  nodeOptions: (method: string, query: Record<string, string> = {}) => {
+    const qs = new URLSearchParams(query).toString();
+    return api<{ data: Array<{ name: string; value: string }> }>(
+      `/api/node-options/${method}${qs ? `?${qs}` : ''}`,
+    );
+  },
   listenWebhook: (
     workflowId: string,
     body: { nodeId: string; workflowData: Partial<WorkflowDTO> },
   ) =>
-    api<{ testUrl: string; method: string; expiresInSeconds: number }>(
-      `/api/workflows/${workflowId}/webhook-test`,
-      { body },
-    ),
+    api<
+      | { kind: 'webhook'; testUrl: string; method: string; expiresInSeconds: number }
+      | { kind: 'event'; source: string; expiresInSeconds: number }
+    >(`/api/workflows/${workflowId}/webhook-test`, { body }),
   stopListening: (workflowId: string) =>
     api<void>(`/api/workflows/${workflowId}/webhook-test`, { method: 'DELETE' }),
+  // WhatsApp
+  whatsappPlatform: () => api<WhatsAppPlatform>('/api/whatsapp/platform'),
+  saveWhatsappPlatform: (body: { appId?: string; appSecret?: string; configId?: string }) =>
+    api<{ appId: string | null; configId: string | null; appSecretSet: boolean }>(
+      '/api/whatsapp/platform',
+      { method: 'PUT', body },
+    ),
+  whatsappChecklist: () =>
+    api<{ steps: ChecklistStep[]; simulators: number }>('/api/whatsapp/checklist'),
+  whatsappAccounts: () => api<{ data: WhatsAppAccount[] }>('/api/whatsapp/accounts'),
+  connectEmbeddedSignup: (body: { code: string; wabaId: string; phoneNumberId: string }) =>
+    api<WhatsAppAccount>('/api/whatsapp/accounts/embedded-signup', { body }),
+  connectManual: (body: { wabaId: string; phoneNumberId: string; accessToken: string }) =>
+    api<WhatsAppAccount>('/api/whatsapp/accounts/manual', { body }),
+  createTestNumber: (body: { name?: string }) =>
+    api<WhatsAppAccount>('/api/whatsapp/accounts/simulator', { body }),
+  refreshWhatsappAccount: (id: string) =>
+    api<WhatsAppAccount>(`/api/whatsapp/accounts/${id}/refresh`, { method: 'POST' }),
+  disconnectWhatsappAccount: (id: string) =>
+    api<void>(`/api/whatsapp/accounts/${id}`, { method: 'DELETE' }),
+  whatsappConversations: (id: string) =>
+    api<{ data: WhatsAppConversation[] }>(`/api/whatsapp/accounts/${id}/conversations`),
+  whatsappMessages: (id: string, contact?: string) =>
+    api<{ data: WhatsAppMessage[] }>(
+      `/api/whatsapp/accounts/${id}/messages?limit=100${contact ? `&contact=${contact}` : ''}`,
+    ),
+  sendWhatsapp: (id: string, body: { to: string; text: string }) =>
+    api<{ messageId: string }>(`/api/whatsapp/accounts/${id}/send`, { body }),
+  simulateWhatsapp: (
+    id: string,
+    body: {
+      from: string;
+      name?: string;
+      text?: string;
+      reply?: { id: string; title: string; type: 'button' | 'list' };
+      location?: { latitude: number; longitude: number; name?: string };
+      media?: { base64: string; mimeType: string; fileName?: string; caption?: string };
+    },
+  ) => api<{ messageId: string }>(`/api/whatsapp/accounts/${id}/simulate`, { body }),
 };
+
+export interface WhatsAppPlatform {
+  appId: string | null;
+  configId: string | null;
+  appSecretSet: boolean;
+  embeddedSignupReady: boolean;
+  sources: Record<
+    'appId' | 'appSecret' | 'configId' | 'verifyToken',
+    'env' | 'settings' | 'generated' | null
+  >;
+  webhookUrl: string;
+  /** Only for the owner. */
+  verifyToken: string | null;
+  webhookVerifiedAt: string | null;
+  lastWebhookAt: string | null;
+  graphVersion: string;
+}
+
+export interface ChecklistStep {
+  id: string;
+  title: string;
+  status: 'done' | 'todo' | 'error' | 'soon';
+  detail: string;
+}
+
+export interface WhatsAppAccount {
+  id: string;
+  name: string;
+  mode: 'cloud' | 'simulator';
+  connectedVia: string;
+  wabaId: string | null;
+  phoneNumberId: string;
+  displayPhoneNumber: string;
+  verifiedName: string | null;
+  qualityRating: string | null;
+  nameStatus: string | null;
+  codeVerificationStatus: string | null;
+  messagingLimit: string | null;
+  webhookSubscribed: boolean;
+  status: 'connected' | 'error' | 'disconnected';
+  lastError: string | null;
+  lastEventAt: string | null;
+  createdAt: string;
+}
+
+export interface WhatsAppMessage {
+  id: string;
+  accountId: string;
+  waMessageId: string | null;
+  direction: 'inbound' | 'outbound';
+  contact: string;
+  contactName: string | null;
+  type: string;
+  text: string | null;
+  status: 'received' | 'sent' | 'delivered' | 'read' | 'failed';
+  error: unknown;
+  payload: IDataObject;
+  timestamp: string;
+}
+
+export interface WhatsAppConversation {
+  contact: string;
+  contactName: string | null;
+  text: string | null;
+  timestamp: string;
+  count: number;
+}
