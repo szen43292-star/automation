@@ -21,6 +21,8 @@ Workflow automation platform (n8n-style) whose core feature will be **answering 
 apps/
   server/      Fastify API + execution engine host, Prisma/PostgreSQL, WebSocket push
   editor/      React + Vite + React Flow editor (later shared by desktop & mobile)
+  desktop/     Windows app (Electron): bundles Node.js, the server, the editor and PostgreSQL
+  website/     Next.js landing + download site (Vercel), reads public GitHub Releases
 packages/
   workflow/    Shared types, Zod schemas, graph utilities, expressions, filter conditions
   engine/      Workflow executor, isolated-vm Code sandbox, HTTP helper
@@ -157,6 +159,94 @@ The simplest production setup:
    - Set `VITE_DEFAULT_SERVER_URL=https://your-server.example.com`.
    - Add the Vercel URL to the server's `CORS_ORIGINS`.
 3. **Download website on Vercel:** see [Windows app & download website](#windows-app--download-website).
+
+## Windows app & download website
+
+### The Windows app (`apps/desktop`)
+
+The installer contains everything FlowForge needs, so it runs on any Windows 10/11 PC **without API keys, accounts or a server**:
+
+- A private **PostgreSQL**. It is created on first start in `%APPDATA%\FlowForge\database`, listens on 127.0.0.1 only and is password-protected. It starts through `pg_ctl`, so it also works for administrator users.
+- The **FlowForge server and editor**, running on a bundled Node.js at `http://localhost:5678`. If that port is taken, a free one is used.
+- **Secrets are generated** on first start (`%APPDATA%\FlowForge\secrets.json`): the JWT secret, the credentials encryption key and the database password. Nobody has to create or paste a key.
+- **Tray app:**
+  - Closing the window keeps workflows running.
+  - Optional *Start with Windows* (on by default).
+  - *Open in browser*, *Open logs folder* and *Quit*.
+  - If the server stops unexpectedly, the window shows the error with *Try again*.
+- **Auto-update** from this repository's GitHub Releases (electron-updater, no token).
+- **Installer:** one-click, per user (no admin prompt), into `%LOCALAPPDATA%\Programs\flowforge`. The installer and uninstaller stop the app, its server and PostgreSQL first. Uninstalling keeps your data folder.
+
+The installer is about 150 MB: Electron, Node.js, PostgreSQL and the server.
+
+**Build it:** the **Windows app** workflow (`.github/workflows/desktop.yml`) runs on every push that touches the app, on a `windows-latest` runner:
+1. Builds the app and bundles the runtime (`scripts/prepare-resources.mjs`).
+2. Runs a smoke test of the bundled runtime: database, migrations, sign-up, a workflow with a Code node and an expression, an encrypted credential, then a restart.
+3. Builds `FlowForge-Setup.exe`.
+4. **Installs it silently, launches it, checks the editor and API, and uninstalls it.**
+
+The installer is attached to the run as an artifact.
+
+**Publish a release:** *Actions → Windows app → Run workflow* with a version (e.g. `0.3.0`), or push a tag `v0.3.0`. The workflow creates the GitHub Release using only the built-in `GITHUB_TOKEN`. It attaches:
+- `FlowForge-Setup.exe`
+- `latest.yml` and the `.blockmap`, for auto-update
+- `release.json`, for the website
+- `SHA256SUMS.txt`
+
+> **The repository must be public for downloads and auto-update to work without a key.** GitHub only serves release files of private repositories to signed-in users with access. To keep the code private, publish releases to a separate public repository instead.
+
+**Develop locally:**
+
+```bash
+pnpm --filter @flowforge/desktop resources   # bundle Node, server, editor, PostgreSQL for this OS
+pnpm --filter @flowforge/desktop smoke       # start the runtime with plain Node and run the checks
+pnpm --filter @flowforge/desktop start       # open the Electron app
+pnpm --filter @flowforge/desktop test        # unit tests
+```
+
+On Linux, PostgreSQL refuses to run as root, so run the smoke test as a regular user.
+
+### The download website (`apps/website`)
+
+A Next.js site with a landing page and a download page. The download page:
+- Detects the visitor's OS. Windows gets the button; macOS/Linux/Android/iOS visitors get a note that their platform is coming.
+- Shows version, date, size and **SHA-256** (copy button plus the PowerShell command to verify it).
+- Shows release notes, install steps, a SmartScreen explanation, an FAQ and a QR code.
+- Supports dark and light themes.
+
+**It needs no API keys or secrets.**
+- Release data comes from `https://github.com/<repo>/releases/latest/download/release.json`. This is a plain public file download, not the GitHub API, so there is no token and no rate limit. If it's missing, the site falls back to the public releases API.
+- Pages are static and re-check every 5 minutes, so a new release shows up on its own.
+- `GET /api/releases/latest` returns the release as JSON. `/download/windows` always redirects to the newest installer.
+- Before the first public release, the button explains that the release is on its way.
+
+**Deploy on Vercel:**
+1. *Add New → Project*, then import this repository.
+2. Set **Root Directory** to `apps/website`. The framework is detected as Next.js.
+3. Deploy. **No environment variables are needed.**
+   - Optional: `FLOWFORGE_RELEASES_REPO=owner/name` to read releases from another (public) repository.
+   - Optional: `RELEASE_MANIFEST_URL` to point at a `release.json` hosted anywhere.
+
+**Develop and test locally:**
+
+```bash
+pnpm --filter @flowforge/website dev     # http://localhost:3000
+pnpm --filter @flowforge/website test    # release parsing/fallbacks, OS detection, release-notes rendering
+pnpm --filter @flowforge/website build
+```
+
+### Testing the Windows app and website
+
+1. Push to any branch, then open *Actions → Windows app*. All steps should be green. "Install, launch and uninstall" proves the installer works on a clean Windows machine.
+2. Download the `FlowForge-Windows-…` artifact on a Windows PC and run `FlowForge-Setup.exe`.
+   - SmartScreen will say "Windows protected your PC" because the build is unsigned. Choose *More info → Run anyway*.
+   - FlowForge opens by itself. Create the owner account, build a workflow, and close the window. The tray icon remains, and an active schedule keeps running.
+   - Right-click the tray icon to try *Open in browser*, *Start with Windows* and *Quit FlowForge*.
+3. Make the repository public, then run *Actions → Windows app → Run workflow* with version `0.2.0`. A release `v0.2.0` appears with the installer and `release.json`.
+4. Deploy `apps/website` on Vercel and open `/download`.
+   - Version, size and SHA-256 match the release. Compare with `Get-FileHash .\FlowForge-Setup.exe -Algorithm SHA256`.
+   - On a phone you get the "coming soon" note, and on a desktop the QR code.
+5. Publish `0.2.1` the same way. The installed app downloads it in the background, and the tray menu offers *Restart to install version 0.2.1*.
 
 ## Running locally
 
