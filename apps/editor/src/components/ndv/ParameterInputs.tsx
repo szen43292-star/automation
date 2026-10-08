@@ -15,10 +15,15 @@ import {
   type INodePropertyOption,
   type NodeParameterValueType,
 } from '@flowforge/workflow';
+import { useQuery } from '@tanstack/react-query';
+import { endpoints } from '../../lib/api';
 import { Toggle } from '../ui';
 // CodeMirror is large - load it only when a code/JSON parameter is shown.
 const CodeEditor = lazy(() => import('./CodeEditor').then((m) => ({ default: m.CodeEditor })));
-import { DRAG_MIME, previewExpression, useNdv } from './context';
+import { DRAG_MIME, useExpressionPreview, useNdv } from './context';
+const ExpressionEditor = lazy(() =>
+  import('./ExpressionEditor').then((m) => ({ default: m.ExpressionEditor })),
+);
 
 type Value = NodeParameterValueType;
 
@@ -173,38 +178,33 @@ function ExpressionInput({
   placeholder?: string;
 }) {
   const ctx = useNdv();
-  const drop = useDrop(value, onChange);
-  const preview = previewExpression(value, ctx);
+  const preview = useExpressionPreview(value);
+  const needsData = ctx.inputItems.length === 0 && /\$(json|input|binary)\b/.test(value);
   return (
-    <div>
-      <textarea
-        {...drop.props}
-        value={value.slice(1)}
-        placeholder={placeholder ?? '{{ $json.field }}'}
-        rows={Math.min(6, Math.max(1, Math.ceil(value.length / 48)))}
-        onChange={(e) => onChange(`=${e.target.value}`)}
-        className={clsx('ff-input is-expression resize-y', drop.over && 'drop-target')}
-        spellCheck={false}
-      />
+    <div className="rounded-md border border-[color-mix(in_srgb,var(--ff-success)_45%,var(--ff-border))]">
+      <Suspense fallback={<div className="ff-input is-expression h-8" />}>
+        <ExpressionEditor
+          value={value.slice(1)}
+          onChange={(v) => onChange(`=${v}`)}
+          placeholder={placeholder ?? '{{ $json.field }}'}
+        />
+      </Suspense>
       {preview && (
         <div
+          data-testid="expression-preview"
           className={clsx(
-            'mt-1 rounded border px-2 py-1 font-mono text-[11.5px] break-all',
-            preview.ok
-              ? 'border-line bg-panel-2 text-muted'
-              : 'border-danger/40 bg-danger-soft text-danger',
+            'border-t px-2 py-1 font-mono text-[11.5px] break-all',
+            preview.ok && !needsData ? 'border-line bg-panel-2 text-muted' : '',
+            needsData && 'border-line bg-panel-2 text-muted',
+            !preview.ok && !needsData && 'border-danger/40 bg-danger-soft text-danger',
           )}
         >
-          {preview.ok ? (
-            <>
-              <span className="text-[10px] uppercase opacity-70">Result: </span>
-              {ctx.inputItems.length === 0 && !/\$(now|today|workflow|vars|node|\()/.test(value)
-                ? '[execute previous nodes to preview]'
-                : formatPreview(preview.value)}
-            </>
-          ) : (
-            preview.error
-          )}
+          <span className="text-[10px] uppercase opacity-70">Result: </span>
+          {needsData
+            ? '[execute previous nodes to preview]'
+            : preview.ok
+              ? formatPreview(preview.value)
+              : preview.error}
         </div>
       )}
     </div>
@@ -295,6 +295,15 @@ function ValueInput({
         />
       );
     case 'options': {
+      if (property.typeOptions?.loadOptionsMethod) {
+        return (
+          <RemoteOptionsInput
+            method={property.typeOptions.loadOptionsMethod}
+            value={value}
+            onChange={onChange}
+          />
+        );
+      }
       const options = (property.options ?? []) as INodePropertyOption[];
       const selected = options.find((o) => o.value === value);
       return (
@@ -394,6 +403,40 @@ function ValueInput({
         <div className="text-xs text-danger">Unsupported parameter type “{property.type}”</div>
       );
   }
+}
+
+/** Options fetched from the server (e.g. the list of workflows). */
+function RemoteOptionsInput({
+  method,
+  value,
+  onChange,
+}: {
+  method: string;
+  value: Value;
+  onChange: (v: Value) => void;
+}) {
+  const query = useQuery({
+    queryKey: ['node-options', method],
+    queryFn: () => endpoints.nodeOptions(method),
+  });
+  const options = query.data?.data ?? [];
+  return (
+    <select
+      className="ff-input"
+      value={String(value ?? '')}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      <option value="">{query.isLoading ? 'Loading…' : 'Choose…'}</option>
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.name}
+        </option>
+      ))}
+      {value && !options.some((o) => o.value === value) && !query.isLoading && (
+        <option value={String(value)}>{String(value)} (not found)</option>
+      )}
+    </select>
+  );
 }
 
 // ---------------------------------------------------------------------------

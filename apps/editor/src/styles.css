@@ -112,7 +112,9 @@ body {
   padding: 6px 9px;
   font-size: 13px;
   outline: none;
-  transition: border-color 0.12s, box-shadow 0.12s;
+  transition:
+    border-color 0.12s,
+    box-shadow 0.12s;
 }
 .ff-input:focus {
   border-color: var(--ff-accent);
@@ -255,4 +257,46 @@ select.ff-input {
   background: rgb(0 0 0 / 7%);
   padding: 1px 4px;
   border-radius: 4px;
+}
+
+.ff-expression-editor .cm-editor {
+  border: none;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ff-success) 4%, var(--ff-panel));
+}
+.ff-expression-editor .cm-editor.cm-focused {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ff-accent) 18%, transparent);
+}
+.cm-tooltip-autocomplete {
+  font-size: 12px;
+}
+.cm-tooltip.cm-tooltip-autocomplete {
+  border: 1px solid var(--ff-border);
+  border-radius: 8px;
+  background: var(--ff-panel);
+  color: var(--ff-text);
+  box-shadow: var(--ff-shadow);
+  overflow: hidden;
+}
+.cm-tooltip.cm-tooltip-autocomplete > ul {
+  font-family: var(--font-mono);
+  max-height: 220px;
+}
+.cm-tooltip.cm-tooltip-autocomplete > ul > li {
+  padding: 3px 10px !important;
+}
+.cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected] {
+  background: var(--ff-accent-soft);
+  color: var(--ff-text);
+}
+.cm-completionDetail {
+  color: var(--ff-muted);
+  margin-left: 8px;
+}
+.cm-tooltip.cm-completionInfo {
+  border: 1px solid var(--ff-border);
+  background: var(--ff-panel);
+  color: var(--ff-muted);
+  border-radius: 6px;
+  padding: 3px 8px;
 }

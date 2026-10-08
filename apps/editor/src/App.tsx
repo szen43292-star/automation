@@ -16,7 +16,9 @@ import { useNodeTypes } from './stores/nodeTypes';
 import { Layout } from './components/Layout';
 import { Spinner } from './components/ui';
 import { AuthPage } from './pages/AuthPage';
+import { CredentialsPage } from './pages/CredentialsPage';
 import { ExecutionsPage } from './pages/ExecutionsPage';
+import { VariablesPage } from './pages/VariablesPage';
 import { WorkflowsPage } from './pages/WorkflowsPage';
 import { EditorPage } from './pages/editor/EditorPage';
 
@@ -51,6 +53,8 @@ const routes: RouteObject[] = [
           { index: true, element: <Navigate to="/workflows" replace /> },
           { path: 'workflows', element: <WorkflowsPage /> },
           { path: 'executions', element: <ExecutionsPage /> },
+          { path: 'credentials', element: <CredentialsPage /> },
+          { path: 'variables', element: <VariablesPage /> },
           { path: 'workflow/:id', element: <EditorPage /> },
           { path: 'workflow/:id/executions', element: <EditorPage /> },
           { path: 'workflow/:id/executions/:executionId', element: <EditorPage /> },

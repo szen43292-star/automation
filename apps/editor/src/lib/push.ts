@@ -34,6 +34,10 @@ export type PushMessage =
       };
     }
   | { type: 'workflowUpdated'; data: { workflowId: string; active: boolean; versionId: string } }
+  | {
+      type: 'testWebhookReceived';
+      data: { workflowId: string; executionId: string; nodeId: string };
+    }
   | { type: 'error'; data: { message: string } }
   | { type: 'pong' };
 

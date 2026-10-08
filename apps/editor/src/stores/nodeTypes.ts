@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { INodeTypeDescription } from '@flowforge/workflow';
+import { resolveNodeOutputs, type INode, type INodeTypeDescription } from '@flowforge/workflow';
 import { endpoints } from '../lib/api';
 
 interface NodeTypesState {
@@ -27,11 +27,14 @@ export function isTrigger(description: INodeTypeDescription | undefined): boolea
   return Boolean(description?.group.includes('trigger'));
 }
 
-/** Number of outputs including the extra "error" output when continueErrorOutput is on. */
+/** Output labels including dynamic outputs (Switch) and the extra "error" output. */
 export function outputLabels(
   description: INodeTypeDescription | undefined,
-  onError?: string,
+  node: Pick<INode, 'parameters' | 'onError'>,
 ): string[] {
-  const base = (description?.outputs ?? [{ type: 'main' }]).map((o) => o.displayName ?? '');
-  return onError === 'continueErrorOutput' ? [...base, 'error'] : base;
+  const outputs = description
+    ? resolveNodeOutputs(description, node.parameters)
+    : [{ type: 'main' as const }];
+  const base = outputs.map((o) => o.displayName ?? '');
+  return node.onError === 'continueErrorOutput' ? [...base, 'error'] : base;
 }

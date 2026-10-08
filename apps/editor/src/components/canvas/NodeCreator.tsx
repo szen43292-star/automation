@@ -173,7 +173,8 @@ export function NodeCreator() {
                 <button
                   key={d.name}
                   data-index={i}
-                  onMouseEnter={() => setActive(i)}
+                  // Only real pointer movement changes the highlight (the panel can open under the cursor).
+                  onMouseMove={() => active !== i && setActive(i)}
                   onClick={() => choose(d)}
                   className={clsx(
                     'flex w-full items-start gap-3 px-4 py-2 text-left',

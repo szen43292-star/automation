@@ -57,23 +57,29 @@ function EditorPageInner() {
       if (state.workflowId !== null || state.readOnly) state.reset();
       return;
     }
-    if (state.workflowId === workflowId && !state.readOnly && state.nodes.length > 0) {
-      // Already loaded (e.g. right after the first save).
-    } else {
-      setLoading(true);
-      setLoadError(null);
-      endpoints
-        .workflow(workflowId)
-        .then((wf) => useEditor.getState().load(wf))
-        .catch((error: Error) => setLoadError(error.message))
-        .finally(() => setLoading(false));
-    }
     const debugId = (location.state as { debugExecutionId?: string } | null)?.debugExecutionId;
-    if (debugId) {
+    const attachDebug = () => {
+      if (!debugId) return;
       endpoints
         .execution(debugId)
         .then((detail) => useEditor.getState().applyExecution(detail))
         .catch(() => undefined);
+    };
+    if (state.workflowId === workflowId && !state.readOnly && state.nodes.length > 0) {
+      // Already loaded (e.g. right after the first save).
+      attachDebug();
+    } else {
+      setLoading(true);
+      setLoadError(null);
+      // Attach the debugged run only after the workflow has loaded - load() resets run data.
+      endpoints
+        .workflow(workflowId)
+        .then((wf) => {
+          useEditor.getState().load(wf);
+          attachDebug();
+        })
+        .catch((error: Error) => setLoadError(error.message))
+        .finally(() => setLoading(false));
     }
   }, [workflowId, tab, location.state]);
 

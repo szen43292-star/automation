@@ -138,6 +138,10 @@ export function useEditorActions(): CanvasActions {
             pinData: latest.pinData,
           },
           destinationNode,
+          // Partial execution: reuse the outputs of the last run for unchanged nodes.
+          ...(destinationNode && latest.runData && Object.keys(latest.runData).length
+            ? { runData: latest.runData, dirtyNodes: latest.dirtyNodes }
+            : {}),
         });
         useEditor.getState().startExecution(newId);
         awaitingRun.current = false;
@@ -166,7 +170,25 @@ export function useEditorActions(): CanvasActions {
     }
   }, []);
 
+  const attachExecution = useCallback(
+    (executionId: string) => {
+      useEditor.getState().startExecution(executionId);
+      // The run may already be over by the time we hear about it.
+      setTimeout(async () => {
+        try {
+          const detail = await endpoints.execution(executionId);
+          if (!detail.running && useEditor.getState().executionId === executionId)
+            void loadResult(executionId);
+        } catch {
+          /* push events will follow */
+        }
+      }, 300);
+    },
+    [loadResult],
+  );
+
   return {
+    attachExecution,
     save,
     executeWorkflow: () => void run(),
     executeStep: (nodeName: string) => void run(nodeName),

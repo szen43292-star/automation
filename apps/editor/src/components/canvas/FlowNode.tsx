@@ -20,7 +20,7 @@ function FlowNodeComponent({ data, selected }: NodeProps<FlowNodeType>) {
   const pinned = useEditor((s) => Boolean(s.pinData[node.name]));
   const readOnly = useEditor((s) => s.readOnly);
   const running = useEditor((s) => s.executionStatus === 'running');
-  const outputs = outputLabels(description, node.onError);
+  const outputs = outputLabels(description, node);
   const inputs = description?.inputs ?? [{ type: 'main' as const }];
   const connectedOutputs = useEditor((s) =>
     outputs
@@ -32,7 +32,7 @@ function FlowNodeComponent({ data, selected }: NodeProps<FlowNodeType>) {
   const actions = useCanvasActions();
   const trigger = isTrigger(description);
   const unknown = !description;
-  const height = Math.max(BOX, Math.max(outputs.length, inputs.length) * 30 + 16);
+  const height = Math.max(BOX, Math.max(outputs.length, inputs.length) * 32 + 16);
 
   const stop = (fn: () => void) => (e: MouseEvent) => {
     e.stopPropagation();
@@ -144,10 +144,14 @@ function FlowNodeComponent({ data, selected }: NodeProps<FlowNodeType>) {
               {(label || (!connected && count !== undefined)) && (
                 <span
                   className={clsx(
-                    'pointer-events-none absolute left-full ml-2 -translate-y-1/2 text-[11px] whitespace-nowrap',
+                    'pointer-events-none absolute left-full -translate-y-1/2 text-[11px] whitespace-nowrap',
                     label === 'error' ? 'text-danger' : 'text-muted',
                   )}
-                  style={{ top: `calc(${top} - ${connected ? 0 : 19}px)` }}
+                  // Connected: just above the edge. Unconnected: to the right of the "+" button.
+                  style={{
+                    top: `calc(${top} - ${connected ? 9 : 0}px)`,
+                    marginLeft: !connected && !readOnly ? 66 : 8,
+                  }}
                 >
                   {label}
                   {!connected && count !== undefined && (

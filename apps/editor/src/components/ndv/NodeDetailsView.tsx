@@ -1,16 +1,23 @@
 import { clsx } from 'clsx';
-import { AlertTriangle, ArrowLeft, Pin, PinOff, Play, Terminal } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Pencil, Pin, PinOff, Play, Terminal } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
+  getNodeParameters,
   getTaskInput,
   type INode,
   type INodeExecutionData,
+  type IDataObject,
   type INodeParameters,
+  type ISourceData,
   type NodeErrorJSON,
   type OnErrorBehaviour,
 } from '@flowforge/workflow';
 import { useEditor } from '../../stores/editor';
+import { useServer } from '../../stores/server';
+import { NodeCredentials } from '../credentials/CredentialSelect';
+import { PinDataModal } from './PinDataModal';
+import { WebhookPanel } from './WebhookPanel';
 import { isTrigger, outputLabels, useNodeTypes } from '../../stores/nodeTypes';
 import { useCanvasActions } from '../canvas/actions';
 import { Button, NodeIcon, Toggle } from '../ui';
@@ -43,6 +50,17 @@ function NdvInner({ node }: { node: INode }) {
   const status = useEditor((s) => s.nodeStatus[node.name]);
   const readOnly = useEditor((s) => s.readOnly);
   const workflowName = useEditor((s) => s.name);
+  const workflowId = useEditor((s) => s.workflowId);
+  const vars = useServer((s) => s.vars);
+  const [pinEditor, setPinEditor] = useState(false);
+  useEffect(
+    () =>
+      void useServer
+        .getState()
+        .load()
+        .catch(() => undefined),
+    [],
+  );
   const timezone = useEditor(
     (s) => s.settings.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
   );
@@ -85,24 +103,61 @@ function NdvInner({ node }: { node: INode }) {
   }, [activeParent, runData, task, connections, node.id, pinData]);
 
   // --- Output ------------------------------------------------------------------
-  const labels = outputLabels(description, node.onError);
+  const labels = outputLabels(description, node);
   const [outputIndex, setOutputIndex] = useState(0);
   const pinned = pinData[node.name];
   const outputItems = pinned ?? task?.data?.main[outputIndex] ?? null;
 
+  const inputSource: ISourceData | null = useMemo(() => {
+    if (task?.source[0] && task.source[0].previousNode === activeParent?.name)
+      return task.source[0];
+    if (!activeParent) return null;
+    const runsOfParent = runData?.[activeParent.name];
+    if (!runsOfParent?.length) return null;
+    const output =
+      connections.find((c) => c.source === activeParent.id && c.target === node.id)?.sourceOutput ??
+      0;
+    return {
+      previousNode: activeParent.name,
+      previousNodeOutput: output,
+      previousNodeRun: runsOfParent.length - 1,
+    };
+  }, [task, activeParent, runData, connections, node.id]);
+
   const ctx: NdvContextValue = useMemo(
     () => ({
       inputItems: inputItems ?? [],
-      getNodeOutput: (nodeName, out = 0) => {
-        if (pinData[nodeName] && out === 0) return pinData[nodeName];
+      inputSource,
+      runData,
+      getNodeOutput: (nodeName: string) => {
         const r = runData?.[nodeName];
-        return r?.[r.length - 1]?.data?.main[out] ?? undefined;
+        if (r?.length) return r[r.length - 1]?.data?.main[0] ?? [];
+        return pinData[nodeName] ?? undefined;
       },
+      nodeNames: nodes
+        .filter((n) => n.id !== node.id && n.type !== 'flowforge.stickyNote')
+        .map((n) => n.name),
+      workflowId: workflowId ?? undefined,
       workflowName,
       timezone,
+      vars: vars as IDataObject,
+      parameters: node.parameters as IDataObject,
       readOnly,
     }),
-    [inputItems, pinData, runData, workflowName, timezone, readOnly],
+    [
+      inputItems,
+      inputSource,
+      pinData,
+      runData,
+      nodes,
+      node.id,
+      node.parameters,
+      workflowId,
+      workflowName,
+      timezone,
+      vars,
+      readOnly,
+    ],
   );
 
   const commitName = () => {
@@ -255,15 +310,19 @@ function NdvInner({ node }: { node: INode }) {
                     Unknown node type “{node.type}”. The node is not installed on this server.
                   </div>
                 ) : tab === 'parameters' ? (
-                  description.properties.length === 0 ? (
-                    <div className="text-[13px] text-muted">This node has no parameters.</div>
-                  ) : (
-                    <ParameterForm
-                      properties={description.properties}
-                      values={node.parameters}
-                      onChange={setParameters}
-                    />
-                  )
+                  <div className="space-y-4">
+                    {description.webhook && <WebhookPanel node={node} description={description} />}
+                    <NodeCredentials node={node} description={description} />
+                    {description.properties.length === 0 ? (
+                      <div className="text-[13px] text-muted">This node has no parameters.</div>
+                    ) : (
+                      <ParameterForm
+                        properties={description.properties}
+                        values={getNodeParameters(description.properties, node.parameters)}
+                        onChange={setParameters}
+                      />
+                    )}
+                  </div>
                 ) : (
                   <NodeSettings node={node} />
                 )}
@@ -291,6 +350,13 @@ function NdvInner({ node }: { node: INode }) {
                     );
                 }}
                 onUnpin={() => useEditor.getState().setPinData(node.name, null)}
+                onEdit={readOnly ? undefined : () => setPinEditor(true)}
+              />
+              <PinDataModal
+                open={pinEditor}
+                onClose={() => setPinEditor(false)}
+                nodeName={node.name}
+                initial={pinned ?? task?.data?.main[0] ?? null}
               />
               {task?.error && <ErrorBox error={task.error} />}
               {pinned && (
@@ -352,8 +418,16 @@ function OutputHeader(props: {
   canPin: boolean;
   onPin: () => void;
   onUnpin: () => void;
+  onEdit?: () => void;
 }) {
-  if (props.labels.length <= 1 && props.runs <= 1 && !props.pinned && !props.canPin) return null;
+  if (
+    props.labels.length <= 1 &&
+    props.runs <= 1 &&
+    !props.pinned &&
+    !props.canPin &&
+    !props.onEdit
+  )
+    return null;
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-1.5">
       {props.labels.length > 1 && (
@@ -385,7 +459,18 @@ function OutputHeader(props: {
           ))}
         </select>
       )}
-      <div className="ml-auto">
+      <div className="ml-auto flex items-center gap-1">
+        {props.onEdit && (
+          <Button
+            size="sm"
+            variant="ghost"
+            icon={Pencil}
+            onClick={props.onEdit}
+            title="Edit or mock this node's output (pins it)"
+          >
+            {props.pinned ? 'Edit' : 'Set mock data'}
+          </Button>
+        )}
         {props.pinned ? (
           <Button size="sm" variant="ghost" icon={PinOff} onClick={props.onUnpin}>
             Unpin

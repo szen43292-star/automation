@@ -1,4 +1,7 @@
 import type {
+  ICredentialType,
+  IDataObject,
+  IRunData,
   IConnection,
   INode,
   INodeTypeDescription,
@@ -153,6 +156,8 @@ export interface ExecutionSummary {
   errorMessage: string | null;
   retryOfId: string | null;
   retrySuccessId: string | null;
+  waitTill?: string | null;
+  parentExecutionId?: string | null;
 }
 
 export interface ExecutionDetail extends Omit<ExecutionSummary, 'durationMs'> {
@@ -161,6 +166,32 @@ export interface ExecutionDetail extends Omit<ExecutionSummary, 'durationMs'> {
     | (Pick<WorkflowDTO, 'name' | 'nodes' | 'connections' | 'settings'> & { pinData?: IPinData })
     | null;
   data: IRunExecutionData | null;
+}
+
+export interface ServerSettings {
+  publicUrl: string;
+  executionsMode: 'regular' | 'queue';
+  oauthCallbackUrl: string;
+  version: string;
+}
+
+export interface Variable {
+  id: string;
+  key: string;
+  value: string;
+}
+
+export interface CredentialSummary {
+  id: string;
+  name: string;
+  type: string;
+  owner?: { id: string; name: string };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CredentialDetail extends CredentialSummary {
+  data: IDataObject;
 }
 
 export interface VersionSummary {
@@ -203,6 +234,8 @@ export const endpoints = {
       workflowData?: Partial<WorkflowDTO>;
       destinationNode?: string;
       startNode?: string;
+      runData?: IRunData;
+      dirtyNodes?: string[];
     },
   ) => api<{ executionId: string }>(`/api/workflows/${id}/run`, { body }),
   executions: (
@@ -218,4 +251,38 @@ export const endpoints = {
   retryExecution: (id: string, useCurrentWorkflow: boolean) =>
     api<{ executionId: string }>(`/api/executions/${id}/retry`, { body: { useCurrentWorkflow } }),
   deleteExecution: (id: string) => api<void>(`/api/executions/${id}`, { method: 'DELETE' }),
+  settings: () => api<ServerSettings>('/api/settings'),
+  variables: () => api<{ data: Variable[] }>('/api/variables'),
+  createVariable: (body: { key: string; value: string }) =>
+    api<Variable>('/api/variables', { body }),
+  updateVariable: (id: string, body: { key?: string; value?: string }) =>
+    api<Variable>(`/api/variables/${id}`, { method: 'PATCH', body }),
+  deleteVariable: (id: string) => api<void>(`/api/variables/${id}`, { method: 'DELETE' }),
+  credentialTypes: () => api<{ data: ICredentialType[] }>('/api/credential-types'),
+  credentials: (type?: string) =>
+    api<{ data: CredentialSummary[] }>(
+      `/api/credentials${type ? `?type=${encodeURIComponent(type)}` : ''}`,
+    ),
+  credential: (id: string) => api<CredentialDetail>(`/api/credentials/${id}`),
+  createCredential: (body: { name: string; type: string; data: IDataObject }) =>
+    api<CredentialDetail>('/api/credentials', { body }),
+  updateCredential: (id: string, body: { name?: string; data?: IDataObject }) =>
+    api<CredentialDetail>(`/api/credentials/${id}`, { method: 'PATCH', body }),
+  deleteCredential: (id: string) => api<void>(`/api/credentials/${id}`, { method: 'DELETE' }),
+  testCredential: (body: { type: string; data: IDataObject; id?: string }) =>
+    api<{ ok: boolean; message: string }>('/api/credentials/test', { body }),
+  oauthUrl: (id: string) =>
+    api<{ url: string; redirectUri: string }>(`/api/credentials/${id}/oauth2/auth-url`),
+  nodeOptions: (method: string) =>
+    api<{ data: Array<{ name: string; value: string }> }>(`/api/node-options/${method}`),
+  listenWebhook: (
+    workflowId: string,
+    body: { nodeId: string; workflowData: Partial<WorkflowDTO> },
+  ) =>
+    api<{ testUrl: string; method: string; expiresInSeconds: number }>(
+      `/api/workflows/${workflowId}/webhook-test`,
+      { body },
+    ),
+  stopListening: (workflowId: string) =>
+    api<void>(`/api/workflows/${workflowId}/webhook-test`, { method: 'DELETE' }),
 };

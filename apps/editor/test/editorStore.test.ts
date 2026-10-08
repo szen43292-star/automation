@@ -21,6 +21,21 @@ const description = (
 });
 
 const types = [
+  description('hook', {
+    group: ['trigger'],
+    inputs: [],
+    displayName: 'Hook',
+    defaults: { name: 'Hook' },
+    properties: [
+      {
+        displayName: 'Path',
+        name: 'path',
+        type: 'string',
+        default: '',
+        typeOptions: { generateId: true },
+      },
+    ],
+  }),
   description('trigger', {
     group: ['trigger'],
     inputs: [],
@@ -145,5 +160,36 @@ describe('editor store', () => {
   it('is read-only when viewing past executions', () => {
     editor().load({ name: 'x', nodes: [], connections: [], settings: {} }, { readOnly: true });
     expect(editor().addNode('set')).toBeNull();
+  });
+
+  it('generates fresh ids for webhook paths on add and paste', () => {
+    const hook = editor().addNode('hook', { position: { x: 0, y: 0 } })!;
+    expect(String(hook.parameters.path)).toMatch(/^[0-9a-f-]{36}$/);
+    editor().setSelection([hook.id]);
+    editor().paste(editor().copySelection());
+    const copy = editor().nodes[1]!;
+    expect(copy.parameters.path).not.toBe(hook.parameters.path);
+  });
+
+  it('tracks nodes changed since the last run for partial execution', () => {
+    const t = editor().addNode('trigger', { position: { x: 0, y: 0 } })!;
+    const a = editor().addNode('set', { source: { nodeId: t.id, output: 0 } })!;
+    editor().setParameters(a.id, { value: 'before run' });
+    expect(editor().dirtyNodes).toEqual([]); // no run data yet
+    editor().applyExecution({
+      id: 'e',
+      running: false,
+      status: 'success',
+      data: { resultData: { runData: { Set: [] } } },
+    } as never);
+    editor().setParameters(a.id, { value: 'changed' });
+    expect(editor().dirtyNodes).toEqual(['Set']);
+    editor().applyExecution({
+      id: 'e2',
+      running: false,
+      status: 'success',
+      data: { resultData: { runData: {} } },
+    } as never);
+    expect(editor().dirtyNodes).toEqual([]);
   });
 });

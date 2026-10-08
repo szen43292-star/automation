@@ -10,6 +10,12 @@ import { Button, Field, Modal, Spinner } from '../../components/ui';
 
 export function WorkflowSettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const settings = useEditor((s) => s.settings);
+  const workflowId = useEditor((s) => s.workflowId);
+  const workflows = useQuery({
+    queryKey: ['workflows', 'all'],
+    queryFn: () => endpoints.workflows({ limit: 250 }),
+    enabled: open,
+  });
   const [draft, setDraft] = useState<IWorkflowSettings>(settings);
   useEffect(() => {
     if (open) setDraft(settings);
@@ -78,6 +84,45 @@ export function WorkflowSettingsModal({ open, onClose }: { open: boolean; onClos
               setDraft({
                 ...draft,
                 executionTimeout: e.target.value ? Math.max(1, Number(e.target.value)) : undefined,
+              })
+            }
+          />
+        </Field>
+        <Field
+          label="Error workflow"
+          hint="Started when a production execution of this workflow fails. It needs an Error Trigger node."
+        >
+          <select
+            className="ff-input"
+            value={draft.errorWorkflow ?? ''}
+            onChange={(e) => setDraft({ ...draft, errorWorkflow: e.target.value || undefined })}
+          >
+            <option value="">None</option>
+            {workflows.data?.data
+              .filter((w) => w.id !== workflowId)
+              .map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name}
+                </option>
+              ))}
+          </select>
+        </Field>
+        <Field
+          label="Max concurrent executions"
+          hint="Limit parallel production runs (e.g. to protect an API). Empty = no limit."
+        >
+          <input
+            className="ff-input"
+            type="number"
+            min={1}
+            max={1000}
+            value={draft.maxConcurrency ?? ''}
+            onChange={(e) =>
+              setDraft({
+                ...draft,
+                maxConcurrency: e.target.value
+                  ? Math.max(1, Math.floor(Number(e.target.value)))
+                  : undefined,
               })
             }
           />

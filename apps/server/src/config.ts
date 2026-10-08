@@ -42,7 +42,10 @@ export type Config = z.infer<typeof envSchema> & {
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
-  const parsed = envSchema.safeParse(env);
+  // Empty values (e.g. `KEY=` in .env or `${KEY:-}` in compose) mean "not set".
+  const parsed = envSchema.safeParse(
+    Object.fromEntries(Object.entries(env).filter(([, value]) => value !== '')),
+  );
   if (!parsed.success) {
     const problems = parsed.error.issues
       .map((i) => `  - ${i.path.join('.')}: ${i.message}`)

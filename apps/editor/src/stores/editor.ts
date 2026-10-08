@@ -73,6 +73,8 @@ interface EditorState {
   nodeStatus: Record<string, NodeRunState>;
   runData: IRunData | null;
   executionError: NodeErrorJSON | null;
+  /** Nodes changed since `runData` was produced (partial execution re-runs them). */
+  dirtyNodes: string[];
 
   past: Snapshot[];
   future: Snapshot[];
@@ -133,7 +135,28 @@ const emptyExecution = {
   nodeStatus: {},
   runData: null,
   executionError: null,
+  dirtyNodes: [] as string[],
 };
+
+/** Give parameters marked `generateId` (e.g. webhook paths) a fresh value. */
+function withGeneratedIds(node: INode): INode {
+  const description = useNodeTypes.getState().byName[node.type];
+  const generated = description?.properties.filter((p) => p.typeOptions?.generateId) ?? [];
+  if (!generated.length) return node;
+  const parameters = { ...node.parameters };
+  for (const prop of generated) parameters[prop.name] = randomId();
+  return { ...node, parameters };
+}
+
+function markDirty(
+  state: { runData: IRunData | null; dirtyNodes: string[] },
+  ...names: Array<string | undefined>
+) {
+  if (!state.runData) return state.dirtyNodes;
+  const next = new Set(state.dirtyNodes);
+  names.forEach((n) => n && next.add(n));
+  return [...next];
+}
 
 export const connectionKey = (c: IConnection) =>
   `${c.source}:${c.sourceOutput}->${c.target}:${c.targetInput}`;
@@ -334,7 +357,10 @@ export const useEditor = create<EditorState>((set, get) => ({
       type,
       typeVersion: description.version,
       position: [snap(position.x), snap(position.y)],
-      parameters: getNodeParameters(description.properties, {}),
+      parameters: withGeneratedIds({
+        parameters: getNodeParameters(description.properties, {}),
+        type,
+      } as INode).parameters,
       ...(isSticky ? { width: 260, height: 180 } : {}),
     };
 
@@ -376,7 +402,11 @@ export const useEditor = create<EditorState>((set, get) => ({
     const state = get();
     if (state.readOnly) return;
     state.record(historyKey ?? `node:${id}:${Object.keys(patch).join(',')}`);
-    set({ nodes: state.nodes.map((n) => (n.id === id ? { ...n, ...patch } : n)), dirty: true });
+    set({
+      nodes: state.nodes.map((n) => (n.id === id ? { ...n, ...patch } : n)),
+      dirty: true,
+      dirtyNodes: markDirty(state, state.nodes.find((n) => n.id === id)?.name),
+    });
   },
 
   setParameters(id, parameters, historyKey) {
@@ -391,6 +421,7 @@ export const useEditor = create<EditorState>((set, get) => ({
     set({
       nodes: state.nodes.map((n) => (n.id === id ? { ...n, parameters: normalised } : n)),
       dirty: true,
+      dirtyNodes: markDirty(state, node.name),
     });
   },
 
@@ -506,7 +537,11 @@ export const useEditor = create<EditorState>((set, get) => ({
     if (state.readOnly || connection.source === connection.target) return;
     if (state.connections.some((c) => connectionKey(c) === connectionKey(connection))) return;
     state.record();
-    set({ connections: [...state.connections, connection], dirty: true });
+    set({
+      connections: [...state.connections, connection],
+      dirty: true,
+      dirtyNodes: markDirty(state, state.nodes.find((n) => n.id === connection.target)?.name),
+    });
   },
 
   removeConnections(list) {
@@ -514,7 +549,14 @@ export const useEditor = create<EditorState>((set, get) => ({
     if (state.readOnly || list.length === 0) return;
     const keys = new Set(list.map(connectionKey));
     state.record();
-    set({ connections: state.connections.filter((c) => !keys.has(connectionKey(c))), dirty: true });
+    set({
+      connections: state.connections.filter((c) => !keys.has(connectionKey(c))),
+      dirty: true,
+      dirtyNodes: markDirty(
+        state,
+        ...list.map((c) => state.nodes.find((n) => n.id === c.target)?.name),
+      ),
+    });
   },
 
   setSelection(ids) {
@@ -563,7 +605,7 @@ export const useEditor = create<EditorState>((set, get) => ({
       idMap.set(original.id, id);
       nameMap.set(original.name, name);
       added.push({
-        ...structuredClone(original),
+        ...withGeneratedIds(structuredClone(original)),
         id,
         name,
         position: [snap(original.position[0] + offset.x), snap(original.position[1] + offset.y)],
@@ -669,6 +711,7 @@ export const useEditor = create<EditorState>((set, get) => ({
       runData,
       nodeStatus: nodeStatusFromRunData(runData),
       executionError: detail.data?.resultData.error ?? null,
+      dirtyNodes: [],
     });
   },
 

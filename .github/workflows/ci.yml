@@ -22,7 +22,11 @@ jobs:
         ports: ['5432:5432']
         options: >-
           --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
     env:
+      REDIS_URL: redis://localhost:6379
       TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/flowforge_test
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/flowforge_test
     steps:
@@ -52,6 +56,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/flowforge
       JWT_SECRET: ci-only-secret-ci-only-secret-ci-only-secret
+      ENCRYPTION_KEY: ci-only-encryption-key-ci-only-encryption-key
       NODE_ENV: production
     steps:
       - uses: actions/checkout@v4

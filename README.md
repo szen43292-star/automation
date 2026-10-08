@@ -2,18 +2,18 @@
 
 Workflow automation platform (n8n-style) whose core feature will be **answering WhatsApp Business calls with an AI voice agent, 24/7**. Web editor, Windows/Android/iOS apps and a download site come in later phases.
 
-> **Status: Phase 1 complete.** The server, database, workflow engine, editor canvas, core nodes and execution history work and have tests. The phases below are built in order.
+> **Status: Phases 1 and 2 complete.** The server, database, workflow engine, editor, expressions, triggers, credentials vault and queue workers work and have tests. The phases below are built in order.
 
-| Phase | Scope | Status |
-| --- | --- | --- |
-| 1 | Server, database, workflow engine, editor canvas, core nodes, execution history | ✅ Done |
-| 2 | Expressions (isolated-vm), Merge/Switch/Loop, pinned data UI, queue + workers, Webhook & Schedule triggers, credentials vault | ⏳ Next |
-| 3 | WhatsApp Business connection, setup checklist, messaging nodes and triggers | |
-| 4 | Media server, incoming call handling, auto-answer modes, call log and recordings | |
-| 5 | AI Voice Agent, knowledge base, tool calling, caller recognition, transfer, follow-ups, owner notifications | |
-| 6 | Outbound calls with permissions, live dashboard, analytics, integrations, templates, users/roles, public API | |
-| 7 | Windows `.exe`, Android `.apk`, sideloadable iOS `.ipa` | |
-| 8 | Download website, release admin, CI/CD for all platforms | |
+| Phase | Scope                                                                                                                         | Status  |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------- | ------- |
+| 1     | Server, database, workflow engine, editor canvas, core nodes, execution history                                               | ✅ Done |
+| 2     | Expressions (isolated-vm), Merge/Switch/Loop, pinned data UI, queue + workers, Webhook & Schedule triggers, credentials vault | ✅ Done |
+| 3     | WhatsApp Business connection, setup checklist, messaging nodes and triggers                                                   | ⏳ Next |
+| 4     | Media server, incoming call handling, auto-answer modes, call log and recordings                                              |         |
+| 5     | AI Voice Agent, knowledge base, tool calling, caller recognition, transfer, follow-ups, owner notifications                   |         |
+| 6     | Outbound calls with permissions, live dashboard, analytics, integrations, templates, users/roles, public API                  |         |
+| 7     | Windows `.exe`, Android `.apk`, sideloadable iOS `.ipa`                                                                       |         |
+| 8     | Download website, release admin, CI/CD for all platforms                                                                      |         |
 
 ## Monorepo layout
 
@@ -34,6 +34,7 @@ Turborepo + pnpm workspaces, TypeScript everywhere (`strict`, `noUncheckedIndexe
 ## What's in Phase 1
 
 **Engine** (`packages/engine`)
+
 - Workflows are JSON graphs (`nodes`, `connections`, `settings`, `pinData`). Data passes between nodes as items: `[{ json, binary? }]`.
 - Depth-first execution (n8n "v1" order): branches run to completion, ordered by canvas position.
 - Multi-input nodes wait for all connected inputs (and still run with partial data if a branch produced nothing). Loops (cycles) are supported, with infinite-loop protection.
@@ -48,12 +49,14 @@ Turborepo + pnpm workspaces, TypeScript everywhere (`strict`, `noUncheckedIndexe
 **Expressions (Phase 1 subset):** any parameter whose value starts with `=` is an expression, e.g. `={{ $json.phone }}` or `=Hello {{ $json.name }}`. Phase 1 supports data references only: `$json.a.b[0]`, `$node["Name"].json.x`, `$('Name').item.json.x`, `$input.first()/last()/all()`, `$now`, `$today` (with `.toFormat('yyyy-MM-dd')`, `.toISO()` …), `$workflow`, `$execution`, `$itemIndex`, `$vars`. **Phase 2** replaces this with full JavaScript expressions in an isolated-vm sandbox behind the same `IExpressionEvaluator` interface.
 
 **Server** (`apps/server`)
+
 - Owner setup and sign-in (scrypt password hashes, JWT, rate-limited), Zod validation on every input with per-field error messages.
 - Workflows: CRUD, search, optimistic locking (`versionId` → `409` when someone else saved first), **version history** with restore, import/export JSON, activation check.
 - Executions: manual runs (also of unsaved editor state), live node events over WebSocket (`/api/push`), full history with per-node input/output, status filters, cursor pagination, stop, retry, delete. Executions left "running" by a crash are marked `crashed` on startup.
 - Serves the built editor as a single-page app; `/healthz` and `/readyz` probes.
 
 **Editor** (`apps/editor`)
+
 - Infinite canvas with minimap, zoom controls, snap-to-grid, multi-select (Shift-drag box, Ctrl/Cmd-click), copy/paste as JSON, undo/redo, sticky notes (markdown, resizable, colours), searchable node panel (keyboard navigable).
 - Add nodes from the `+` on any unconnected output, by dropping a connection on empty canvas, or by inserting into an existing connection.
 - Node panel with **INPUT | PARAMETERS | OUTPUT** columns; Table / JSON / Schema views; **drag a field from INPUT into a parameter** to insert `{{ $json.field }}`; live expression preview; per-output tabs (true/false/error); pin output data; console.log output from Code nodes; node settings tab.
@@ -63,29 +66,105 @@ Turborepo + pnpm workspaces, TypeScript everywhere (`strict`, `noUncheckedIndexe
 
 ### Keyboard shortcuts
 
-| Keys | Action |
-| --- | --- |
-| `Ctrl/⌘ S` | Save |
-| `Ctrl/⌘ Enter` | Execute workflow |
-| `Tab` | Open node panel (connects to the selected node) |
-| `Enter` | Open selected node |
-| `Ctrl/⌘ Z`, `Ctrl/⌘ Shift Z` / `Ctrl Y` | Undo / redo |
-| `Ctrl/⌘ C / X / V` | Copy / cut / paste nodes (JSON) |
-| `Ctrl/⌘ A`, `Ctrl/⌘ D` | Select all, duplicate |
-| `Delete` / `Backspace` | Delete selection |
-| `D` | Deactivate / activate selected nodes |
-| `Shift S` | Add sticky note |
-| `F2` | Rename selected node |
-| `1`, `0`, `+`, `-` | Fit view, reset zoom, zoom in/out |
-| `Shift`-drag | Box select |
+| Keys                                    | Action                                          |
+| --------------------------------------- | ----------------------------------------------- |
+| `Ctrl/⌘ S`                              | Save                                            |
+| `Ctrl/⌘ Enter`                          | Execute workflow                                |
+| `Tab`                                   | Open node panel (connects to the selected node) |
+| `Enter`                                 | Open selected node                              |
+| `Ctrl/⌘ Z`, `Ctrl/⌘ Shift Z` / `Ctrl Y` | Undo / redo                                     |
+| `Ctrl/⌘ C / X / V`                      | Copy / cut / paste nodes (JSON)                 |
+| `Ctrl/⌘ A`, `Ctrl/⌘ D`                  | Select all, duplicate                           |
+| `Delete` / `Backspace`                  | Delete selection                                |
+| `D`                                     | Deactivate / activate selected nodes            |
+| `Shift S`                               | Add sticky note                                 |
+| `F2`                                    | Rename selected node                            |
+| `1`, `0`, `+`, `-`                      | Fit view, reset zoom, zoom in/out               |
+| `Shift`-drag                            | Box select                                      |
+
+## What's in Phase 2
+
+**JavaScript expressions.** `{{ }}` blocks are real JavaScript, evaluated on the server in an **isolated-vm** sandbox (one isolate per execution, 1 s timeout, 64 MB). Available: `$json`, `$input.item/first()/last()/all()`, `$('Node').item/first()/all()/itemMatching(i)`, `$node`, `$now`, `$today`, `DateTime` (Luxon), `$vars`, `$workflow`, `$execution` (incl. `resumeUrl`), `$itemIndex`, `$if()`, `$ifEmpty()`. `$('Node').item` follows **paired items** back through the graph, so it returns the item that produced the current one. In the editor, the expression editor has syntax highlighting and **autocomplete** (variables, node names, fields from the real input data). The live preview runs in a sandboxed, network-less iframe worker and is cut off after 1 s.
+
+**New nodes:**
+
+| Node                                                | What it does                                                                                                                                                                                                                |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Webhook**                                         | Production URL `/webhook/<path>` (while active) and test URL `/webhook-test/<path>` (while "Listen for test event" is on). Any method; respond immediately, when the last node finishes, or from a Respond to Webhook node. |
+| **Respond to Webhook**                              | Sends JSON, text, binary or no data, with status code and headers.                                                                                                                                                          |
+| **Schedule Trigger**                                | Every N seconds/minutes/hours/days/weeks/months, or a cron expression, in the workflow timezone.                                                                                                                            |
+| **Merge**                                           | Append, combine by matching fields, by position, all combinations, or choose a branch.                                                                                                                                      |
+| **Switch**                                          | Rules or an expression; one output per rule, renamable, with an optional fallback output.                                                                                                                                   |
+| **Loop Over Items**                                 | Processes items in batches, with `loop` and `done` outputs.                                                                                                                                                                 |
+| **Wait**                                            | Pause for an interval, until a date, or until a webhook call (`$execution.resumeUrl`). Long waits are saved to the database and survive restarts.                                                                           |
+| **Execute Workflow** / **Execute Workflow Trigger** | Sub-workflows: pass items in and get the results back.                                                                                                                                                                      |
+| **Error Trigger**                                   | Starts an error workflow when a production execution fails.                                                                                                                                                                 |
+
+**Credentials vault.** Header, Basic, query, Bearer and **OAuth2** credentials (authorization code with PKCE, or client credentials; tokens refresh automatically). They are encrypted with AES-256-GCM using `ENCRYPTION_KEY`. Secrets are never sent back to the browser: they show as masked, and leaving them unchanged keeps the stored value. **Test** checks a credential against a URL. HTTP Request uses credentials through _Authentication → Generic credential type_.
+
+**Execution.**
+
+- **Queue mode:** `EXECUTIONS_MODE=queue` sends production runs through Redis (BullMQ) to any number of `worker` processes. Live events and cancel commands travel over Redis pub/sub.
+- **Per-workflow concurrency limit.**
+- **Error workflows** and **variables** (`$vars`, Variables page).
+- **Partial execution:** "Execute step" reuses earlier results and re-runs only the nodes you changed.
+- **Pinned data** can be edited as JSON. **Set mock data** can pin output to a node that hasn't run yet.
+
+## Testing Phase 2
+
+```bash
+pnpm test        # 138 tests: workflow 22, engine 32, nodes 46, server 28, editor 10
+pnpm --filter @flowforge/e2e test:e2e   # 8 browser tests (4 Phase 1 + 4 Phase 2)
+```
+
+The server suite includes queue mode with a real worker. It needs Redis on `REDIS_URL`, default `redis://localhost:6379`.
+
+The Phase 2 browser tests check:
+
+- Expression preview, autocomplete and that the sandbox has no storage or network.
+- Credential masking.
+- Webhook listening and activation.
+- Switch outputs.
+
+**Manual walkthrough:**
+
+1. **Expressions:** add a _Code_ node returning `[{ json: { name: 'asha', price: 10, qty: 3 } }]`, then _Edit Fields_ with value `{{ $json.price * $json.qty }} for {{ $json.name.toUpperCase() }}`. Type `{{ $json.` to see autocomplete. The preview shows `30 for ASHA`.
+2. **Webhook:** create a workflow with _Webhook_ (POST, path `hello`) → _Respond to Webhook_ (JSON `{{ { ok: true, got: $json.body } }}`), and set the Webhook to respond _Using 'Respond to Webhook' node_.
+   - Click **Listen for test event**, then run `curl -X POST localhost:5678/webhook-test/hello -H 'content-type: application/json' -d '{"a":1}'`. The run appears on the canvas.
+   - Save, toggle **Active**, and call `/webhook/hello`. The response is `{"ok":true,"got":{"a":1}}`, and the run is under **Executions**.
+3. **Schedule:** add _Schedule Trigger_ (every 10 seconds) → _No-Op_, then activate. A new execution appears every 10 s. Deactivate it again.
+4. **Credentials:**
+   - **Credentials → Add credential → Header Auth** (`X-Api-Key` / any secret), then reopen it: the secret is masked.
+   - In _HTTP Request_ with URL `https://httpbin.org/headers` and _Authentication: Generic → Header Auth_, choose the credential and run. httpbin echoes the header back.
+5. **Switch / Loop / Merge / Wait:** build a Switch on `{{ $json.intent }}` with rules `sales` and `support` plus a fallback. Each output shows its item count. Add _Wait_ (2 minutes; waits over 65 s are saved to the database) and watch the execution sit in **waiting**, then finish.
+6. **Error workflow:** create a workflow with _Error Trigger_ → _No-Op_. In another workflow's **Settings**, choose it as the _Error workflow_. When an active run of the second workflow fails, the error workflow runs with the error details.
+7. **Queue mode:** `docker compose up -d --build` starts the server plus a `worker`. Production runs (webhook/schedule) then appear in the worker's logs: `docker compose logs -f worker`.
+
+## Deployment
+
+FlowForge has two kinds of parts:
+
+- **Static parts** can be hosted on Vercel: the editor (`apps/editor`) and the download website (`apps/website`).
+- **Long-running parts** need a host that keeps processes running: the **server** (webhooks, schedules, WebSockets), the **worker** and, from Phase 4, the **media server**. Vercel can't run these because its functions stop after each request. Use Railway, Render, Fly.io or any VPS with `docker compose`.
+
+The simplest production setup:
+
+1. **Server:** deploy `docker/Dockerfile.server` (Railway/Render/Fly) or run `docker compose up -d` on a VPS.
+   - Set `DATABASE_URL` (e.g. Neon/Supabase Postgres), `REDIS_URL` (e.g. Upstash, needed for queue mode), `JWT_SECRET`, `ENCRYPTION_KEY` and `PUBLIC_URL`.
+   - The server also serves the editor, so this alone is a complete deployment.
+2. **Optional: editor on Vercel.**
+   - Import the repo with **Root Directory** `apps/editor` (`vercel.json` is included).
+   - Set `VITE_DEFAULT_SERVER_URL=https://your-server.example.com`.
+   - Add the Vercel URL to the server's `CORS_ORIGINS`.
+3. **Download website on Vercel:** see [Windows app & download website](#windows-app--download-website).
 
 ## Running locally
 
-Requirements: Node 22+, pnpm 10, PostgreSQL 16 (Redis comes in Phase 2).
+Requirements: Node 22+, pnpm 10, PostgreSQL 16, and Redis 7 (only for queue mode and its tests).
 
 ```bash
 pnpm install
-cp .env.example .env                  # set DATABASE_URL and JWT_SECRET (openssl rand -hex 32)
+cp .env.example .env                  # set DATABASE_URL, JWT_SECRET and ENCRYPTION_KEY (openssl rand -hex 32)
 cp .env apps/server/.env              # Prisma CLI reads apps/server/.env
 pnpm db:deploy                        # apply migrations
 
@@ -97,27 +176,32 @@ Open http://localhost:5173 (dev) and create the owner account. Or build the edit
 ### Self-hosting with Docker
 
 ```bash
-cp .env.example .env    # set JWT_SECRET and POSTGRES_PASSWORD
+cp .env.example .env    # set JWT_SECRET, ENCRYPTION_KEY and POSTGRES_PASSWORD
 docker compose up -d --build
 ```
 
-Open http://localhost:5678. The image runs migrations on start and has a health check on `/readyz`.
+Open http://localhost:5678. The image runs migrations on start and has a health check on `/readyz`. Production executions run on the `worker` service (`docker compose up -d --scale worker=3` for more).
 
 ### Configuration
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `DATABASE_URL` | – | PostgreSQL connection URL (required) |
-| `JWT_SECRET` | – | At least 32 characters (required) |
-| `PORT` / `HOST` | `5678` / `0.0.0.0` | Listen address |
-| `PUBLIC_URL` | `http://localhost:5678` | Public URL (webhooks, links) |
-| `CORS_ORIGINS` | – | Comma-separated browser origins allowed to call the API (e.g. the Vite dev server) |
-| `JWT_EXPIRES_IN` | `7d` | Session length |
-| `DEFAULT_TIMEZONE` | `UTC` | Default for workflows without a timezone |
-| `CODE_TIMEOUT_MS` / `CODE_MEMORY_MB` | `30000` / `128` | Code node sandbox limits |
-| `AUTH_RATE_LIMIT` | `10` | Sign-in attempts per IP per minute |
-| `EDITOR_DIST` | auto | Folder with the built editor |
-| `LOG_LEVEL` | `info` | pino log level |
+| Variable                                     | Default                 | Description                                                                                                 |
+| -------------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                               | –                       | PostgreSQL connection URL (required)                                                                        |
+| `JWT_SECRET`                                 | –                       | At least 32 characters (required)                                                                           |
+| `ENCRYPTION_KEY`                             | –                       | Encrypts credentials; required in production. Keep it safe, since credentials can't be decrypted without it |
+| `EXECUTIONS_MODE`                            | `regular`               | `queue` hands production runs to workers via Redis                                                          |
+| `REDIS_URL`                                  | –                       | Redis connection URL (required for queue mode)                                                              |
+| `WORKER_CONCURRENCY`                         | `10`                    | Parallel executions per worker                                                                              |
+| `WEBHOOK_TIMEOUT_MS` / `WEBHOOK_MAX_BODY_MB` | `120000` / `16`         | Webhook response timeout and body size                                                                      |
+| `PORT` / `HOST`                              | `5678` / `0.0.0.0`      | Listen address                                                                                              |
+| `PUBLIC_URL`                                 | `http://localhost:5678` | Public URL (webhooks, links)                                                                                |
+| `CORS_ORIGINS`                               | –                       | Comma-separated browser origins allowed to call the API (e.g. the Vite dev server)                          |
+| `JWT_EXPIRES_IN`                             | `7d`                    | Session length                                                                                              |
+| `DEFAULT_TIMEZONE`                           | `UTC`                   | Default for workflows without a timezone                                                                    |
+| `CODE_TIMEOUT_MS` / `CODE_MEMORY_MB`         | `30000` / `128`         | Code node sandbox limits                                                                                    |
+| `AUTH_RATE_LIMIT`                            | `10`                    | Sign-in attempts per IP per minute                                                                          |
+| `EDITOR_DIST`                                | auto                    | Folder with the built editor                                                                                |
+| `LOG_LEVEL`                                  | `info`                  | pino log level                                                                                              |
 
 ## Testing Phase 1
 
@@ -130,13 +214,13 @@ pnpm test                      # 93 tests across workflow, engine, nodes, server
 pnpm typecheck
 ```
 
-| Suite | What it covers |
-| --- | --- |
-| `packages/workflow` (21) | Graph indexing and ordering, schemas, expressions, filter operators and type checks, parameter defaults/visibility |
-| `packages/engine` (21) | Linear/branching order, multi-input waits, empty outputs, retries, continue-on-fail, error output, pinned data, execute step, cancel, timeout, loop protection, resume/retry, hooks, clear errors |
-| `packages/nodes` (29) | Every core node, the Code sandbox (isolation, line numbers, infinite loops), HTTP Request against a local server (JSON/text/binary, 404, network errors) |
-| `apps/server` (14) | Owner setup, sign-in, auth guard, rate limiting, CRUD, optimistic locking, versions, graph validation, import/export, runs, history, retry, stop, WebSocket events, crash recovery |
-| `apps/editor` (8) | Editor store: add/connect, undo/redo, rename with expression rewrite, paste, delete with reconnect, live status |
+| Suite                    | What it covers                                                                                                                                                                                    |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/workflow` (21) | Graph indexing and ordering, schemas, expressions, filter operators and type checks, parameter defaults/visibility                                                                                |
+| `packages/engine` (21)   | Linear/branching order, multi-input waits, empty outputs, retries, continue-on-fail, error output, pinned data, execute step, cancel, timeout, loop protection, resume/retry, hooks, clear errors |
+| `packages/nodes` (29)    | Every core node, the Code sandbox (isolation, line numbers, infinite loops), HTTP Request against a local server (JSON/text/binary, 404, network errors)                                          |
+| `apps/server` (14)       | Owner setup, sign-in, auth guard, rate limiting, CRUD, optimistic locking, versions, graph validation, import/export, runs, history, retry, stop, WebSocket events, crash recovery                |
+| `apps/editor` (8)        | Editor store: add/connect, undo/redo, rename with expression rewrite, paste, delete with reconnect, live status                                                                                   |
 
 The server tests use `TEST_DATABASE_URL` (default `postgresql://postgres:postgres@localhost:5432/flowforge_test`) and refuse to run against a database whose name doesn't end in `_test`.
 
@@ -155,32 +239,37 @@ These tests build, run and inspect a workflow (including execution history and "
 ### Manual walkthrough (about 5 minutes)
 
 1. Open the app and **create the owner account** (the password needs 8+ characters, an uppercase letter and a number).
-2. **Create workflow** → **Add first step** → *Manual Trigger*.
-3. Click the **+** on the trigger's output → *HTTP Request* → URL `https://jsonplaceholder.typicode.com/users` → **Execute step**. The OUTPUT panel shows 10 items (arrays become items).
-4. Close the panel. Click **+** after HTTP Request → *If*. Drag `address` → `city` from the INPUT **Schema** view into *value1*. Choose *String: is equal to*, value2 `Gwenborough`. The preview under the field shows the resolved value.
+2. **Create workflow** → **Add first step** → _Manual Trigger_.
+3. Click the **+** on the trigger's output → _HTTP Request_ → URL `https://jsonplaceholder.typicode.com/users` → **Execute step**. The OUTPUT panel shows 10 items (arrays become items).
+4. Close the panel. Click **+** after HTTP Request → _If_. Drag `address` → `city` from the INPUT **Schema** view into _value1_. Choose _String: is equal to_, value2 `Gwenborough`. The preview under the field shows the resolved value.
 5. **Execute workflow** (`Ctrl+Enter`). Nodes turn green, connections show item counts, and the If node shows `true · 1 item` / `false · 9 items`.
-6. Add a *Code* node on the false branch with `return [{ json: { count: $input.all().length } }];` and run again. Add `console.log('hi')` and look for the log line under OUTPUT.
-7. Break something: set the HTTP URL to `https://jsonplaceholder.typicode.com/nope`. Running shows a red node and the error "The resource you are requesting could not be found" with HTTP 404. Open the node → **Settings** → *On Error: Continue (using error output)* and see the red **error** output appear.
+6. Add a _Code_ node on the false branch with `return [{ json: { count: $input.all().length } }];` and run again. Add `console.log('hi')` and look for the log line under OUTPUT.
+7. Break something: set the HTTP URL to `https://jsonplaceholder.typicode.com/nope`. Running shows a red node and the error "The resource you are requesting could not be found" with HTTP 404. Open the node → **Settings** → _On Error: Continue (using error output)_ and see the red **error** output appear.
 8. **Save** (`Ctrl+S`). Open the **Executions** tab: every run is listed and clicking one replays it read-only with all node data. Use **Retry** on the failed run and **Debug in editor** to load its data back onto the canvas.
 9. Select nodes (Shift-drag), `Ctrl+C`, `Ctrl+V`, `Ctrl+Z`, `Ctrl+Shift+Z`; add a sticky note with `Shift+S`; toggle the theme in the sidebar.
 10. Workflow menu (`…`): **Download JSON**, then on the Workflows page use **Import** to bring it back. Open **Version history** and restore an earlier version.
 
-## API (Phase 1)
+## API
 
 All endpoints except `/api/auth/status|setup|login` need `Authorization: Bearer <token>`.
 
-| Method & path | Description |
-| --- | --- |
-| `GET /api/auth/status` | `{ setupRequired, version }` |
-| `POST /api/auth/setup` · `POST /api/auth/login` · `GET /api/auth/me` | Owner setup, sign-in, current user |
-| `GET /api/node-types` | Node descriptions (the editor renders forms from these) |
-| `GET/POST /api/workflows`, `GET/PATCH/DELETE /api/workflows/:id` | Workflows (PATCH accepts `versionId` for conflict detection) |
-| `POST /api/workflows/import`, `GET /api/workflows/:id/export` | JSON import/export |
-| `GET /api/workflows/:id/versions[/:versionId]` | Version history |
-| `POST /api/workflows/:id/run` | Manual run `{ workflowData?, destinationNode?, startNode?, triggerItems? }` → `202 { executionId }` |
-| `GET /api/executions?workflowId=&status=error,crashed&cursor=&limit=` | Execution history |
-| `GET/DELETE /api/executions/:id`, `POST /api/executions/:id/stop`, `POST /api/executions/:id/retry` | Details with per-node data, stop, retry `{ useCurrentWorkflow }` |
-| `WS /api/push?token=` | Live events; send `{ "type": "subscribe", "topic": "workflow:<id>" }` |
+| Method & path                                                                                       | Description                                                                                         |
+| --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `GET /api/auth/status`                                                                              | `{ setupRequired, version }`                                                                        |
+| `POST /api/auth/setup` · `POST /api/auth/login` · `GET /api/auth/me`                                | Owner setup, sign-in, current user                                                                  |
+| `GET /api/node-types`                                                                               | Node descriptions (the editor renders forms from these)                                             |
+| `GET/POST /api/workflows`, `GET/PATCH/DELETE /api/workflows/:id`                                    | Workflows (PATCH accepts `versionId` for conflict detection)                                        |
+| `POST /api/workflows/import`, `GET /api/workflows/:id/export`                                       | JSON import/export                                                                                  |
+| `GET /api/workflows/:id/versions[/:versionId]`                                                      | Version history                                                                                     |
+| `POST /api/workflows/:id/run`                                                                       | Manual run `{ workflowData?, destinationNode?, startNode?, triggerItems? }` → `202 { executionId }` |
+| `GET /api/executions?workflowId=&status=error,crashed&cursor=&limit=`                               | Execution history                                                                                   |
+| `GET/DELETE /api/executions/:id`, `POST /api/executions/:id/stop`, `POST /api/executions/:id/retry` | Details with per-node data, stop, retry `{ useCurrentWorkflow }`                                    |
+| `WS /api/push?token=`                                                                               | Live events; send `{ "type": "subscribe", "topic": "workflow:<id>" }`                               |
+| `GET/POST /api/credentials`, `GET/PATCH/DELETE /api/credentials/:id`, `POST /api/credentials/test`  | Credentials (secrets masked)                                                                        |
+| `GET /api/credential-types`                                                                         | Credential type descriptions                                                                        |
+| `GET/POST /api/variables`, `PATCH/DELETE /api/variables/:id`                                        | Variables                                                                                           |
+| `POST/DELETE /api/workflows/:id/webhook-test`                                                       | Start/stop listening for a test webhook                                                             |
+| `ANY /webhook/<path>`, `/webhook-test/<path>`, `/webhook-waiting/<executionId>`                     | Webhook triggers and Wait resumes (no auth)                                                         |
 
 The public REST API with API keys comes in Phase 6.
 
@@ -191,16 +280,26 @@ import type { IExecuteFunctions, INodeType } from '@flowforge/workflow';
 
 export const Greet: INodeType = {
   description: {
-    name: 'acme.greet', displayName: 'Greet', icon: 'smile', group: ['transform'], version: 1,
-    description: 'Adds a greeting', defaults: { name: 'Greet' },
-    inputs: [{ type: 'main' }], outputs: [{ type: 'main' }],
-    properties: [{ displayName: 'Name', name: 'name', type: 'string', default: '={{ $json.name }}' }],
+    name: 'acme.greet',
+    displayName: 'Greet',
+    icon: 'smile',
+    group: ['transform'],
+    version: 1,
+    description: 'Adds a greeting',
+    defaults: { name: 'Greet' },
+    inputs: [{ type: 'main' }],
+    outputs: [{ type: 'main' }],
+    properties: [
+      { displayName: 'Name', name: 'name', type: 'string', default: '={{ $json.name }}' },
+    ],
   },
   async execute(this: IExecuteFunctions) {
-    return [this.getInputData().map((item, i) => ({
-      json: { ...item.json, greeting: `Hello ${this.getNodeParameter('name', i)}` },
-      pairedItem: { item: i },
-    }))];
+    return [
+      this.getInputData().map((item, i) => ({
+        json: { ...item.json, greeting: `Hello ${this.getNodeParameter('name', i)}` },
+        pairedItem: { item: i },
+      })),
+    ];
   },
 };
 ```

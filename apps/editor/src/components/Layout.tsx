@@ -1,5 +1,15 @@
 import { clsx } from 'clsx';
-import { History, LogOut, Monitor, Moon, Sun, Workflow as WorkflowIcon, Zap } from 'lucide-react';
+import {
+  Braces,
+  History,
+  KeyRound,
+  LogOut,
+  Monitor,
+  Moon,
+  Sun,
+  Workflow as WorkflowIcon,
+  Zap,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { push } from '../lib/push';
@@ -69,6 +79,12 @@ export function Layout() {
           </NavLink>
           <NavLink to="/executions" className={link}>
             <History size={16} /> Executions
+          </NavLink>
+          <NavLink to="/credentials" className={link}>
+            <KeyRound size={16} /> Credentials
+          </NavLink>
+          <NavLink to="/variables" className={link}>
+            <Braces size={16} /> Variables
           </NavLink>
         </nav>
         <div className="space-y-3 border-t border-line p-3">
