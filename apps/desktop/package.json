@@ -1,5 +1,5 @@
 {
-  "name": "flowforge",
+  "name": "@flowforge/desktop",
   "version": "0.2.0",
   "productName": "FlowForge",
   "private": true,
@@ -7,6 +7,22 @@
   "author": "FlowForge",
   "homepage": "https://github.com/szen43292-star/automation",
   "main": "dist/main.cjs",
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "resources": "node scripts/prepare-resources.mjs",
+    "start": "pnpm build && electron .",
+    "dist": "pnpm build && pnpm resources && electron-builder --config electron-builder.config.cjs --publish never",
+    "smoke": "pnpm build && node dist/smoke.cjs"
+  },
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "26.15.3",
+    "electron-updater": "6.8.9",
+    "tsup": "^8.5.1",
+    "vitest": "^3.2.4"
+  },
   "optionalDependencies": {
     "@embedded-postgres/linux-x64": "17.10.0-beta.17",
     "@embedded-postgres/windows-x64": "17.10.0-beta.17"

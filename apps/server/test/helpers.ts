@@ -28,9 +28,19 @@ export async function createTestApp(): Promise<FastifyInstance> {
 export async function resetDb() {
   if (!new URL(TEST_DATABASE_URL).pathname.endsWith('_test'))
     throw new Error('resetDb only runs on *_test databases');
-  await prisma.$executeRawUnsafe(
-    'TRUNCATE "ExecutionData", "Execution", "WebhookEntity", "WorkflowVersion", "Workflow", "Credential", "Variable", "User" RESTART IDENTITY CASCADE',
-  );
+  // A background execution from the previous test (error workflow, schedule, wait) may still be
+  // writing; if PostgreSQL picks the TRUNCATE as a deadlock victim, try again.
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await prisma.$executeRawUnsafe(
+        'TRUNCATE "ExecutionData", "Execution", "WebhookEntity", "WorkflowVersion", "Workflow", "Credential", "Variable", "User" RESTART IDENTITY CASCADE',
+      );
+      return;
+    } catch (error) {
+      if (attempt >= 5 || !String((error as Error).message).includes('40P01')) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 100 * attempt));
+    }
+  }
 }
 
 export const OWNER = { email: 'owner@example.com', name: 'Owner', password: 'Sup3rSecret!' };
