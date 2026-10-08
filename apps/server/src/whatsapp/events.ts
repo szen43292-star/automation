@@ -57,6 +57,13 @@ export interface CloudMessage {
     type?: string;
     button_reply?: { id?: string; title?: string };
     list_reply?: { id?: string; title?: string; description?: string };
+    /** The customer's answer to a call permission request (business-initiated calls). */
+    call_permission_reply?: {
+      response?: 'accept' | 'reject' | string;
+      is_permanent?: boolean;
+      expiration_timestamp?: number | string;
+      response_source?: string;
+    };
   };
   button?: { payload?: string; text?: string };
   reaction?: { message_id?: string; emoji?: string };
@@ -74,6 +81,8 @@ interface CloudMedia {
 
 export interface CloudStatus {
   id: string;
+  /** "call" for call status updates (ringing, accepted, rejected...). */
+  type?: string;
   status: string;
   timestamp: string;
   recipient_id: string;
@@ -135,7 +144,16 @@ export function messageItem(
   }
   if (message.location) item.location = message.location as IDataObject;
   if (message.contacts) item.contacts = message.contacts as IDataObject[];
-  if (message.interactive) {
+  const permission = message.interactive?.call_permission_reply;
+  if (permission) {
+    item.callPermission = {
+      granted: permission.response === 'accept',
+      permanent: Boolean(permission.is_permanent),
+      expiresAt: permission.expiration_timestamp
+        ? toIso(String(permission.expiration_timestamp))
+        : null,
+    };
+  } else if (message.interactive) {
     const reply = message.interactive.button_reply ?? message.interactive.list_reply;
     item.reply = {
       type: message.interactive.type === 'list_reply' ? 'list' : 'button',
@@ -170,6 +188,11 @@ export function messageText(message: CloudMessage): string | null {
   if (message.text?.body !== undefined) return message.text.body;
   for (const kind of MEDIA_TYPES) {
     if (message[kind]?.caption) return message[kind]!.caption!;
+  }
+  if (message.interactive?.call_permission_reply) {
+    return message.interactive.call_permission_reply.response === 'accept'
+      ? 'Allowed calls'
+      : 'Declined calls';
   }
   if (message.interactive) {
     return message.interactive.button_reply?.title ?? message.interactive.list_reply?.title ?? null;

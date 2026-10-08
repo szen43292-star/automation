@@ -112,4 +112,69 @@ export async function callRoutes(app: FastifyInstance) {
     await calls.simulateHangup(id, waCallId);
     return reply.status(204).send();
   });
+
+  app.post('/api/whatsapp/accounts/:id/simulate-call/:waCallId/answer', async (request, reply) => {
+    const { id, waCallId } = parse(
+      z.object({ id: z.string(), waCallId: z.string() }),
+      request.params,
+    );
+    const { sdp } = parse(sdpBody, request.body);
+    await calls.simulateOutboundAnswer(id, waCallId, sdp);
+    return reply.status(204).send();
+  });
+
+  app.post('/api/whatsapp/accounts/:id/simulate-call/:waCallId/decline', async (request, reply) => {
+    const { id, waCallId } = parse(
+      z.object({ id: z.string(), waCallId: z.string() }),
+      request.params,
+    );
+    await calls.simulateOutboundDecline(id, waCallId);
+    return reply.status(204).send();
+  });
+
+  // ---- Outbound calls -----------------------------------------------------------------------------
+
+  app.get('/api/whatsapp/accounts/:id/call-permission', async (request) => {
+    const { id } = parse(idParams, request.params);
+    const { to } = parse(z.object({ to: z.string().min(5).max(32) }), request.query);
+    return calls.permission(id, to);
+  });
+
+  /** Ask a customer for permission to call them (a WhatsApp message with Allow / Not now). */
+  app.post('/api/whatsapp/accounts/:id/call-permission', async (request) => {
+    const { id } = parse(idParams, request.params);
+    const body = parse(
+      z.object({ to: z.string().min(5).max(32), text: z.string().max(1024).optional() }),
+      request.body,
+    );
+    return calls.requestPermission(id, body.to, body.text);
+  });
+
+  /**
+   * Call a customer who allowed calls: the AI agent talks (with a purpose), or you do -
+   * send your WebRTC offer as `sdp` and get the answer back.
+   */
+  app.post('/api/calls/outbound', async (request, reply) => {
+    const body = parse(
+      z.object({
+        accountId: z.string().min(1),
+        to: z.string().min(5).max(32),
+        handler: z.enum(['agent', 'person']).default('agent'),
+        agentId: z.string().min(1).nullable().optional(),
+        purpose: z.string().max(2000).optional(),
+        sdp: z.string().min(20).max(20_000).optional(),
+      }),
+      request.body,
+    );
+    const result = await calls.startOutbound({
+      accountId: body.accountId,
+      to: body.to,
+      handler: body.handler,
+      agentId: body.agentId ?? null,
+      purpose: body.purpose,
+      personSdp: body.sdp,
+      userId: request.currentUser.id,
+    });
+    return reply.status(201).send(result);
+  });
 }

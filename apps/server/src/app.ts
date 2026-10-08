@@ -36,6 +36,8 @@ import type { MediaConfig } from '@flowforge/media';
 import { AiProviders } from './ai/providers';
 import { AgentService } from './agent/AgentService';
 import { agentRoutes } from './agent/routes';
+import { inviteRoutes, userRoutes } from './users/routes';
+import { dashboardRoutes } from './dashboard/routes';
 
 export const VERSION = '0.2.0';
 
@@ -133,6 +135,7 @@ export async function buildApp(
       : {}),
   });
   const variables = new VariablesService(prisma);
+  const whatsappHelper = whatsapp.helper();
   const executions = new ExecutionService({
     prisma,
     nodeTypes,
@@ -142,7 +145,7 @@ export async function buildApp(
     push,
     config,
     logger: app.log,
-    whatsapp: whatsapp.helper(),
+    whatsapp: whatsappHelper,
     ...(queue ? { queue } : {}),
   });
   const activeWorkflows = new ActiveWorkflowManager(
@@ -187,7 +190,15 @@ export async function buildApp(
     defaultTimezone: config.DEFAULT_TIMEZONE,
   });
   calls.agent = agents.runCall;
-  calls.agentAvailable = (account) => agents.available(account);
+  calls.agentAvailable = (account, agentId) => agents.available(account, agentId);
+  whatsapp.onInbound = (account, message) => calls.handleInbound(account, message);
+  whatsappHelper.requestCallPermission = (accountId, to, text) =>
+    calls.requestPermission(accountId, to, text);
+  whatsappHelper.startAgentCall = async (accountId, to, options) => {
+    const { callId } = await calls.startOutbound({ accountId, to, handler: 'agent', ...options });
+    return { callId, status: 'calling' };
+  };
+  whatsapp.onCallStatus = (account, status) => calls.handleCallStatus(account, status);
   calls.summarize = agents.summarizeCall;
   const waitTracker = new WaitTracker(prisma, executions, app.log, options.waitTrackerIntervalMs);
 
@@ -208,7 +219,24 @@ export async function buildApp(
   app.decorate('startBackgroundServices', async () => {
     if (queue) {
       // Relay live events from workers to WebSocket clients.
-      await queue.subscribe({ onPush: (topics, event) => push.publish(topics, event) });
+      await queue.subscribe({
+        onPush: (topics, event) => push.publish(topics, event),
+        // Workflows running on workers: calls are made from here, where call audio lives.
+        onCommand: (command) => {
+          const run =
+            command.type === 'callPermission'
+              ? calls.requestPermission(command.accountId, command.to, command.text)
+              : command.type === 'startCall'
+                ? calls.startOutbound({ ...command, handler: 'agent' })
+                : null;
+          run?.catch((error: Error) =>
+            app.log.warn(
+              { err: error, command: command.type },
+              'Call request from a worker failed',
+            ),
+          );
+        },
+      });
     }
     await executions.recoverCrashed();
     await activeWorkflows.init();
@@ -252,6 +280,7 @@ export async function buildApp(
     }
   });
   await app.register(authRoutes, { rateLimit: config.AUTH_RATE_LIMIT });
+  await app.register(inviteRoutes, { rateLimit: config.AUTH_RATE_LIMIT });
   await app.register(pushRoutes);
   await app.register(oauthCallbackRoutes, { config });
   await app.register(webhookRoutes, { config });
@@ -276,6 +305,8 @@ export async function buildApp(
     await api.register(whatsappRoutes);
     await api.register(callRoutes);
     await api.register(agentRoutes);
+    await api.register(userRoutes, { publicUrl: config.PUBLIC_URL });
+    await api.register(dashboardRoutes, { defaultTimezone: config.DEFAULT_TIMEZONE });
   });
 
   // --- Editor (single page app) ---------------------------------------------

@@ -14,7 +14,11 @@ export interface ExecutionJobData {
   maxConcurrency?: number;
 }
 
-type Command = { type: 'cancel'; executionId: string };
+export type Command =
+  | { type: 'cancel'; executionId: string }
+  /** Workers ask the main process (which hosts call audio) to request permission or call. */
+  | { type: 'callPermission'; accountId: string; to: string; text?: string }
+  | { type: 'startCall'; accountId: string; to: string; agentId?: string | null; purpose: string };
 
 /**
  * Redis-backed pieces of queue mode:

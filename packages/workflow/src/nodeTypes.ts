@@ -76,6 +76,18 @@ export interface IWhatsAppHelper {
   ): Promise<{ id: string }>;
   downloadMedia(accountId: string, mediaId: string): Promise<IWhatsAppMedia>;
   listTemplates(accountId: string): Promise<IDataObject[]>;
+  /** Ask a customer for permission to call them (needed before business-initiated calls). */
+  requestCallPermission?(
+    accountId: string,
+    to: string,
+    text?: string,
+  ): Promise<{ alreadyGranted: boolean; messageId: string | null }>;
+  /** Have the AI voice agent call a customer who allowed calls. */
+  startAgentCall?(
+    accountId: string,
+    to: string,
+    options: { agentId?: string | null; purpose: string },
+  ): Promise<{ callId: string | null; status: 'calling' | 'queued' }>;
 }
 
 export interface IWebhookRequest {

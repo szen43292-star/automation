@@ -17,13 +17,17 @@ enum Role {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  name         String
-  passwordHash String
-  role         Role     @default(member)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id              String    @id @default(cuid())
+  email           String    @unique
+  name            String
+  passwordHash    String
+  role            Role      @default(member)
+  /// Invited users set their password with this one-time token (sha256 stored).
+  inviteTokenHash String?   @unique
+  inviteExpiresAt DateTime?
+  lastLoginAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   workflows        Workflow[]
   versions         WorkflowVersion[]
@@ -32,6 +36,21 @@ model User {
   whatsAppAccounts WhatsAppAccount[]
   answeredCalls    Call[]
   agents           Agent[]
+  apiKeys          ApiKey[]
+}
+
+/// Key for the public API: acts as its user (same role and access). Only a sha256 hash is stored.
+model ApiKey {
+  id         String    @id @default(cuid())
+  name       String
+  /// First characters, to recognise the key ("ff_AbCd…").
+  prefix     String
+  hash       String    @unique
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+  createdAt  DateTime  @default(now())
 }
 
 model Workflow {
@@ -229,8 +248,9 @@ model WhatsAppAccount {
   createdAt              DateTime              @default(now())
   updatedAt              DateTime              @updatedAt
 
-  messages WhatsAppMessage[]
-  calls    Call[]
+  messages        WhatsAppMessage[]
+  calls           Call[]
+  callPermissions CallPermission[]
 }
 
 enum WhatsAppDirection {
@@ -361,4 +381,26 @@ model KnowledgeDocument {
   updatedAt DateTime @updatedAt
 
   @@index([agentId])
+}
+
+enum CallPermissionStatus {
+  requested
+  granted
+  denied
+}
+
+/// A customer's permission for the business to call them on WhatsApp (needed for outbound calls).
+model CallPermission {
+  id          String               @id @default(cuid())
+  accountId   String
+  account     WhatsAppAccount      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  contact     String
+  status      CallPermissionStatus
+  permanent   Boolean              @default(false)
+  requestedAt DateTime?
+  respondedAt DateTime?
+  expiresAt   DateTime?
+  updatedAt   DateTime             @updatedAt
+
+  @@unique([accountId, contact])
 }

@@ -8,7 +8,10 @@ export interface EngineContext {
   session: CallMediaSession;
   /** Aborted when the call ends or a person takes over. */
   signal: AbortSignal;
-  greeting: string;
+  /** Fixed first sentence (incoming calls). */
+  greeting: string | null;
+  /** Instead of a greeting: let the model start (outbound calls), prompted with this text. */
+  opening: string | null;
   tools: AgentTool[];
   transcript(role: 'caller' | 'agent', text: string): void;
   /** end_call was requested: hang up once the goodbye is spoken. */
@@ -183,17 +186,22 @@ export async function runPipeline(
   let turnRunning = false;
   let failures = 0;
 
-  const respond = async (utterance: Int16Array) => {
+  /** A turn: the caller's utterance (or, for the opening, a prompt that is not in the transcript). */
+  const respond = async (input: Int16Array | { prompt: string }) => {
     turn?.abort();
     const controller = new AbortController();
     turn = controller;
     const turnSignal = AbortSignal.any([signal, controller.signal]);
     turnRunning = true;
     try {
-      const text = await speech.transcribe(utterance, turnSignal);
-      if (!text || turnSignal.aborted) return;
-      ctx.transcript('caller', text);
-      brain.addUser(text);
+      if (input instanceof Int16Array) {
+        const text = await speech.transcribe(input, turnSignal);
+        if (!text || turnSignal.aborted) return;
+        ctx.transcript('caller', text);
+        brain.addUser(text);
+      } else {
+        brain.addUser(input.prompt);
+      }
       const spoken: string[] = [];
       for (let step = 0; step < 5 && !turnSignal.aborted; step++) {
         const splitter = new SentenceSplitter();
@@ -257,10 +265,14 @@ export async function runPipeline(
   const off = session.onAudio((frame) => detector.push(frame));
 
   try {
-    const greeting = await speech.synthesize(ctx.greeting, signal);
-    if (!signal.aborted) {
-      void session.play(greeting);
-      ctx.transcript('agent', ctx.greeting);
+    if (ctx.greeting) {
+      const greeting = await speech.synthesize(ctx.greeting, signal);
+      if (!signal.aborted) {
+        void session.play(greeting);
+        ctx.transcript('agent', ctx.greeting);
+      }
+    } else if (ctx.opening) {
+      void respond({ prompt: ctx.opening });
     }
     await new Promise<void>((resolve) => {
       if (signal.aborted) resolve();

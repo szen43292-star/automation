@@ -185,6 +185,10 @@ export class WhatsAppService {
 
   /** Incoming call events (set by the call service). */
   onCalls?: (account: WhatsAppAccount, value: CloudChangeValue) => Promise<void>;
+  /** Every received message (the call service watches for call permission replies). */
+  onInbound?: (account: WhatsAppAccount, message: CloudMessage) => Promise<void>;
+  /** Call status updates (statuses with type "call"). */
+  onCallStatus?: (account: WhatsAppAccount, status: CloudStatus) => Promise<void>;
 
   /** The account row, or a 404 that explains the number is gone. */
   async row(id: string): Promise<WhatsAppAccount> {
@@ -644,7 +648,12 @@ export class WhatsAppService {
           if (await this.handleInbound(account, message, names.get(message.from))) handled++;
         }
         for (const status of change.value.statuses ?? []) {
-          if (await this.handleStatus(account, status)) handled++;
+          if (status.type === 'call') {
+            await this.onCallStatus?.(account, status).catch((error: unknown) =>
+              this.deps.logger.error({ err: error }, 'WhatsApp call status handling failed'),
+            );
+            handled++;
+          } else if (await this.handleStatus(account, status)) handled++;
         }
         await this.deps.prisma.whatsAppAccount.update({
           where: { id: account.id },
@@ -683,6 +692,9 @@ export class WhatsAppService {
       throw error;
     }
     this.publishMessage(row);
+    await this.onInbound?.(account, message).catch((error: unknown) =>
+      this.deps.logger.error({ err: error }, 'Inbound message hook failed'),
+    );
     await this.emit(
       {
         source: 'whatsapp',
@@ -751,6 +763,8 @@ export class WhatsAppService {
       reply?: { id: string; title: string; type: 'button' | 'list' };
       location?: { latitude: number; longitude: number; name?: string };
       media?: { data: Buffer; mimeType: string; fileName?: string; caption?: string };
+      /** Answer a call permission request. */
+      callPermission?: 'accept' | 'reject';
     },
   ) {
     const account = await this.row(accountId);
@@ -764,7 +778,18 @@ export class WhatsAppService {
       timestamp: String(Math.floor(Date.now() / 1000)),
       type: 'text',
     };
-    if (input.reply) {
+    if (input.callPermission) {
+      message.type = 'interactive';
+      message.interactive = {
+        type: 'call_permission_reply',
+        call_permission_reply: {
+          response: input.callPermission,
+          is_permanent: false,
+          expiration_timestamp: Math.floor(Date.now() / 1000) + 7 * 86_400,
+          response_source: 'user_action',
+        },
+      };
+    } else if (input.reply) {
       message.type = 'interactive';
       message.interactive =
         input.reply.type === 'list'

@@ -195,8 +195,10 @@ export class AgentService {
     return providersNeeded(agent.engine, readVoice(agent.voice)).filter((p) => !configured.has(p));
   }
 
-  async available(account: WhatsAppAccount): Promise<boolean> {
-    const agent = await this.agentFor(account);
+  async available(account: WhatsAppAccount, agentId?: string | null): Promise<boolean> {
+    const agent = agentId
+      ? await this.deps.prisma.agent.findUnique({ where: { id: agentId } })
+      : await this.agentFor(account);
     return Boolean(agent) && (await this.missingProviders(agent!)).length === 0;
   }
 
@@ -299,7 +301,14 @@ export class AgentService {
 
   instructions(
     agent: Agent,
-    context: { business: string; caller: string; timezone: string; testChat?: boolean },
+    context: {
+      business: string;
+      caller: string;
+      timezone: string;
+      testChat?: boolean;
+      /** Outbound call: why we called. */
+      purpose?: string | null;
+    },
   ) {
     const tools = readTools(agent.tools);
     const now = new Intl.DateTimeFormat('en-GB', {
@@ -313,7 +322,9 @@ export class AgentService {
         : '- You are on a live WhatsApp voice call. Your words are spoken aloud.',
       '- Keep every reply short: one to three sentences in natural spoken language. No lists, markdown, emojis or symbols; say numbers and prices the way people speak them.',
       `- You speak ${agent.languages.join(', ')}. Reply in the language the caller uses; if they mix Hindi and English (Hinglish), reply in Hinglish.`,
-      `- You already greeted the caller with: "${agent.greeting}"`,
+      context.purpose !== undefined && context.purpose !== null
+        ? '- You called the customer (they did not call you). Greet them by name if you know it, say who you are and why you are calling. If it is a bad time, offer to call back later and end the call politely.'
+        : `- You already greeted the caller with: "${agent.greeting}"`,
       '- Never invent prices, dates, availability or policies.',
     ];
     if (tools.knowledge)
@@ -335,6 +346,11 @@ export class AgentService {
       `\n# Business\n${context.business}`,
       `\n# Now\n${now} (${context.timezone})`,
       `\n# The caller\n${context.caller}`,
+      ...(context.purpose !== undefined && context.purpose !== null
+        ? [
+            `\n# Why you are calling\n${context.purpose || 'A friendly follow-up with the customer.'}`,
+          ]
+        : []),
     ].join('\n');
   }
 
@@ -352,7 +368,9 @@ export class AgentService {
   // ---- Calls --------------------------------------------------------------------------------------
 
   readonly runCall: CallAgent = async (call) => {
-    const agent = await this.agentFor(call.account);
+    const agent = call.outbound?.agentId
+      ? await this.deps.prisma.agent.findUnique({ where: { id: call.outbound.agentId } })
+      : await this.agentFor(call.account);
     if (!agent) throw new Error('No AI agent is set up for this number');
     await this.deps.prisma.call.update({ where: { id: call.callId }, data: { agentId: agent.id } });
     const voice = readVoice(agent.voice);
@@ -366,6 +384,7 @@ export class AgentService {
         call.callId,
       ),
       timezone,
+      purpose: call.outbound ? call.outbound.purpose : null,
     });
     const index = await this.index(agent.id);
     let endReason: string | null = null;
@@ -392,7 +411,10 @@ export class AgentService {
     const ctx: EngineContext = {
       session: call.session,
       signal: call.signal,
-      greeting: agent.greeting || call.settings.greetingText,
+      greeting: call.outbound ? null : agent.greeting || call.settings.greetingText,
+      opening: call.outbound
+        ? '(The customer just picked up your call. Start the conversation now.)'
+        : null,
       tools: buildTools(readTools(agent.tools), toolContext),
       transcript: call.transcript,
       endRequested: () => endReason !== null,

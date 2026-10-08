@@ -14,7 +14,10 @@ export interface ITriggerEvent {
  * An event matches when its name is in `events` and, for every `filter` key with values that the
  * event carries, its attribute is one of them (a message-type filter doesn't block status events).
  */
-export function matchesSubscription(subscription: IEventSubscription, event: ITriggerEvent): boolean {
+export function matchesSubscription(
+  subscription: IEventSubscription,
+  event: ITriggerEvent,
+): boolean {
   if (subscription.source !== event.source) return false;
   if (subscription.scope !== '*' && subscription.scope !== event.scope) return false;
   if (!subscription.events.includes(event.name)) return false;

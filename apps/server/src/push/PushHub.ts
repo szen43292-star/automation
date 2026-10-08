@@ -59,6 +59,18 @@ export type PushEvent =
   | { type: 'callTranscript'; data: { callId: string; role: 'caller' | 'agent'; text: string } }
   | { type: 'simulatedCallAction'; data: { waCallId: string; action: string } }
   | {
+      type: 'simulatedOutboundCall';
+      data: {
+        accountId: string;
+        waCallId: string;
+        to: string;
+        from: string;
+        businessName: string;
+        sdp: string;
+      };
+    }
+  | { type: 'callPermission'; data: { accountId: string; contact: string; status: string } }
+  | {
       type: 'callSummary';
       data: { callId: string; summary: string; contact: string; contactName: string | null };
     };

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Role, User } from '@prisma/client';
 import { z } from 'zod';
@@ -31,8 +32,38 @@ export const toAuthUser = (user: User): AuthUser => ({
   role: user.role,
 });
 
-/** onRequest hook: verifies the bearer token and loads the user. */
+const apiKeyUse = new Map<string, number>();
+
+/** API key from `X-API-Key: ff_…` or `Authorization: Bearer ff_…`. */
+function apiKeyOf(request: FastifyRequest): string | null {
+  const header = request.headers['x-api-key'];
+  if (typeof header === 'string' && header.startsWith('ff_')) return header;
+  const auth = request.headers.authorization;
+  if (auth?.startsWith('Bearer ff_')) return auth.slice(7);
+  return null;
+}
+
+/** onRequest hook: verifies the bearer token (or API key) and loads the user. */
 export async function authenticate(request: FastifyRequest, _reply: FastifyReply) {
+  const apiKey = apiKeyOf(request);
+  if (apiKey) {
+    const hash = createHash('sha256').update(apiKey).digest('hex');
+    const key = await request.server.prisma.apiKey.findUnique({
+      where: { hash },
+      include: { user: true },
+    });
+    if (!key || (key.expiresAt && key.expiresAt < new Date()))
+      throw unauthorized('This API key is invalid, revoked or expired');
+    // Record use at most once a minute per key.
+    if (Date.now() - (apiKeyUse.get(key.id) ?? 0) > 60_000) {
+      apiKeyUse.set(key.id, Date.now());
+      void request.server.prisma.apiKey
+        .update({ where: { id: key.id }, data: { lastUsedAt: new Date() } })
+        .catch(() => undefined);
+    }
+    request.currentUser = toAuthUser(key.user);
+    return;
+  }
   try {
     await request.jwtVerify();
   } catch {
@@ -49,7 +80,7 @@ export function requireRole(...roles: Role[]) {
   };
 }
 
-const passwordSchema = z
+export const passwordSchema = z
   .string()
   .min(8, 'Password must be at least 8 characters')
   .max(256)
@@ -106,6 +137,7 @@ export async function authRoutes(app: FastifyInstance, opts: { rateLimit: number
       ? await verifyPassword(body.password, user.passwordHash)
       : await verifyPassword(body.password, await dummyHash).then(() => false);
     if (!user || !valid) throw unauthorized('Wrong email or password');
+    await app.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
     return issue(user);
   });
 

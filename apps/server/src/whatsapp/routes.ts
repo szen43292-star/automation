@@ -109,6 +109,7 @@ const manualSchema = z.object({
 
 const simulateSchema = z.object({
   from: z.string().min(1).max(32),
+  callPermission: z.enum(['accept', 'reject']).optional(),
   name: z.string().max(100).optional(),
   text: z.string().max(4096).optional(),
   reply: z
@@ -377,6 +378,13 @@ export async function whatsappNodeOptions(
     return templates
       .filter((t) => t.status === 'APPROVED')
       .map((t) => ({ name: `${String(t.name)} · ${String(t.language)}`, value: String(t.name) }));
+  }
+  if (method === 'aiAgents') {
+    const agents = await app.prisma.agent.findMany({ orderBy: { createdAt: 'asc' } });
+    return [
+      { name: "The number's agent", value: '' },
+      ...agents.map((a) => ({ name: a.name, value: a.id })),
+    ];
   }
   return null;
 }

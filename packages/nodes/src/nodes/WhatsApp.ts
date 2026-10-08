@@ -11,6 +11,8 @@ import {
 const ICON = 'message-circle';
 const COLOR = '#25D366';
 
+const CALL_OPERATIONS = ['requestCallPermission', 'callWithAgent'];
+
 const SEND_OPERATIONS = [
   'sendText',
   'sendTemplate',
@@ -91,6 +93,16 @@ export const WhatsApp: INodeType = {
             value: 'downloadMedia',
             description: 'Get a received photo, voice note or file',
           },
+          {
+            name: 'Ask Permission to Call',
+            value: 'requestCallPermission',
+            description: 'The customer taps "Allow" to let you call them on WhatsApp',
+          },
+          {
+            name: 'Call with AI Agent',
+            value: 'callWithAgent',
+            description: 'The AI voice agent calls a customer who allowed calls',
+          },
         ],
       },
       {
@@ -102,7 +114,46 @@ export const WhatsApp: INodeType = {
         placeholder: 'e.g. +91 98765 43210',
         description:
           'Phone number with country code. With a WhatsApp Trigger, {{ $json.from }} replies to the sender.',
-        displayOptions: show(SEND_OPERATIONS),
+        displayOptions: show([...SEND_OPERATIONS, ...CALL_OPERATIONS]),
+      },
+      // Calls
+      {
+        displayName: 'Message',
+        name: 'permissionText',
+        type: 'string',
+        default: 'We would like to call you on WhatsApp about your appointment. Is that OK?',
+        typeOptions: { rows: 2 },
+        description: 'Shown with the "Allow" button. Permission lasts 7 days (or until revoked).',
+        displayOptions: show(['requestCallPermission']),
+      },
+      {
+        displayName: 'Agent',
+        name: 'agentId',
+        type: 'options',
+        default: '',
+        typeOptions: { loadOptionsMethod: 'aiAgents' },
+        displayOptions: show(['callWithAgent']),
+      },
+      {
+        displayName: 'Purpose of the Call',
+        name: 'purpose',
+        type: 'string',
+        default: '',
+        required: true,
+        typeOptions: { rows: 3 },
+        placeholder:
+          'Remind {{ $json.name }} of the appointment tomorrow at {{ $json.time }} and confirm they are coming.',
+        description:
+          'What the agent should do. The call result (transcript, summary) arrives in "call ended" workflows.',
+        displayOptions: show(['callWithAgent']),
+      },
+      {
+        displayName:
+          'The customer must have allowed calls first (Ask Permission to Call). Calls from workflows on test numbers ring in the simulator.',
+        name: 'callNotice',
+        type: 'notice',
+        default: '',
+        displayOptions: show(['callWithAgent']),
       },
       // Text
       {
@@ -500,6 +551,34 @@ export const WhatsApp: INodeType = {
             },
           );
         }
+        if (operation === 'requestCallPermission' || operation === 'callWithAgent') {
+          if (!whatsapp.requestCallPermission || !whatsapp.startAgentCall)
+            throw new NodeOperationError(node, 'Calls are not available here', { itemIndex: i });
+          if (operation === 'requestCallPermission') {
+            const result = await whatsapp.requestCallPermission(
+              accountId,
+              to,
+              this.getNodeParameter<string>('permissionText', i, ''),
+            );
+            out.push({
+              json: { to, ...result, status: result.alreadyGranted ? 'granted' : 'requested' },
+              pairedItem: { item: i },
+            });
+          } else {
+            const purpose = this.getNodeParameter<string>('purpose', i, '').trim();
+            if (!purpose)
+              throw new NodeOperationError(node, 'Describe the purpose of the call', {
+                itemIndex: i,
+              });
+            const result = await whatsapp.startAgentCall(accountId, to, {
+              agentId: this.getNodeParameter<string>('agentId', i, '') || null,
+              purpose,
+            });
+            out.push({ json: { to, purpose, ...result }, pairedItem: { item: i } });
+          }
+          continue;
+        }
+
         const options = this.getNodeParameter<IDataObject>('options', i, {});
         const message = await buildMessage.call(this, operation, i, options, accountId);
         if (options.replyTo && operation !== 'react')

@@ -47,12 +47,31 @@ export async function startWorker(
     push,
     logger,
   });
+  // Calls are hosted by the main server (call audio, webhooks): ask it over Redis.
+  const whatsappHelper = whatsapp.helper();
+  whatsappHelper.requestCallPermission = async (accountId, to, text) => {
+    queue.sendCommand({ type: 'callPermission', accountId, to, ...(text ? { text } : {}) });
+    return { alreadyGranted: false, messageId: null };
+  };
+  whatsappHelper.startAgentCall = async (accountId, to, options) => {
+    const contact = to.replace(/[^\d]/g, '');
+    const permission = await prisma.callPermission.findUnique({
+      where: { accountId_contact: { accountId, contact } },
+    });
+    if (
+      permission?.status !== 'granted' ||
+      (permission.expiresAt && permission.expiresAt < new Date())
+    )
+      throw new Error(`+${contact} has not allowed calls - send a call permission request first`);
+    queue.sendCommand({ type: 'startCall', accountId, to: contact, ...options });
+    return { callId: null, status: 'queued' };
+  };
   const executions = new ExecutionService({
     prisma,
     nodeTypes,
     workflows,
     credentials: new CredentialsService(prisma, cipher, new CredentialTypeRegistry()),
-    whatsapp: whatsapp.helper(),
+    whatsapp: whatsappHelper,
     variables: new VariablesService(prisma),
     push,
     config,

@@ -66,7 +66,9 @@ export async function runRealtime(
       send({
         type: 'response.create',
         response: {
-          instructions: `Greet the caller now by saying exactly: "${ctx.greeting}"`,
+          instructions: ctx.greeting
+            ? `Greet the caller now by saying exactly: "${ctx.greeting}"`
+            : (ctx.opening ?? 'Start the conversation.'),
         },
       });
     });

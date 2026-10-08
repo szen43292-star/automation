@@ -15,7 +15,7 @@ import {
 import type { IDataObject, ITriggerEvent } from '@flowforge/workflow';
 import type { PushPublisher } from '../executions/types';
 import { HttpError, badRequest, conflict } from '../lib/errors';
-import type { CloudCall, CloudChangeValue } from '../whatsapp/events';
+import type { CloudCall, CloudChangeValue, CloudMessage, CloudStatus } from '../whatsapp/events';
 import type { WhatsAppService } from '../whatsapp/WhatsAppService';
 import { chooseMode, readCallSettings, type CallMode, type CallSettings } from './settings';
 
@@ -77,6 +77,8 @@ export type CallAgent = (call: {
   transfer: () => Promise<boolean>;
   /** Aborted when the call ends or a person takes over. */
   signal: AbortSignal;
+  /** Business-initiated call: why we are calling, and which agent should talk. */
+  outbound: { purpose: string; agentId: string | null } | null;
 }) => Promise<void>;
 
 /** Writes the call summary from the transcript (Phase 5). */
@@ -109,6 +111,13 @@ interface ActiveCall {
   agentAbort?: AbortController;
   /** The AI agent is ringing a person (transfer): resolves true when someone picks up. */
   transferring?: (answered: boolean) => void;
+  /** Business-initiated call: who talks to the customer once they pick up. */
+  outbound?: {
+    handler: 'agent' | 'person';
+    agentId: string | null;
+    purpose: string;
+    userId?: string;
+  };
   transcript: Array<{ role: 'caller' | 'agent'; text: string; at: string }>;
   finished: boolean;
 }
@@ -136,7 +145,8 @@ export class CallService {
   /** The AI voice agent (Phase 5). */
   agent: CallAgent | null = null;
   /** Whether the AI agent can take calls for this number (an agent with working keys). */
-  agentAvailable: (account: WhatsAppAccount) => Promise<boolean> = async () => this.agent !== null;
+  agentAvailable: (account: WhatsAppAccount, agentId?: string | null) => Promise<boolean> =
+    async () => this.agent !== null;
   summarize: CallSummarizer | null = null;
 
   constructor(private readonly deps: CallServiceDeps) {}
@@ -295,7 +305,13 @@ export class CallService {
   }
 
   private async onConnect(account: WhatsAppAccount, event: CloudCall, contactName: string | null) {
-    if (this.byWaCallId.has(event.id)) return; // webhook retry
+    if (this.byWaCallId.has(event.id)) {
+      // Our outbound call was picked up (its SDP answer), or a webhook retry.
+      const active = this.active.get(this.byWaCallId.get(event.id)!);
+      if (active?.outbound && !active.accepted && event.session?.sdp)
+        await this.onOutboundAnswer(active, event.session.sdp);
+      return;
+    }
     const offer = event.session?.sdp;
     const settings = this.settingsOf(account);
     const row = await this.deps.prisma.call.create({
@@ -358,7 +374,8 @@ export class CallService {
     // Media is set up before the call is picked up, so the first words are not cut off.
     await this.callAction(account, event.id, 'pre_accept', answerSdp);
     if (mode === 'app') this.ring(active);
-    else await this.handleWith(active, mode);
+    // The conversation runs in the background (handleWith reports its own errors).
+    else void this.handleWith(active, mode);
   }
 
   private async onTerminate(event: CloudCall) {
@@ -380,9 +397,9 @@ export class CallService {
 
   // ---- Modes ------------------------------------------------------------------------------------
 
-  private async aiReady(account: WhatsAppAccount) {
+  private async aiReady(account: WhatsAppAccount, agentId?: string | null) {
     if (!this.agent) return false;
-    return this.agentAvailable(account).catch(() => false);
+    return this.agentAvailable(account, agentId).catch(() => false);
   }
 
   /** Ring everyone in the app; the fallback takes over if nobody answers in time. */
@@ -476,6 +493,9 @@ export class CallService {
     active.agentAbort = abort;
     await this.agent!({
       signal: abort.signal,
+      outbound: active.outbound
+        ? { purpose: active.outbound.purpose, agentId: active.outbound.agentId }
+        : null,
       callId: active.callId,
       account: active.account,
       contact: active.contact,
@@ -523,6 +543,272 @@ export class CallService {
         while (!done && !active.finished && !active.personLeg) await active.caller.play(ringback);
       };
       void loop();
+    });
+  }
+
+  // ---- Outbound calls (business-initiated) ------------------------------------------------------
+
+  /** Whether a customer allowed this number to call them. */
+  async permission(accountId: string, contact: string) {
+    const row = await this.deps.prisma.callPermission.findUnique({
+      where: { accountId_contact: { accountId, contact: contact.replace(/[^\d]/g, '') } },
+    });
+    if (!row) return { status: 'none' as const, expiresAt: null, requestedAt: null };
+    const expired = row.status === 'granted' && row.expiresAt && row.expiresAt < new Date();
+    return {
+      status: expired ? ('expired' as const) : row.status,
+      expiresAt: row.expiresAt?.toISOString() ?? null,
+      requestedAt: row.requestedAt?.toISOString() ?? null,
+      permanent: row.permanent,
+    };
+  }
+
+  /** Ask the customer (a WhatsApp message with Allow / Not now) for permission to call them. */
+  async requestPermission(accountId: string, to: string, text?: string) {
+    const contact = to.replace(/[^\d]/g, '');
+    if (contact.length < 7) throw badRequest('Enter the number with country code');
+    const current = await this.permission(accountId, contact);
+    if (current.status === 'granted') return { alreadyGranted: true, messageId: null };
+    const sent = await this.deps.whatsapp.send(accountId, contact, {
+      type: 'interactive',
+      interactive: {
+        type: 'call_permission_request',
+        action: { name: 'call_permission_request' },
+        body: { text: text?.trim() || 'We would like to call you on WhatsApp. Is that OK?' },
+      },
+    });
+    await this.deps.prisma.callPermission.upsert({
+      where: { accountId_contact: { accountId, contact } },
+      create: { accountId, contact, status: 'requested', requestedAt: new Date() },
+      update: { status: 'requested', requestedAt: new Date() },
+    });
+    return { alreadyGranted: false, messageId: sent.messageId };
+  }
+
+  /** Received messages: the customer's answer to a permission request. */
+  async handleInbound(account: WhatsAppAccount, message: CloudMessage) {
+    const reply = message.interactive?.call_permission_reply;
+    if (!reply) return;
+    const granted = reply.response === 'accept';
+    const expires = Number(reply.expiration_timestamp);
+    const data = {
+      status: granted ? ('granted' as const) : ('denied' as const),
+      permanent: Boolean(reply.is_permanent),
+      respondedAt: new Date(),
+      expiresAt:
+        granted && Number.isFinite(expires) && expires > 0 ? new Date(expires * 1000) : null,
+    };
+    await this.deps.prisma.callPermission.upsert({
+      where: { accountId_contact: { accountId: account.id, contact: message.from } },
+      create: { accountId: account.id, contact: message.from, ...data },
+      update: data,
+    });
+    this.deps.push.publish(['whatsapp'], {
+      type: 'callPermission',
+      data: { accountId: account.id, contact: message.from, status: data.status },
+    });
+  }
+
+  /**
+   * Call a customer. The AI agent talks (with a purpose, e.g. "remind them of tomorrow's
+   * appointment"), or the person in the app - whose browser sends `personSdp`.
+   */
+  async startOutbound(input: {
+    accountId: string;
+    to: string;
+    handler: 'agent' | 'person';
+    agentId?: string | null;
+    purpose?: string;
+    personSdp?: string;
+    userId?: string;
+  }): Promise<{ callId: string; waCallId: string; sdp?: string }> {
+    const account = await this.deps.whatsapp.row(input.accountId);
+    const contact = input.to.replace(/[^\d]/g, '');
+    if (contact.length < 7) throw badRequest('Enter the number with country code');
+    const permission = await this.permission(account.id, contact);
+    if (permission.status !== 'granted') {
+      throw new HttpError(
+        409,
+        permission.status === 'requested'
+          ? 'The customer has not answered your call permission request yet'
+          : 'The customer has not allowed calls - send them a call permission request first',
+        'CallPermissionRequired',
+        { permission },
+      );
+    }
+    if (input.handler === 'person' && !input.personSdp)
+      throw badRequest('Your audio (sdp) is missing');
+    if (input.handler === 'agent' && !(await this.aiReady(account, input.agentId)))
+      throw badRequest('The AI agent is not ready - create an agent and add AI provider keys');
+
+    const named = await this.deps.prisma.whatsAppMessage.findFirst({
+      where: { accountId: account.id, contact, contactName: { not: null } },
+      orderBy: { timestamp: 'desc' },
+      select: { contactName: true },
+    });
+    const caller = new CallMediaSession(this.deps.media);
+    let personLeg: CallMediaSession | undefined;
+    let personAnswer: string | undefined;
+    let waCallId: string;
+    try {
+      const offer = await caller.offer();
+      if (input.handler === 'person') {
+        personLeg = new CallMediaSession(this.deps.media);
+        personAnswer = await personLeg.answer(input.personSdp!);
+      }
+      if (account.mode === 'simulator') {
+        waCallId = `wacid.SIM${randomBytes(10).toString('hex').toUpperCase()}`;
+        this.deps.push.publish(['whatsapp'], {
+          type: 'simulatedOutboundCall',
+          data: {
+            accountId: account.id,
+            waCallId,
+            to: contact,
+            from: account.displayPhoneNumber,
+            businessName: account.verifiedName ?? account.name,
+            sdp: offer,
+          },
+        });
+      } else {
+        const result = await this.deps.whatsapp.graphRequest<{ calls?: Array<{ id: string }> }>(
+          account,
+          {
+            method: 'POST',
+            path: `/${account.phoneNumberId}/calls`,
+            json: {
+              messaging_product: 'whatsapp',
+              to: contact,
+              action: 'connect',
+              session: { sdp_type: 'offer', sdp: offer },
+            },
+          },
+        );
+        const id = result.calls?.[0]?.id;
+        if (!id) throw new Error('WhatsApp did not start the call');
+        waCallId = id;
+      }
+    } catch (error) {
+      await Promise.all([caller.close(), personLeg?.close()]);
+      throw error;
+    }
+
+    const purpose = input.purpose?.trim() ?? '';
+    const row = await this.deps.prisma.call.create({
+      data: {
+        accountId: account.id,
+        waCallId,
+        direction: 'outbound',
+        contact,
+        contactName: named?.contactName ?? null,
+        status: 'ringing',
+        answeredById: input.handler === 'person' ? (input.userId ?? null) : null,
+        metadata: { purpose, handler: input.handler },
+      },
+    });
+    const active: ActiveCall = {
+      callId: row.id,
+      waCallId,
+      account,
+      contact,
+      contactName: named?.contactName ?? null,
+      settings: this.settingsOf(account),
+      mode: input.handler === 'agent' ? 'ai' : 'app',
+      caller,
+      answerSdp: '',
+      accepted: false,
+      transcript: [],
+      finished: false,
+      personLeg,
+      outbound: {
+        handler: input.handler,
+        agentId: input.agentId ?? null,
+        purpose,
+        ...(input.userId ? { userId: input.userId } : {}),
+      },
+    };
+    this.active.set(row.id, active);
+    this.byWaCallId.set(waCallId, row.id);
+    caller.onState((state) => {
+      if (state === 'failed') void this.finish(active, 'failed', 'Call audio connection failed');
+    });
+    personLeg?.onState((state) => {
+      if (state === 'failed' || state === 'closed')
+        void this.hangupActive(active, 'You left the call');
+    });
+    active.ringTimer = setTimeout(() => void this.hangupActive(active, 'No answer'), 45_000);
+    active.ringTimer.unref();
+    this.publish(row);
+    await this.emit('call_started', account, row);
+    return { callId: row.id, waCallId, ...(personAnswer ? { sdp: personAnswer } : {}) };
+  }
+
+  /** The customer picked up our call. */
+  private async onOutboundAnswer(active: ActiveCall, sdp: string) {
+    if (active.ringTimer) clearTimeout(active.ringTimer);
+    active.ringTimer = undefined;
+    try {
+      await active.caller.acceptAnswer(sdp);
+      await active.caller.connected(15_000);
+      active.accepted = true; // business-initiated: nothing to accept at Meta
+      if (active.outbound!.handler === 'person' && active.personLeg) {
+        await active.personLeg.connected(15_000);
+        await this.accept(active, 'person', active.outbound!.userId);
+        active.unbridge = active.caller.bridge(active.personLeg);
+        if (active.recorder) {
+          const recorder = active.recorder;
+          active.personLeg.onAudio((frame) => recorder.agent(frame));
+        }
+        this.deps.push.publish(['whatsapp'], {
+          type: 'callAnswered',
+          data: { callId: active.callId, userId: active.outbound!.userId ?? '' },
+        });
+      } else {
+        void this.handleWith(active, 'ai');
+      }
+    } catch (error) {
+      this.deps.logger.error({ err: error, callId: active.callId }, 'Outbound call failed');
+      await this.hangupActive(active, `Call failed: ${(error as Error).message}`);
+    }
+  }
+
+  /** Call status updates: the customer declined, or it is ringing. */
+  async handleCallStatus(_account: WhatsAppAccount, status: CloudStatus) {
+    const callId = this.byWaCallId.get(status.id);
+    const active = callId ? this.active.get(callId) : undefined;
+    if (!active) return;
+    const value = status.status.toLowerCase();
+    if (value === 'rejected' && !active.accepted)
+      await this.finish(active, 'rejected', 'Declined by the customer');
+  }
+
+  async simulateOutboundAnswer(accountId: string, waCallId: string, sdp: string) {
+    const account = await this.deps.whatsapp.row(accountId);
+    const active = this.active.get(this.byWaCallId.get(waCallId) ?? '');
+    if (!active) throw new HttpError(404, 'This call has ended', 'NotFound');
+    await this.handleWebhook(account, {
+      metadata: { phone_number_id: account.phoneNumberId },
+      calls: [
+        {
+          id: waCallId,
+          from: account.displayPhoneNumber.replace(/[^\d]/g, ''),
+          to: active.contact,
+          event: 'connect',
+          timestamp: String(Math.floor(Date.now() / 1000)),
+          direction: 'BUSINESS_INITIATED',
+          session: { sdp_type: 'answer', sdp },
+        },
+      ],
+    });
+  }
+
+  async simulateOutboundDecline(accountId: string, waCallId: string) {
+    const account = await this.deps.whatsapp.row(accountId);
+    await this.handleCallStatus(account, {
+      id: waCallId,
+      type: 'call',
+      status: 'REJECTED',
+      timestamp: String(Math.floor(Date.now() / 1000)),
+      recipient_id: '',
     });
   }
 
