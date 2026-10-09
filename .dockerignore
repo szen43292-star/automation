@@ -1,0 +1,15 @@
+# Vercel builds the server container from the repository root (see flowforge/docker/Dockerfile.vercel).
+.git
+apps-download
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/build
+**/.env
+**/.env.*
+**/test-results
+**/playwright-report
+**/data
+flowforge/apps/desktop/release
+flowforge/apps/mobile/android/.gradle
