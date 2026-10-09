@@ -8,10 +8,10 @@ on:
   push:
     branches: ['**']
     paths:
-      - 'apps/mobile/**'
-      - 'apps/editor/**'
-      - 'packages/workflow/**'
-      - 'pnpm-lock.yaml'
+      - 'flowforge/apps/mobile/**'
+      - 'flowforge/apps/editor/**'
+      - 'flowforge/packages/workflow/**'
+      - 'flowforge/pnpm-lock.yaml'
       - '.github/workflows/mobile.yml'
   workflow_dispatch:
   workflow_call:
@@ -31,6 +31,11 @@ concurrency:
 permissions:
   contents: read
 
+# The project lives in flowforge/.
+defaults:
+  run:
+    working-directory: flowforge
+
 jobs:
   android:
     name: Android APK
@@ -39,10 +44,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: flowforge/package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
+          cache-dependency-path: flowforge/pnpm-lock.yaml
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -65,7 +73,7 @@ jobs:
         run: pnpm --filter @flowforge/mobile web && pnpm --filter @flowforge/mobile exec cap sync android
 
       - name: Signing key and Firebase config (optional secrets)
-        working-directory: apps/mobile/android
+        working-directory: flowforge/apps/mobile/android
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -91,7 +99,7 @@ jobs:
           fi
 
       - name: Build the APK
-        working-directory: apps/mobile/android
+        working-directory: flowforge/apps/mobile/android
         env:
           MOBILE_VERSION: ${{ steps.version.outputs.version }}
           MOBILE_VERSION_CODE: ${{ steps.version.outputs.code }}
@@ -107,7 +115,7 @@ jobs:
         with:
           name: FlowForge-Android-${{ steps.version.outputs.version }}
           retention-days: 14
-          path: apps/mobile/release/FlowForge.apk
+          path: flowforge/apps/mobile/release/FlowForge.apk
 
   ios:
     name: iPhone IPA
@@ -118,10 +126,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: flowforge/package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
+          cache-dependency-path: flowforge/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
 
       - name: Version
@@ -175,7 +186,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Build the IPA
-        working-directory: apps/mobile/ios/App
+        working-directory: flowforge/apps/mobile/ios/App
         env:
           VERSION: ${{ steps.version.outputs.version }}
           SIGNED: ${{ steps.sign.outputs.signed }}
@@ -215,4 +226,4 @@ jobs:
         with:
           name: FlowForge-iOS-${{ steps.version.outputs.version }}
           retention-days: 14
-          path: apps/mobile/release/FlowForge.ipa
+          path: flowforge/apps/mobile/release/FlowForge.ipa

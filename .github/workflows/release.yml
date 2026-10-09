@@ -93,7 +93,7 @@ jobs:
               echo "- **iPhone:** FlowForge.ipa - unsigned, install with AltStore or Sideloadly"
             fi
           } >> "$notes_file"
-          node apps/desktop/scripts/release-manifest.mjs --version "$VERSION" --dir release --notes-file "$notes_file"
+          node flowforge/apps/desktop/scripts/release-manifest.mjs --version "$VERSION" --dir release --notes-file "$notes_file"
           cp "$notes_file" release/notes.md
           ls -la release
 

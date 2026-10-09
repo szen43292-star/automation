@@ -7,11 +7,11 @@ on:
   push:
     branches: ['**']
     paths:
-      - 'apps/desktop/**'
-      - 'apps/server/**'
-      - 'apps/editor/**'
-      - 'packages/**'
-      - 'pnpm-lock.yaml'
+      - 'flowforge/apps/desktop/**'
+      - 'flowforge/apps/server/**'
+      - 'flowforge/apps/editor/**'
+      - 'flowforge/packages/**'
+      - 'flowforge/pnpm-lock.yaml'
       - '.github/workflows/desktop.yml'
   workflow_dispatch:
   workflow_call:
@@ -27,6 +27,11 @@ concurrency:
 permissions:
   contents: read
 
+# The project lives in flowforge/.
+defaults:
+  run:
+    working-directory: flowforge
+
 jobs:
   windows:
     name: Build, test and package (Windows x64)
@@ -37,10 +42,13 @@ jobs:
         with:
           fetch-depth: 0
       - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: flowforge/package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
+          cache-dependency-path: flowforge/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
 
       - name: Version
@@ -86,7 +94,7 @@ jobs:
         run: node apps/desktop/dist/smoke.cjs
 
       - name: Build the installer
-        working-directory: apps/desktop
+        working-directory: flowforge/apps/desktop
         env:
           RELEASES_PRIVATE: ${{ github.event.repository.private }}
         run: pnpm exec electron-builder --config electron-builder.config.cjs --win nsis --publish never
@@ -130,8 +138,8 @@ jobs:
           name: FlowForge-Windows-${{ steps.version.outputs.version }}
           retention-days: 14
           path: |
-            apps/desktop/release/FlowForge-Setup.exe
-            apps/desktop/release/FlowForge-Setup.exe.blockmap
-            apps/desktop/release/latest.yml
-            apps/desktop/release/release.json
-            apps/desktop/release/SHA256SUMS.txt
+            flowforge/apps/desktop/release/FlowForge-Setup.exe
+            flowforge/apps/desktop/release/FlowForge-Setup.exe.blockmap
+            flowforge/apps/desktop/release/latest.yml
+            flowforge/apps/desktop/release/release.json
+            flowforge/apps/desktop/release/SHA256SUMS.txt

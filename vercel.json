@@ -2,40 +2,106 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "services": {
     "website": {
-      "root": "apps/website",
+      "root": "flowforge/apps/website",
       "framework": "nextjs",
       "installCommand": "cd ../.. && ELECTRON_SKIP_BINARY_DOWNLOAD=1 pnpm install --frozen-lockfile --filter \"@flowforge/website...\"",
       "buildCommand": "pnpm build"
     },
     "editor": {
-      "root": "apps/editor",
+      "root": "flowforge/apps/editor",
       "framework": "vite",
       "installCommand": "cd ../.. && ELECTRON_SKIP_BINARY_DOWNLOAD=1 pnpm install --frozen-lockfile --filter \"@flowforge/editor...\"",
       "buildCommand": "FLOWFORGE_BASE=/app/ pnpm exec vite build --outDir dist/app --emptyOutDir",
       "outputDirectory": "dist",
       "rewrites": [
-        { "source": "/app", "destination": "/app/index.html" },
-        { "source": "/app/((?!assets/|favicon).*)", "destination": "/app/index.html" }
+        {
+          "source": "/app",
+          "destination": "/app/index.html"
+        },
+        {
+          "source": "/app/((?!assets/|favicon).*)",
+          "destination": "/app/index.html"
+        }
       ]
     },
     "server": {
-      "root": ".",
+      "root": "flowforge",
       "runtime": "container",
       "entrypoint": "docker/Dockerfile.vercel"
     }
   },
   "rewrites": [
-    { "source": "/api/releases/(.*)", "destination": { "service": "website" } },
-    { "source": "/api/(.*)", "destination": { "service": "server" } },
-    { "source": "/webhook/(.*)", "destination": { "service": "server" } },
-    { "source": "/webhook-test/(.*)", "destination": { "service": "server" } },
-    { "source": "/webhook-waiting/(.*)", "destination": { "service": "server" } },
-    { "source": "/webhooks/(.*)", "destination": { "service": "server" } },
-    { "source": "/rest/(.*)", "destination": { "service": "server" } },
-    { "source": "/healthz", "destination": { "service": "server" } },
-    { "source": "/readyz", "destination": { "service": "server" } },
-    { "source": "/app", "destination": { "service": "editor" } },
-    { "source": "/app/(.*)", "destination": { "service": "editor" } },
-    { "source": "/(.*)", "destination": { "service": "website" } }
+    {
+      "source": "/api/releases/(.*)",
+      "destination": {
+        "service": "website"
+      }
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": {
+        "service": "server"
+      }
+    },
+    {
+      "source": "/webhook/(.*)",
+      "destination": {
+        "service": "server"
+      }
+    },
+    {
+      "source": "/webhook-test/(.*)",
+      "destination": {
+        "service": "server"
+      }
+    },
+    {
+      "source": "/webhook-waiting/(.*)",
+      "destination": {
+        "service": "server"
+      }
+    },
+    {
+      "source": "/webhooks/(.*)",
+      "destination": {
+        "service": "server"
+      }
+    },
+    {
+      "source": "/rest/(.*)",
+      "destination": {
+        "service": "server"
+      }
+    },
+    {
+      "source": "/healthz",
+      "destination": {
+        "service": "server"
+      }
+    },
+    {
+      "source": "/readyz",
+      "destination": {
+        "service": "server"
+      }
+    },
+    {
+      "source": "/app",
+      "destination": {
+        "service": "editor"
+      }
+    },
+    {
+      "source": "/app/(.*)",
+      "destination": {
+        "service": "editor"
+      }
+    },
+    {
+      "source": "/(.*)",
+      "destination": {
+        "service": "website"
+      }
+    }
   ]
 }

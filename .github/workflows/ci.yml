@@ -13,6 +13,11 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# The project lives in flowforge/.
+defaults:
+  run:
+    working-directory: flowforge
+
 jobs:
   test:
     name: Typecheck & tests
@@ -36,10 +41,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: flowforge/package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
+          cache-dependency-path: flowforge/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm test
@@ -65,10 +73,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: flowforge/package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
+          cache-dependency-path: flowforge/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @flowforge/editor build && pnpm --filter @flowforge/server build
       - run: pnpm --filter @flowforge/server db:deploy
@@ -94,6 +105,6 @@ jobs:
         with:
           name: e2e-report
           path: |
-            e2e/playwright-report
-            e2e/test-results
-            server.log
+            flowforge/e2e/playwright-report
+            flowforge/e2e/test-results
+            flowforge/server.log
