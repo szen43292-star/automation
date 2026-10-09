@@ -341,7 +341,7 @@ Import the repository on Vercel and press **Deploy**. The `vercel.json` at the r
 | --------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `website` | `apps/website` (Next.js)               | `/` (landing, `/download`, `/admin`, `/api/releases/*`)                                                                             |
 | `editor`  | `apps/editor` (Vite)                   | `/app` - the FlowForge app (workflows, WhatsApp, calls, agents)                                                                     |
-| `server`  | `docker/Dockerfile.vercel` (container) | `/api/*`, `/webhook/*`, `/webhook-test/*`, `/webhook-waiting/*`, `/webhooks/*` (WhatsApp), `/rest/*` (OAuth), `/healthz`, `/readyz` |
+| `server`  | `Dockerfile.vercel` (container) | `/api/*`, `/webhook/*`, `/webhook-test/*`, `/webhook-waiting/*`, `/webhooks/*` (WhatsApp), `/rest/*` (OAuth), `/healthz`, `/readyz` |
 
 The editor calls the server from the browser on the same domain, so there is no CORS setup and no
 server URL to enter.

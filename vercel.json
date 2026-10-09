@@ -27,7 +27,7 @@
     "server": {
       "root": "flowforge",
       "runtime": "container",
-      "entrypoint": "docker/Dockerfile.vercel"
+      "entrypoint": "Dockerfile.vercel"
     }
   },
   "rewrites": [
