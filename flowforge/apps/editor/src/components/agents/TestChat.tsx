@@ -25,7 +25,11 @@ export function TestChat({
   const [model, setModel] = useState('');
   const bottom = useRef<HTMLDivElement>(null);
 
-  useEffect(() => bottom.current?.scrollIntoView({ block: 'end' }), [lines, busy]);
+  // No implicit return: newer browsers return a Promise from scrollIntoView, which React would
+  // treat as the effect's cleanup.
+  useEffect(() => {
+    bottom.current?.scrollIntoView({ block: 'end' });
+  }, [lines, busy]);
 
   const send = async () => {
     const message = text.trim();

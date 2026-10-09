@@ -234,7 +234,9 @@ function Thread({
   const bottom = useRef<HTMLDivElement>(null);
   const rows = useMemo(() => messages.data?.data ?? [], [messages.data]);
 
-  useEffect(() => bottom.current?.scrollIntoView({ block: 'end' }), [rows.length]);
+  useEffect(() => {
+    bottom.current?.scrollIntoView({ block: 'end' }); // returns a Promise in newer browsers
+  }, [rows.length]);
 
   const asCustomer = async (body: Parameters<typeof endpoints.simulateWhatsapp>[1]) => {
     try {
