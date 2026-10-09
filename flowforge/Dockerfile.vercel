@@ -9,10 +9,12 @@ RUN corepack enable && corepack prepare pnpm@10.28.0 --activate \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /repo
 COPY . .
-# Vercel builds from the repository root, where the project is the flowforge/ folder; a build
-# from inside flowforge/ works too. --fail-if-no-match stops the build if the folder is wrong.
+# This file sits at the top of the server service (vercel.json → services.server.root), where
+# Vercel expects it, so the build sees the whole flowforge/ folder. A build from the repository
+# root works too. --fail-if-no-match stops the build if the folder is wrong.
 RUN set -e; \
  if [ -f flowforge/package.json ]; then cd flowforge; fi; \
+ echo "Build context: $(pwd)"; ls -a; \
  pnpm install --frozen-lockfile --filter "@flowforge/server..." --fail-if-no-match; \
  pnpm --filter "@flowforge/server..." --fail-if-no-match build; \
  pnpm --filter @flowforge/server --fail-if-no-match deploy --prod --legacy /out; \

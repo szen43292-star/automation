@@ -1,4 +1,4 @@
-# Vercel builds the server container from the repository root (see flowforge/docker/Dockerfile.vercel).
+# Vercel builds the server container from the repository root (see flowforge/Dockerfile.vercel).
 .git
 apps-download
 **/node_modules
