@@ -1,0 +1,13 @@
+**/node_modules
+**/dist
+**/.turbo
+**/.env
+**/.env.*
+**/test-results
+**/playwright-report
+.git
+**/.next
+**/build
+apps/desktop/release
+apps/mobile/android/.gradle
+apps/mobile/ios/App/build

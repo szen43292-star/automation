@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">FlowForge</string>
+    <string name="title_activity_main">FlowForge</string>
+    <string name="package_name">com.flowforge.app</string>
+    <string name="custom_url_scheme">com.flowforge.app</string>
+</resources>

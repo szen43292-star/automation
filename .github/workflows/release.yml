@@ -1,0 +1,113 @@
+name: Release
+
+# One release with every app: the Windows installer (.exe), the Android app (.apk) and the iPhone
+# app (.ipa), plus release.json for the download website and latest.yml for Windows auto-update.
+# Start it from Actions → Release → Run workflow (or the website's admin page), or push a v* tag.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version, e.g. 0.3.0'
+        required: true
+      notes:
+        description: 'Release notes (Markdown). Empty = list of commits since the last release'
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - id: v
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then version="${GITHUB_REF_NAME#v}"; else version="${INPUT_VERSION#v}"; fi
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::Version must look like 1.2.3 (got '$version')"; exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  windows:
+    needs: version
+    uses: ./.github/workflows/desktop.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+    secrets: inherit
+
+  phones:
+    needs: version
+    uses: ./.github/workflows/mobile.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+    secrets: inherit
+
+  publish:
+    name: Publish GitHub Release
+    needs: [version, windows, phones]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: FlowForge-*-${{ needs.version.outputs.version }}
+          path: release
+          merge-multiple: true
+
+      - name: Release notes and manifest
+        env:
+          INPUT_NOTES: ${{ inputs.notes }}
+          IOS_SIGNED: ${{ needs.phones.outputs.ios-signed }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          notes_file="$RUNNER_TEMP/notes.md"
+          if [[ -n "$INPUT_NOTES" ]]; then
+            printf '%s\n' "$INPUT_NOTES" > "$notes_file"
+          else
+            previous="$(git describe --tags --abbrev=0 --match 'v*' HEAD^ 2>/dev/null || true)"
+            range="${previous:+$previous..}HEAD"
+            { echo "### Changes"; git log --no-merges --pretty='- %s' $range | head -40; } > "$notes_file"
+          fi
+          {
+            echo
+            echo "### Install"
+            echo "- **Windows:** FlowForge-Setup.exe"
+            echo "- **Android:** FlowForge.apk (allow installing apps from your browser)"
+            if [[ "$IOS_SIGNED" == "true" ]]; then
+              echo "- **iPhone:** FlowForge.ipa (devices in your Apple developer account)"
+            else
+              echo "- **iPhone:** FlowForge.ipa - unsigned, install with AltStore or Sideloadly"
+            fi
+          } >> "$notes_file"
+          node flowforge/apps/desktop/scripts/release-manifest.mjs --version "$VERSION" --dir release --notes-file "$notes_file"
+          cp "$notes_file" release/notes.md
+          ls -la release
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        working-directory: release
+        run: |
+          tag="v$VERSION"
+          files=(FlowForge-Setup.exe FlowForge-Setup.exe.blockmap latest.yml FlowForge.apk FlowForge.ipa release.json SHA256SUMS.txt)
+          present=(); for f in "${files[@]}"; do [[ -f "$f" ]] && present+=("$f"); done
+          if gh release view "$tag" > /dev/null 2>&1; then
+            gh release upload "$tag" "${present[@]}" --clobber
+          else
+            gh release create "$tag" --target "$GITHUB_SHA" --title "FlowForge $VERSION" --notes-file notes.md --latest "${present[@]}"
+          fi

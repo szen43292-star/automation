@@ -1,0 +1,421 @@
+// FlowForge database schema (PostgreSQL)
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  owner
+  admin
+  member
+}
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  name            String
+  passwordHash    String
+  role            Role      @default(member)
+  /// Invited users set their password with this one-time token (sha256 stored).
+  inviteTokenHash String?   @unique
+  inviteExpiresAt DateTime?
+  lastLoginAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  workflows        Workflow[]
+  versions         WorkflowVersion[]
+  executions       Execution[]
+  credentials      Credential[]
+  whatsAppAccounts WhatsAppAccount[]
+  answeredCalls    Call[]
+  agents           Agent[]
+  apiKeys          ApiKey[]
+  devices          Device[]
+}
+
+/// A phone with the FlowForge app, registered for push notifications (Firebase Cloud Messaging).
+model Device {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token      String   @unique
+  /// android | ios
+  platform   String
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+/// Key for the public API: acts as its user (same role and access). Only a sha256 hash is stored.
+model ApiKey {
+  id         String    @id @default(cuid())
+  name       String
+  /// First characters, to recognise the key ("ff_AbCd…").
+  prefix     String
+  hash       String    @unique
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+  createdAt  DateTime  @default(now())
+}
+
+model Workflow {
+  id          String   @id @default(cuid())
+  name        String
+  active      Boolean  @default(false)
+  /// INode[]
+  nodes       Json     @default("[]")
+  /// IConnection[]
+  connections Json     @default("[]")
+  /// IWorkflowSettings
+  settings    Json     @default("{}")
+  /// IPinData
+  pinData     Json?
+  /// Changes on every save; used for optimistic concurrency + history.
+  versionId   String
+  ownerId     String
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  executions Execution[]
+  versions   WorkflowVersion[]
+  webhooks   WebhookEntity[]
+
+  @@index([ownerId])
+  @@index([updatedAt])
+}
+
+model WorkflowVersion {
+  id          String   @id @default(cuid())
+  versionId   String   @unique
+  workflowId  String
+  workflow    Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  name        String
+  nodes       Json
+  connections Json
+  settings    Json
+  authorId    String?
+  author      User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  @@index([workflowId, createdAt])
+}
+
+enum ExecutionStatus {
+  new
+  running
+  success
+  error
+  canceled
+  crashed
+  waiting
+}
+
+enum ExecutionMode {
+  manual
+  trigger
+  webhook
+  retry
+  internal
+  error
+}
+
+model Execution {
+  id                String          @id @default(cuid())
+  workflowId        String
+  workflow          Workflow        @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  status            ExecutionStatus @default(new)
+  mode              ExecutionMode
+  startedAt         DateTime?
+  stoppedAt         DateTime?
+  createdAt         DateTime        @default(now())
+  /// Execution this one retried.
+  retryOfId         String?
+  /// Successful retry of this execution.
+  retrySuccessId    String?
+  lastNodeExecuted  String?
+  errorMessage      String?
+  /// Waiting executions resume at this time (Wait node).
+  waitTill          DateTime?
+  /// Sub-workflow executions point at the execution that called them.
+  parentExecutionId String?
+  triggeredById     String?
+  triggeredBy       User?           @relation(fields: [triggeredById], references: [id], onDelete: SetNull)
+  data              ExecutionData?
+
+  @@index([workflowId, createdAt(sort: Desc)])
+  @@index([status])
+  @@index([createdAt(sort: Desc)])
+  @@index([status, waitTill])
+}
+
+/// Large payloads kept apart so execution lists stay fast.
+model ExecutionData {
+  executionId  String    @id
+  execution    Execution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  /// Snapshot of the workflow as it was executed.
+  workflowData Json
+  /// IRunExecutionData
+  data         Json
+  /// How to start a queued execution (start node, trigger items, resume data, …).
+  startData    Json?
+}
+
+/// Encrypted credentials (AES-256-GCM). `data` never leaves the server unencrypted
+/// except to the execution engine.
+model Credential {
+  id        String   @id @default(cuid())
+  name      String
+  type      String
+  data      String
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
+  @@index([type])
+}
+
+/// Instance-wide variables available as $vars.<key>.
+model Variable {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Production webhooks of active workflows.
+model WebhookEntity {
+  id         String   @id @default(cuid())
+  workflowId String
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  nodeId     String
+  method     String
+  path       String
+  createdAt  DateTime @default(now())
+
+  @@unique([method, path])
+  @@index([workflowId])
+}
+
+/// Instance settings (e.g. the WhatsApp platform config). Secret values are stored encrypted.
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+enum WhatsAppAccountMode {
+  /// A real number on the WhatsApp Business Cloud API.
+  cloud
+  /// A built-in test number: nothing is sent to Meta; messages are simulated in the app.
+  simulator
+}
+
+enum WhatsAppAccountStatus {
+  connected
+  error
+  disconnected
+}
+
+/// A WhatsApp Business phone number connected to this instance.
+model WhatsAppAccount {
+  id                     String                @id @default(cuid())
+  name                   String
+  mode                   WhatsAppAccountMode   @default(cloud)
+  /// embedded_signup | manual | simulator
+  connectedVia           String
+  wabaId                 String?
+  phoneNumberId          String                @unique
+  displayPhoneNumber     String
+  verifiedName           String?
+  qualityRating          String?
+  nameStatus             String?
+  codeVerificationStatus String?
+  messagingLimit         String?
+  /// Encrypted JSON { accessToken, pin } - cloud accounts only, never sent to the browser.
+  secrets                String?
+  webhookSubscribed      Boolean               @default(false)
+  status                 WhatsAppAccountStatus @default(connected)
+  lastError              String?
+  lastEventAt            DateTime?
+  createdById            String?
+  createdBy              User?                 @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  /// How incoming calls are handled (CallSettings JSON); null = calling not set up.
+  callSettings           Json?
+  /// Calling switched on for this number at Meta.
+  callingEnabled         Boolean               @default(false)
+  /// The AI voice agent that answers calls to this number (call mode "ai").
+  agentId                String?
+  agent                  Agent?                @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+
+  messages        WhatsAppMessage[]
+  calls           Call[]
+  callPermissions CallPermission[]
+}
+
+enum WhatsAppDirection {
+  inbound
+  outbound
+}
+
+enum WhatsAppMessageStatus {
+  received
+  sent
+  delivered
+  read
+  failed
+}
+
+/// Messages sent and received, with delivery status updates from the webhook.
+model WhatsAppMessage {
+  id          String                @id @default(cuid())
+  accountId   String
+  account     WhatsAppAccount       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  /// Meta's message id (wamid…).
+  waMessageId String?               @unique
+  direction   WhatsAppDirection
+  /// The customer's WhatsApp id (phone number in international format, digits only).
+  contact     String
+  contactName String?
+  type        String
+  /// Text, caption or chosen reply - for lists and previews.
+  text        String?
+  payload     Json
+  status      WhatsAppMessageStatus
+  error       Json?
+  timestamp   DateTime
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  @@index([accountId, contact, timestamp])
+  @@index([accountId, timestamp])
+}
+
+enum CallDirection {
+  inbound
+  outbound
+}
+
+enum CallStatus {
+  ringing
+  answered
+  ended
+  missed
+  rejected
+  failed
+}
+
+/// A WhatsApp voice call (call log).
+model Call {
+  id              String          @id @default(cuid())
+  accountId       String
+  account         WhatsAppAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  /// Meta's call id.
+  waCallId        String?         @unique
+  direction       CallDirection
+  /// The customer's WhatsApp id (digits).
+  contact         String
+  contactName     String?
+  status          CallStatus      @default(ringing)
+  /// person | voicemail | ai | rejected | none
+  handledBy       String?
+  answeredById    String?
+  answeredBy      User?           @relation(fields: [answeredById], references: [id], onDelete: SetNull)
+  startedAt       DateTime        @default(now())
+  answeredAt      DateTime?
+  endedAt         DateTime?
+  durationSeconds Int?
+  endReason       String?
+  /// Relative path of the WAV recording in the data folder.
+  recordingPath   String?
+  recordingBytes  Int?
+  /// [{ role: 'caller' | 'agent', text, at }]
+  transcript      Json?
+  summary         String?
+  metadata        Json?
+  /// The AI agent that talked to the caller.
+  agentId         String?
+  agent           Agent?          @relation(fields: [agentId], references: [id], onDelete: SetNull)
+
+  @@index([accountId, startedAt(sort: Desc)])
+  @@index([startedAt(sort: Desc)])
+  @@index([status])
+}
+
+/// An AI voice agent: answers WhatsApp calls 24/7 with a persona, knowledge and tools.
+model Agent {
+  id           String   @id @default(cuid())
+  name         String
+  /// Who the agent is and how it should behave (the persona).
+  instructions String
+  /// What the agent says first on every call.
+  greeting     String
+  /// Languages the agent speaks, e.g. ["English", "Hindi", "Hinglish"].
+  languages    String[]
+  /// realtime (speech-to-speech model) | pipeline (speech-to-text → LLM → text-to-speech)
+  engine       String   @default("realtime")
+  /// Models and voice (AgentVoice JSON).
+  voice        Json
+  /// Built-in tools switched on and workflows the agent can run (AgentTools JSON).
+  tools        Json
+  /// What happens after a call: summary, WhatsApp note to the owner (AgentNotify JSON).
+  notify       Json
+  createdById  String?
+  createdBy    User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  documents KnowledgeDocument[]
+  accounts  WhatsAppAccount[]
+  calls     Call[]
+}
+
+/// Knowledge the agent can look up during calls (prices, opening hours, FAQs...).
+model KnowledgeDocument {
+  id        String   @id @default(cuid())
+  agentId   String
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  title     String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([agentId])
+}
+
+enum CallPermissionStatus {
+  requested
+  granted
+  denied
+}
+
+/// A customer's permission for the business to call them on WhatsApp (needed for outbound calls).
+model CallPermission {
+  id          String               @id @default(cuid())
+  accountId   String
+  account     WhatsAppAccount      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  contact     String
+  status      CallPermissionStatus
+  permanent   Boolean              @default(false)
+  requestedAt DateTime?
+  respondedAt DateTime?
+  expiresAt   DateTime?
+  updatedAt   DateTime             @updatedAt
+
+  @@unique([accountId, contact])
+}

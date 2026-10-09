@@ -1,0 +1,27 @@
+{
+  "name": "@flowforge/mobile",
+  "version": "0.2.0",
+  "private": true,
+  "description": "FlowForge for Android and iOS: answer calls, chat, see your dashboard and agents - connected to your FlowForge server",
+  "type": "module",
+  "scripts": {
+    "web": "node scripts/build-web.mjs",
+    "sync": "node scripts/build-web.mjs && cap sync",
+    "android:debug": "node scripts/build-web.mjs && cap sync android && cd android && ./gradlew assembleDebug",
+    "android:release": "node scripts/build-web.mjs && cap sync android && cd android && ./gradlew assembleRelease",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.5.3",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/core": "8.5.3",
+    "@capacitor/ios": "8.5.3",
+    "@capacitor/push-notifications": "8.1.3",
+    "@capacitor/status-bar": "8.0.4"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.3",
+    "vitest": "^3.2.4"
+  }
+}
