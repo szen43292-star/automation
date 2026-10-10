@@ -610,6 +610,21 @@ describe('receiving and replying', () => {
 });
 
 describe('test numbers (simulator) - no Meta account or keys', () => {
+  it('every test number gets its own phone number', async () => {
+    const numbers = new Set<string>();
+    for (let i = 0; i < 40; i++) {
+      const sim = await app.inject({
+        method: 'POST',
+        url: '/api/whatsapp/accounts/simulator',
+        headers: H(),
+        payload: { name: `Test ${i}` },
+      });
+      expect(sim.statusCode).toBe(201);
+      numbers.add(sim.json().displayPhoneNumber);
+    }
+    expect(numbers.size).toBe(40);
+  });
+
   it('runs the whole conversation: message → buttons → tapped reply, with receipts', async () => {
     const sim = await app.inject({
       method: 'POST',
