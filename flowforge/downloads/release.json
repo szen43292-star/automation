@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "name": "FlowForge",
+  "version": "0.3.0",
+  "tag": "v0.3.0",
+  "publishedAt": "2026-10-09T16:18:59.643Z",
+  "repo": "szen43292-star/automation",
+  "notes": "### Changes\n- Editor: fix crash on chat pages in newer Chrome\n- Move the whole project into flowforge/\n- Deploy on Vercel as one project with three services\n- Vercel: import the repository and the download website deploys with no settings\n- Phases 7-8: Android and iPhone apps, phone notifications, one release for all apps, release admin\n- Phase 6 (editor): dashboard, templates, team & API keys, calling customers\n- Phase 6 (backend): team & roles, API keys, dashboard, templates, outbound calls\n- Phase 5 (editor): AI agents page - persona builder, voice & models, knowledge, tools, test chat\n- Phase 5 (backend): AI voice agent that answers WhatsApp calls 24/7\n- Phase 4 (editor): answer WhatsApp calls in the app, call settings, call log with recordings\n- Phase 4 (backend): WhatsApp voice calls - WebRTC media, call modes, recordings, call log\n- Private builds: keys from GitHub secrets built into the app, private-repo updates and downloads\n- Phase 3 (editor): WhatsApp page with setup checklist, connect options and simulator chat\n- Phase 3 (backend): WhatsApp Business - numbers, webhook, simulator, triggers and the WhatsApp node\n- Installer: stop bundled processes with 64-bit PowerShell and WMI\n- Docs for the Windows app and download website; filtered Vercel install for the website\n- Remove stray Redis dump file and ignore it\n- Restore desktop package.json; retry test DB reset on deadlock\n- Download website (Next.js) and installer install-folder fix\n- Windows app: Electron shell with bundled server, editor and PostgreSQL; NSIS installer CI\n- Phase 2 (editor + deploy): expression editor, credentials, webhooks, Switch outputs, queue worker service\n- Phase 2 (backend): JS expressions in isolated-vm, new nodes, credentials vault, webhooks, schedules, queue workers\n- Phase 1: workflow editor, Docker self-hosting, CI and docs\n- Phase 1: monorepo, workflow engine, core nodes, API server\n- Initial commit\n\n### Install\n- **Windows:** FlowForge-Setup.exe\n- **Android:** FlowForge.apk (allow installing apps from your browser)\n- **iPhone:** FlowForge.ipa - unsigned, install with AltStore or Sideloadly",
+  "downloads": [
+    {
+      "file": "FlowForge-Setup.exe",
+      "platform": "windows",
+      "arch": "x64",
+      "kind": "installer",
+      "label": "Windows installer (.exe)",
+      "requirements": "Windows 10 or 11, 64-bit",
+      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.0/FlowForge-Setup.exe",
+      "size": 234612905,
+      "sha256": "0e22831ea394b4e5bbad7789b872a19049e59ac27a7dd100eac14effca55ccca"
+    },
+    {
+      "file": "FlowForge.apk",
+      "platform": "android",
+      "arch": "universal",
+      "kind": "app",
+      "label": "Android app (.apk)",
+      "requirements": "Android 7 or newer - allow \"Install unknown apps\" for your browser",
+      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.0/FlowForge.apk",
+      "size": 4948262,
+      "sha256": "7bf8a477a0ba5b23b6175ce92eb8f87c6fcfd1dee2452d1b5e42a9ff304de734"
+    },
+    {
+      "file": "FlowForge.ipa",
+      "platform": "ios",
+      "arch": "arm64",
+      "kind": "app",
+      "label": "iPhone app (.ipa)",
+      "requirements": "iOS 15 or newer - unsigned: install with AltStore or Sideloadly using your Apple ID",
+      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.0/FlowForge.ipa",
+      "size": 1147821,
+      "sha256": "e9e058e87d0c67ef7d6bb6f69b525b47d60f00e22353f261ae3e5a9a895b7afc"
+    }
+  ]
+}
