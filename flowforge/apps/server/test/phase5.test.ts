@@ -423,7 +423,7 @@ describe('agents', () => {
 });
 
 describe('Groq', () => {
-  it('runs the agent and speech-to-text with a Groq key and Groq models', async () => {
+  it('uses the models the key can actually use: no model names to type', async () => {
     const providers = await setKeys({ groq: 'gsk_groq-key-4321' });
     expect(providers.find((p) => p.id === 'groq')).toMatchObject({
       configured: true,
@@ -435,18 +435,37 @@ describe('Groq', () => {
     expect(options.llmProviders).toContain('groq');
     expect(options.sttProviders).toContain('groq');
 
-    const agent = await createAgent({ engine: 'pipeline', voice: { llm: { provider: 'groq' } } });
-    const res = await app.inject({
-      method: 'POST',
-      url: `/api/agents/${agent.id}/chat`,
+    // The editor lists what the key has (chat models only) and what "automatic" picks.
+    const listed = await app.inject({
+      method: 'GET',
+      url: '/api/ai/models?provider=groq&purpose=llm',
       headers: H(),
-      payload: { messages: [{ role: 'caller', text: 'What does a haircut cost?' }] },
     });
-    expect(res.statusCode, res.body).toBe(200);
-    expect(res.json().model).toBe('groq/llama-3.3-70b-versatile');
-    const chat = fake.requests.find((r) => r.path === '/v1/chat/completions')!;
-    expect(chat.headers.authorization).toBe('Bearer gsk_groq-key-4321');
-    expect(chat.body.model).toBe('llama-3.3-70b-versatile');
+    expect(listed.json()).toEqual({
+      data: ['llama-3.1-8b-instant', 'openai/gpt-oss-120b'],
+      automatic: 'openai/gpt-oss-120b',
+    });
+
+    // This key has no llama-3.3-70b-versatile (the default): the best model it has is used,
+    // also when an agent names a model the key cannot use.
+    for (const model of ['', 'llama-3.3-70b-versatile']) {
+      const agent = await createAgent({
+        engine: 'pipeline',
+        voice: { llm: { provider: 'groq', model } },
+      });
+      fake.requests.length = 0;
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/agents/${agent.id}/chat`,
+        headers: H(),
+        payload: { messages: [{ role: 'caller', text: 'What does a haircut cost?' }] },
+      });
+      expect(res.statusCode, res.body).toBe(200);
+      expect(res.json().model).toBe('groq/openai/gpt-oss-120b');
+      const chat = fake.requests.find((r) => r.path === '/v1/chat/completions')!;
+      expect(chat.headers.authorization).toBe('Bearer gsk_groq-key-4321');
+      expect(chat.body.model).toBe('openai/gpt-oss-120b');
+    }
 
     const { transcribe } = await import('../src/agent/speech');
     const { agentVoiceSchema } = await import('../src/agent/config');

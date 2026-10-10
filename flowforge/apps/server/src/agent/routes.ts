@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireRole } from '../auth/auth';
+import { pickModel, suitable } from '../ai/models';
 import { PROVIDERS } from '../ai/providers';
 import { HttpError, parse } from '../lib/errors';
 import {
@@ -40,6 +41,25 @@ export async function agentRoutes(app: FastifyInstance) {
     );
     await aiProviders.save(body);
     return { data: await aiProviders.status() };
+  });
+
+  /** The models a provider's key can use, and the one picked automatically (empty model). */
+  app.get('/api/ai/models', async (request) => {
+    const query = parse(
+      z.object({ provider: z.enum(PROVIDERS), purpose: z.enum(['llm', 'stt']) }),
+      request.query,
+    );
+    const available = await aiProviders.models(query.provider);
+    const fallback =
+      query.purpose === 'llm'
+        ? DEFAULT_MODELS.llm[query.provider as keyof typeof DEFAULT_MODELS.llm]
+        : DEFAULT_MODELS.stt[query.provider as keyof typeof DEFAULT_MODELS.stt];
+    return {
+      data: (available ?? []).filter((m) => suitable(query.purpose, m)).sort(),
+      automatic: fallback
+        ? pickModel(query.purpose, query.provider, available, '', fallback)
+        : null,
+    };
   });
 
   // ---- Agents -------------------------------------------------------------------------------------

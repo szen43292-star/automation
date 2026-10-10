@@ -544,7 +544,7 @@ export class AgentService {
     return {
       reply: replies.join(' '),
       actions,
-      model: `${model.provider}/${llmModel(model.provider, model.model)}`,
+      model: `${model.provider}/${await llmModel(this.deps.providers, model.provider, model.model)}`,
     };
   }
 }

@@ -4,6 +4,7 @@ import type {
   BetaMessageParam,
   BetaToolResultBlockParam,
 } from '@anthropic-ai/sdk/resources/beta/messages/messages';
+import { chooseModel } from '../ai/models';
 import type { AiProviders, ProviderAccess } from '../ai/providers';
 import { DEFAULT_MODELS, type LlmProvider } from './config';
 import type { AgentTool } from './tools';
@@ -372,8 +373,9 @@ export class ChatCompletionsBrain implements Brain {
 
 // ---- Factory and one-shot completions ---------------------------------------------------------------
 
-export const llmModel = (provider: LlmProvider, model: string) =>
-  model.trim() || DEFAULT_MODELS.llm[provider];
+/** The model to run: the agent's choice when the key has it, else the best one it has. */
+export const llmModel = (providers: AiProviders, provider: LlmProvider, model: string) =>
+  chooseModel(providers, provider, 'llm', model, DEFAULT_MODELS.llm[provider]);
 
 export async function createBrain(
   providers: AiProviders,
@@ -381,7 +383,7 @@ export async function createBrain(
   system: string,
   tools: AgentTool[],
 ): Promise<Brain> {
-  const model = llmModel(config.provider, config.model);
+  const model = await llmModel(providers, config.provider, config.model);
   if (config.provider === 'anthropic')
     return new ClaudeBrain(await providers.require('anthropic'), model, system, tools);
   return new ChatCompletionsBrain(
@@ -403,7 +405,7 @@ export async function complete(
   system: string,
   prompt: string,
 ): Promise<string> {
-  const model = llmModel(config.provider, config.model);
+  const model = await llmModel(providers, config.provider, config.model);
   if (config.provider === 'anthropic') {
     const access = await providers.require('anthropic');
     const client = new Anthropic({ apiKey: access.apiKey, baseURL: access.baseUrl, maxRetries: 2 });

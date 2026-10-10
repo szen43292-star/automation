@@ -497,11 +497,12 @@ function VoiceTab({ draft, set, options }: TabProps & { options: AgentOptions })
                 </select>
               </Field>
               <Field label="Model">
-                <input
-                  className="ff-input"
-                  placeholder={options.defaultModels.stt[voice.stt.provider]}
+                <ModelInput
+                  provider={voice.stt.provider}
+                  purpose="stt"
+                  fallback={options.defaultModels.stt[voice.stt.provider]}
                   value={voice.stt.model}
-                  onChange={(e) => setVoice({ stt: { ...voice.stt, model: e.target.value } })}
+                  onChange={(model) => setVoice({ stt: { ...voice.stt, model } })}
                 />
               </Field>
             </div>
@@ -528,11 +529,12 @@ function VoiceTab({ draft, set, options }: TabProps & { options: AgentOptions })
                 </select>
               </Field>
               <Field label="Model">
-                <input
-                  className="ff-input"
-                  placeholder={options.defaultModels.llm[voice.llm.provider]}
+                <ModelInput
+                  provider={voice.llm.provider}
+                  purpose="llm"
+                  fallback={options.defaultModels.llm[voice.llm.provider]}
                   value={voice.llm.model}
-                  onChange={(e) => setVoice({ llm: { ...voice.llm, model: e.target.value } })}
+                  onChange={(model) => setVoice({ llm: { ...voice.llm, model } })}
                 />
               </Field>
             </div>
@@ -997,5 +999,54 @@ function AfterTab({ draft, set, agent }: TabProps & { agent: AgentDetail }) {
         )}
       </Section>
     </>
+  );
+}
+
+/**
+ * A model name, or empty for automatic: the server then uses the best model the provider's key
+ * can use. Suggests the models the key actually has.
+ */
+function ModelInput({
+  provider,
+  purpose,
+  fallback,
+  value,
+  onChange,
+}: {
+  provider: string;
+  purpose: 'llm' | 'stt';
+  fallback: string;
+  value: string;
+  onChange: (model: string) => void;
+}) {
+  const models = useQuery({
+    queryKey: ['ai', 'models', provider, purpose],
+    queryFn: () => endpoints.aiModels(provider, purpose),
+    staleTime: 5 * 60_000,
+  });
+  const automatic = models.data?.automatic ?? fallback;
+  const listId = `models-${purpose}-${provider}`;
+  const missing = Boolean(value && models.data?.data.length && !models.data.data.includes(value));
+  return (
+    <div>
+      <input
+        className="ff-input"
+        list={listId}
+        placeholder={`Automatic (${automatic})`}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        data-testid={`model-${purpose}`}
+      />
+      <datalist id={listId}>
+        {models.data?.data.map((model) => (
+          <option key={model} value={model} />
+        ))}
+      </datalist>
+      {missing && (
+        <p className="mt-1 text-xs text-muted">
+          Your key cannot use this model - {automatic} is used instead.
+        </p>
+      )}
+    </div>
   );
 }
