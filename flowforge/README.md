@@ -337,10 +337,10 @@ pnpm --filter @flowforge/e2e test:e2e   # 19 browser tests, incl. the phone layo
 Import the repository on Vercel and press **Deploy**. The `vercel.json` at the repository root (next to this folder) defines three
 [services](https://vercel.com/docs/services) on one domain:
 
-| Service   | Code                                   | Public paths                                                                                                                        |
-| --------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `website` | `apps/website` (Next.js)               | `/` (landing, `/download`, `/admin`, `/api/releases/*`)                                                                             |
-| `editor`  | `apps/editor` (Vite)                   | `/app` - the FlowForge app (workflows, WhatsApp, calls, agents)                                                                     |
+| Service   | Code                            | Public paths                                                                                                                        |
+| --------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `website` | `apps/website` (Next.js)        | `/` (landing, `/download`, `/admin`, `/api/releases/*`)                                                                             |
+| `editor`  | `apps/editor` (Vite)            | `/app` - the FlowForge app (workflows, WhatsApp, calls, agents)                                                                     |
 | `server`  | `Dockerfile.vercel` (container) | `/api/*`, `/webhook/*`, `/webhook-test/*`, `/webhook-waiting/*`, `/webhooks/*` (WhatsApp), `/rest/*` (OAuth), `/healthz`, `/readyz` |
 
 The editor calls the server from the browser on the same domain, so there is no CORS setup and no
@@ -452,33 +452,43 @@ For your own private use, the app can carry your keys, so nothing has to be type
 
 A Next.js site with a landing page and a download page. The download page:
 
-- Detects the visitor's OS. Windows gets the button; macOS/Linux/Android/iOS visitors get a note that their platform is coming.
+- Detects the visitor's device and offers the right app first: Windows, Android or iPhone.
 - Shows version, date, size and **SHA-256** (copy button plus the PowerShell command to verify it).
 - Shows release notes, install steps, a SmartScreen explanation, an FAQ and a QR code.
 - Supports dark and light themes.
 
-**It needs no API keys or secrets.**
+**It needs no API keys, tokens or settings - also for a private repository.**
 
-- Release data comes from `https://github.com/<repo>/releases/latest/download/release.json`. This is a plain public file download, not the GitHub API, so there is no token and no rate limit. If it's missing, the site falls back to the public releases API.
-- Pages are static and re-check every 5 minutes, so a new release shows up on its own.
-- `GET /api/releases/latest` returns the release as JSON. `/download/windows` always redirects to the newest installer.
-- Before the first public release, the button explains that the release is on its way.
+- **The apps are part of the website.** After every release, the _Website downloads_ workflow
+  (`.github/workflows/website-downloads.yml`) commits the APK, the IPA and the Windows installer
+  (in parts under 100 MB, GitHub's file limit) to `flowforge/downloads/`. The website build
+  (`apps/website/scripts/bundle-downloads.mjs`) joins them, checks each file's SHA-256 and serves
+  them at `/downloads/FlowForge.apk`, `/downloads/FlowForge.ipa` and `/downloads/FlowForge-Setup.exe`.
+- `/download/windows`, `/download/android` and `/download/ios` always point at the newest app.
+  `GET /api/releases/latest` returns the release as JSON.
+- Apps the site does not carry come from GitHub Releases (public repositories need nothing;
+  private ones can add `RELEASES_GITHUB_TOKEN`).
+- Before the first release, the button says to run _Actions → Release_.
+
+**Your keys stay safe:** a Windows installer built with your keys (the secrets above) is **not**
+put on the public site. To include it anyway, protect the site with `SITE_PASSWORD` in Vercel,
+then set the repository variable `PUBLISH_PRIVATE_EXE` to `true` (_Settings → Secrets and
+variables → Actions → Variables_). The phone apps never contain keys.
 
 **Deploy on Vercel - just import the repository:**
 
 1. _Add New → Project_, import this repository and press **Deploy**. Change nothing: the root
    `vercel.json` serves the website at `/` (see [Vercel: one project, three services](#vercel-one-project-three-services)).
-2. The site finds its releases in the repository it was deployed from (Vercel tells it which).
-3. **Private repository** (yours): add these in _Settings → Environment Variables_, then redeploy:
-   - `RELEASES_GITHUB_TOKEN` - a fine-grained GitHub token for this repository with
-     _Contents: read_ (add _Actions: read & write_ to start releases from `/admin`). The site
-     keeps it on the server and hands out short-lived download links.
-   - `SITE_PASSWORD` - recommended: the installers contain your keys.
-   - `ADMIN_PASSWORD` - turns on `/admin` (builds, releases, download counts, **Build and publish**).
-4. Until the first release exists, the download button says what is missing.
+2. Run _Actions → Release → Run workflow_ on GitHub (or press **Build and publish** on `/admin`).
+   About 20 minutes later the apps are on `/download`. For a release made earlier, run
+   _Actions → Website downloads_.
+3. Optional, in _Settings → Environment Variables_:
+   - `SITE_PASSWORD` - a password for the whole site.
+   - `ADMIN_PASSWORD` - turns on `/admin` (builds, releases, download counts, **Build and publish**;
+     needs `RELEASES_GITHUB_TOKEN` with _Actions: read & write_).
 
-Optional: `FLOWFORGE_RELEASES_REPO=owner/name` (read releases from another repository) or
-`RELEASE_MANIFEST_URL` (a `release.json` hosted anywhere). Vercel deploys the `main` branch.
+Each release adds its apps (about 230 MB) to the repository's history. Vercel deploys the `main`
+branch.
 
 **Develop and test locally:**
 
