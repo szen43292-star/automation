@@ -3,7 +3,10 @@ name: CI
 on:
   push:
     branches: [main]
+    # The apps the release copies in for the website (website-downloads.yml) need no tests.
+    paths-ignore: ['flowforge/downloads/**']
   pull_request:
+    paths-ignore: ['flowforge/downloads/**']
 
 env:
   # The Linux jobs only typecheck/test the desktop app; the Windows build lives in desktop.yml.

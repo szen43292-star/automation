@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import {
   APP_PLATFORMS,
   ASSETS,
+  bundledRelease,
   getLatestRelease,
   githubToken,
   platformDownload,
@@ -20,12 +21,15 @@ const NAMES: Record<AppPlatform, string> = {
 };
 
 /** Short, permanent links to the newest apps: /download/windows, /download/android, /download/ios */
-export async function GET(_request: Request, context: { params: Promise<{ platform: string }> }) {
+export async function GET(request: Request, context: { params: Promise<{ platform: string }> }) {
   const { platform } = await context.params;
   if (!(APP_PLATFORMS as readonly string[]).includes(platform)) {
     return NextResponse.json({ error: 'NotFound', message: 'Unknown platform' }, { status: 404 });
   }
   const app = platform as AppPlatform;
+  // Built into this site: a plain file next to the pages.
+  const bundled = platformDownload(bundledRelease(), app);
+  if (bundled) return NextResponse.redirect(new URL(bundled.url, request.url), 302);
   if (githubToken()) {
     // Private repository: hand out a short-lived signed link instead of the token.
     const signed = await signedAssetUrl(ASSETS[app].file).catch(() => null);

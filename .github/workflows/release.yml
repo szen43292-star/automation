@@ -111,3 +111,11 @@ jobs:
           else
             gh release create "$tag" --target "$GITHUB_SHA" --title "FlowForge $VERSION" --notes-file notes.md --latest "${present[@]}"
           fi
+
+  website:
+    name: Website downloads
+    needs: [version, publish]
+    uses: ./.github/workflows/website-downloads.yml
+    with:
+      tag: v${{ needs.version.outputs.version }}
+    secrets: inherit

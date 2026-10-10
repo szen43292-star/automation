@@ -13,3 +13,4 @@ apps-download
 **/data
 flowforge/apps/desktop/release
 flowforge/apps/mobile/android/.gradle
+flowforge/downloads

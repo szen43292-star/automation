@@ -5,7 +5,7 @@
   "description": "FlowForge website: landing page and Windows download page (no API keys - reads public GitHub Releases)",
   "scripts": {
     "dev": "next dev --port 3000",
-    "build": "next build",
+    "build": "node scripts/bundle-downloads.mjs && next build",
     "start": "next start --port 3000",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"

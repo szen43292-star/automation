@@ -1,11 +1,13 @@
 import { z } from 'zod';
 
 /**
- * Release data comes from public GitHub Releases - no token, no API key:
- *  1. release.json, attached to every release by the "Windows app" workflow, downloaded from
+ * Where the apps come from, first match wins - none of them needs a setting:
+ *  1. The apps bundled into this site (public/downloads, see scripts/bundle-downloads.mjs): the
+ *     release workflow commits them to the repository, so even a private repository works.
+ *  2. A private repository with RELEASES_GITHUB_TOKEN: the releases API, through the server.
+ *  3. Public GitHub Releases: release.json from
  *     https://github.com/<repo>/releases/latest/download/release.json (a plain file, not the API,
- *     so there is no rate limit). It has sizes and SHA-256 checksums.
- *  2. If that file is missing, the public releases API (unauthenticated) for the basic facts.
+ *     so there is no rate limit), else the public releases API for the basic facts.
  */
 
 export const DEFAULT_REPO = 'szen43292-star/automation';
@@ -201,7 +203,30 @@ async function privateRelease(
   };
 }
 
+/** The apps built into this site (set at build time from public/downloads/release.json). */
+export function bundledRelease(): Release | null {
+  const raw = process.env.FLOWFORGE_BUNDLED_RELEASE;
+  if (!raw) return null;
+  try {
+    const parsed = releaseSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getLatestRelease(fetcher: Fetcher = fetch): Promise<Release | null> {
+  const bundled = bundledRelease();
+  if (bundled && APP_PLATFORMS.every((platform) => platformDownload(bundled, platform)))
+    return bundled;
+  const remote = await remoteRelease(fetcher);
+  if (!bundled || !remote) return bundled ?? remote;
+  // Apps the site does not carry (e.g. a Windows installer with keys built in) come from GitHub.
+  const missing = remote.downloads.filter((d) => !platformDownload(bundled, d.platform));
+  return { ...bundled, downloads: [...bundled.downloads, ...missing] };
+}
+
+async function remoteRelease(fetcher: Fetcher): Promise<Release | null> {
   const repo = releasesRepo();
   const token = githubToken();
   if (token && !process.env.RELEASE_MANIFEST_URL) {
@@ -293,7 +318,5 @@ export function formatDate(iso: string): string {
 /** Shown instead of the download button when no release could be read: what to do about it. */
 export function setupHint(release: Release | null): string | null {
   if (release) return null;
-  if (!githubToken())
-    return 'Private repository? Add RELEASES_GITHUB_TOKEN in Vercel (Settings → Environment Variables), then redeploy. Otherwise run Actions → Release on GitHub to publish the apps.';
-  return 'No release yet: run Actions → Release on GitHub (or open /admin) to build and publish the apps.';
+  return 'No apps yet: run Actions → Release on GitHub. The Windows, Android and iPhone apps are then added to this site by themselves (about 20 minutes).';
 }

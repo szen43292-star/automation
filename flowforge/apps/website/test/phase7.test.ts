@@ -167,8 +167,6 @@ describe('zero-config Vercel deploy', () => {
     vi.stubEnv('VERCEL_GIT_PROVIDER', 'gitlab');
     expect(releasesRepo()).not.toBe('someone/my-flowforge');
 
-    expect(setupHint(null)).toContain('RELEASES_GITHUB_TOKEN');
-    vi.stubEnv('RELEASES_GITHUB_TOKEN', 'github_pat_x');
     expect(setupHint(null)).toContain('Actions → Release');
   });
 });

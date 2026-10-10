@@ -1,0 +1,110 @@
+name: Website downloads
+
+# Copies a release's apps into the repository (flowforge/downloads), so the website on Vercel
+# serves them itself: import the repository on Vercel and the download page works, with no token
+# and no settings - also for a private repository. Runs after every release (release.yml);
+# start it by hand (Actions → Website downloads → Run workflow) for a release made earlier.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag, e.g. v0.3.0 (empty = the latest release)'
+        required: false
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: website-downloads
+  cancel-in-progress: false
+
+jobs:
+  copy:
+    name: Copy the apps into the website
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Download the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/release"
+          gh release download ${TAG:+"$TAG"} --repo "$GITHUB_REPOSITORY" --dir "$RUNNER_TEMP/release" \
+            --pattern release.json --pattern FlowForge.apk --pattern FlowForge.ipa --pattern FlowForge-Setup.exe
+          ls -la "$RUNNER_TEMP/release"
+
+      - name: Copy into flowforge/downloads
+        env:
+          # A private build has your keys inside the Windows installer. It then stays off the
+          # public website unless the repository variable PUBLISH_PRIVATE_EXE is "true" (protect
+          # the site with SITE_PASSWORD in Vercel first). The phone apps never contain keys.
+          HAS_KEYS: >-
+            ${{ secrets.META_APP_SECRET != '' || secrets.WHATSAPP_WEBHOOK_VERIFY_TOKEN != '' ||
+            secrets.OPENAI_API_KEY != '' || secrets.DEEPGRAM_API_KEY != '' ||
+            secrets.ELEVENLABS_API_KEY != '' || secrets.SARVAM_API_KEY != '' ||
+            secrets.GEMINI_API_KEY != '' || secrets.ANTHROPIC_API_KEY != '' ||
+            secrets.UPDATE_GITHUB_TOKEN != '' }}
+          PUBLISH_PRIVATE_EXE: ${{ vars.PUBLISH_PRIVATE_EXE }}
+        run: |
+          src="$RUNNER_TEMP/release"
+          out=flowforge/downloads
+          rm -rf "$out"
+          mkdir -p "$out"
+          for file in FlowForge.apk FlowForge.ipa; do
+            if [[ -f "$src/$file" ]]; then cp "$src/$file" "$out/"; fi
+          done
+          if [[ -f "$src/FlowForge-Setup.exe" ]]; then
+            if [[ "$HAS_KEYS" == "true" && "$PUBLISH_PRIVATE_EXE" != "true" ]]; then
+              echo "::warning::The Windows installer has your keys built in, so it is not put on the public website. Set the repository variable PUBLISH_PRIVATE_EXE=true (and SITE_PASSWORD in Vercel) to include it."
+            else
+              # GitHub refuses files over 100 MB: store the installer in parts, the website joins them.
+              split -b 90m -d -a 1 "$src/FlowForge-Setup.exe" "$out/FlowForge-Setup.exe.part"
+            fi
+          fi
+          # release.json lists only the files that are here (the website checks them by SHA-256).
+          node -e '
+            const fs = require("fs");
+            const [src, out] = process.argv.slice(1);
+            const manifest = JSON.parse(fs.readFileSync(`${src}/release.json`, "utf8"));
+            const here = (file) => fs.existsSync(`${out}/${file}`) || fs.existsSync(`${out}/${file}.part0`);
+            manifest.downloads = manifest.downloads.filter((d) => here(d.file));
+            fs.writeFileSync(`${out}/release.json`, JSON.stringify(manifest, null, 2) + "\n");
+            console.log(`FlowForge ${manifest.version}: ${manifest.downloads.map((d) => d.file).join(", ")}`);
+          ' "$src" "$out"
+          cat > "$out/README.md" <<'EOF'
+          # Website downloads
+
+          The newest apps, copied here by the "Website downloads" workflow after each release. The
+          website (`flowforge/apps/website`) serves them at `/downloads/...` - see
+          `flowforge/apps/website/scripts/bundle-downloads.mjs`. Do not edit by hand.
+          EOF
+          ls -la "$out"
+
+      - name: Commit
+        run: |
+          # Committed as you (the person who started the release), so Vercel deploys it.
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
+          git add -A flowforge/downloads
+          if git diff --cached --quiet; then
+            echo "The website already has these apps."
+            exit 0
+          fi
+          version="$(node -p "require('./flowforge/downloads/release.json').version")"
+          git commit -q -m "Website downloads: FlowForge $version"
+          for attempt in 1 2 3 4; do
+            git push origin HEAD:main && exit 0
+            sleep $((attempt * 5))
+            git pull -q --rebase origin main
+          done
+          exit 1
