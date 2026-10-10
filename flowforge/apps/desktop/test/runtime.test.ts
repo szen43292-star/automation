@@ -3,7 +3,13 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { checkResources, loadBundledConfig, loadSecrets } from '../src/runtime';
+import {
+  checkResources,
+  compareVersions,
+  loadBundledConfig,
+  loadSecrets,
+  pickUpdateSite,
+} from '../src/runtime';
 import { freePort, isPortFree, rotateLog, run, tail } from '../src/runtime/util';
 
 const dirs: string[] = [];
@@ -86,7 +92,7 @@ describe('log rotation', () => {
 describe('private builds', () => {
   it('passes only known keys to the server and keeps the update token for the updater', () => {
     const dir = tempDir();
-    expect(loadBundledConfig(dir)).toEqual({ env: {}, updateToken: null, updateUrl: null });
+    expect(loadBundledConfig(dir)).toEqual({ env: {}, updateToken: null, updateUrls: [] });
     writeFileSync(
       join(dir, 'config.json'),
       JSON.stringify({
@@ -96,19 +102,45 @@ describe('private builds', () => {
           OPENAI_API_KEY: '',
           DATABASE_URL: 'postgresql://evil',
           UPDATE_GITHUB_TOKEN: 'github_pat_x',
-          UPDATE_URL: 'https://my-flowforge.vercel.app/',
+          UPDATE_URL:
+            'https://my-flowforge.vercel.app/ https://other.vercel.app,http://insecure.example',
         },
       }),
     );
     expect(loadBundledConfig(dir)).toEqual({
       env: { META_APP_ID: '123', META_APP_SECRET: 'secret' },
       updateToken: 'github_pat_x',
-      updateUrl: 'https://my-flowforge.vercel.app',
+      updateUrls: ['https://my-flowforge.vercel.app', 'https://other.vercel.app'],
     });
     // Only an https address is used for updates.
     writeFileSync(join(dir, 'config.json'), JSON.stringify({ env: { UPDATE_URL: 'http://x' } }));
-    expect(loadBundledConfig(dir).updateUrl).toBeNull();
+    expect(loadBundledConfig(dir).updateUrls).toEqual([]);
     writeFileSync(join(dir, 'config.json'), '{ broken');
     expect(loadBundledConfig(dir).env).toEqual({});
+  });
+});
+
+describe('updates from the download websites', () => {
+  it('uses the site with the newest version and skips sites that are gone', async () => {
+    const sites: Record<string, string | null> = {
+      'https://old.vercel.app': 'version: 0.3.0\npath: FlowForge-Setup.exe\n',
+      'https://new.vercel.app': "version: '0.3.1'\npath: FlowForge-Setup.exe\n",
+      'https://deleted.vercel.app': null,
+    };
+    const fetcher = (async (url: string) => {
+      const yml = sites[url.replace('/downloads/latest.yml', '')];
+      return yml ? new Response(yml) : new Response('not found', { status: 404 });
+    }) as typeof fetch;
+    expect(await pickUpdateSite(Object.keys(sites), fetcher)).toEqual({
+      url: 'https://new.vercel.app',
+      version: '0.3.1',
+    });
+    expect(await pickUpdateSite(['https://deleted.vercel.app'], fetcher)).toBeNull();
+  });
+
+  it('compares versions', () => {
+    expect(compareVersions('0.3.10', '0.3.9')).toBeGreaterThan(0);
+    expect(compareVersions('0.4.0', '0.4.0-ci.3')).toBeGreaterThan(0);
+    expect(compareVersions('1.0.0', '1.0.0')).toBe(0);
   });
 });

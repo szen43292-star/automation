@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error - plain JavaScript build script
-import { candidatesFrom, findUpdateUrl } from '../scripts/find-update-url.mjs';
+import { candidatesFrom, findUpdateUrls } from '../scripts/find-update-url.mjs';
 
 /** The Windows app build finds the download website it updates from - no settings. */
 const json = (body: unknown, status = 200) =>
@@ -20,7 +20,7 @@ describe('finding the download website', () => {
     ]);
   });
 
-  it("keeps only the site that answers for this repository, skipping other projects' sites", async () => {
+  it("keeps every site that answers for this repository, skipping other projects' sites", async () => {
     const asked: string[] = [];
     const fetcher = async (url: string) => {
       asked.push(url);
@@ -39,18 +39,27 @@ describe('finding the download website', () => {
       if (url === 'https://flowforge.vercel.app/api/releases/site') return json({}, 404);
       if (url === 'https://flowforge-acme.vercel.app/api/releases/site')
         return json({ app: 'flowforge-website', repo: 'Owner/Automation' });
+      if (url === 'https://automation-acme.vercel.app/api/releases/site')
+        return json({ app: 'flowforge-website', repo: 'owner/automation' });
       return json({}, 404);
     };
-    const url = await findUpdateUrl({ repo: 'owner/automation', token: 't', fetcher });
-    expect(url).toBe('https://flowforge-acme.vercel.app');
+    const urls = await findUpdateUrls({ repo: 'owner/automation', token: 't', fetcher });
+    expect(urls).toEqual([
+      'https://automation-acme.vercel.app',
+      'https://flowforge-acme.vercel.app',
+    ]);
     expect(asked.some((u) => u.includes('ignored'))).toBe(false);
   });
 
   it('an UPDATE_URL secret wins; nothing found means GitHub Releases', async () => {
     expect(
-      await findUpdateUrl({ repo: 'o/r', token: 't', override: 'https://dl.example.com/' }),
-    ).toBe('https://dl.example.com');
+      await findUpdateUrls({
+        repo: 'o/r',
+        token: 't',
+        override: 'https://dl.example.com/, https://b.example.com',
+      }),
+    ).toEqual(['https://dl.example.com', 'https://b.example.com']);
     const fetcher = async () => json([], 200);
-    expect(await findUpdateUrl({ repo: 'o/r', token: 't', fetcher })).toBeNull();
+    expect(await findUpdateUrls({ repo: 'o/r', token: 't', fetcher })).toEqual([]);
   });
 });
