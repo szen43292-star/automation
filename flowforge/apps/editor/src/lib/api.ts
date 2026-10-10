@@ -443,6 +443,10 @@ export const endpoints = {
   saveAiProviders: (keys: Partial<Record<AiProviderId, string | null>>) =>
     api<{ data: AiProvider[] }>('/api/ai/providers', { method: 'PUT', body: keys }),
   agentOptions: () => api<AgentOptions>('/api/agents/options'),
+  aiModels: (provider: string, purpose: 'llm' | 'stt') =>
+    api<{ data: string[]; automatic: string | null }>(
+      `/api/ai/models?provider=${encodeURIComponent(provider)}&purpose=${purpose}`,
+    ),
   agents: () => api<{ data: AgentSummary[] }>('/api/agents'),
   agent: (id: string) => api<AgentDetail>(`/api/agents/${id}`),
   createAgent: (body: AgentInput) => api<AgentDetail>('/api/agents', { body }),

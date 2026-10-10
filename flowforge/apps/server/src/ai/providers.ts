@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 import type { Config } from '../config';
 import type { Cipher } from '../credentials/cipher';
+import { parseModelList } from './models';
 
 const KEY = 'ai.providers';
 
@@ -90,6 +91,7 @@ type Stored = Partial<Record<ProviderId, string>>; // encrypted keys
  */
 export class AiProviders {
   private cache: Map<ProviderId, { apiKey: string; source: 'env' | 'settings' }> | null = null;
+  private modelLists = new Map<ProviderId, { at: number; models: string[] | null }>();
 
   constructor(
     private readonly prisma: PrismaClient,
@@ -175,10 +177,41 @@ export class AiProviders {
       create: { key: KEY, value: stored as object },
       update: { value: stored as object },
     });
-    this.cache = null;
+    this.invalidate();
   }
 
   invalidate() {
     this.cache = null;
+    this.modelLists.clear();
+  }
+
+  /**
+   * The models this key can use, as the provider lists them (kept 10 minutes; a failed lookup is
+   * retried after a minute). null when the provider is not set up or did not answer.
+   */
+  async models(id: ProviderId): Promise<string[] | null> {
+    const cached = this.modelLists.get(id);
+    if (cached && Date.now() - cached.at < (cached.models ? 10 : 1) * 60_000) return cached.models;
+    const access = await this.get(id);
+    let models: string[] | null = null;
+    if (access) {
+      try {
+        const response = await fetch(
+          id === 'anthropic' ? `${access.baseUrl}/v1/models?limit=100` : `${access.baseUrl}/models`,
+          {
+            headers:
+              id === 'anthropic'
+                ? { 'x-api-key': access.apiKey, 'anthropic-version': '2023-06-01' }
+                : { authorization: `Bearer ${access.apiKey}` },
+            signal: AbortSignal.timeout(10_000),
+          },
+        );
+        if (response.ok) models = parseModelList(await response.json());
+      } catch {
+        // offline or not listing: callers fall back to the documented default model
+      }
+    }
+    this.modelLists.set(id, { at: Date.now(), models: models?.length ? models : null });
+    return models?.length ? models : null;
   }
 }

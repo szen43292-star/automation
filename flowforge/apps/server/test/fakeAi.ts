@@ -133,6 +133,26 @@ export async function startFakeAi(port = 0) {
       );
     }
 
+    // ---- Model lists: a Groq key (gsk_…) that cannot use llama-3.3-70b-versatile ----
+    if (path === '/v1/models') {
+      if (!String(auth).includes('gsk_')) {
+        res.writeHead(404, { 'content-type': 'application/json' });
+        return res.end(JSON.stringify({ error: { message: 'not listed here' } }));
+      }
+      res.writeHead(200, { 'content-type': 'application/json' });
+      return res.end(
+        JSON.stringify({
+          object: 'list',
+          data: [
+            { id: 'meta-llama/llama-guard-4-12b' },
+            { id: 'openai/gpt-oss-120b' },
+            { id: 'llama-3.1-8b-instant' },
+            { id: 'whisper-large-v3' },
+          ],
+        }),
+      );
+    }
+
     // ---- Anthropic Messages ----
     if (path === '/v1/messages') {
       const system = typeof body.system === 'string' ? body.system : '';

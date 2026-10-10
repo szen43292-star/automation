@@ -1,4 +1,5 @@
 import { encodeWav, loadPrompt, resample, SAMPLE_RATE } from '@flowforge/media';
+import { chooseModel } from '../ai/models';
 import type { AiProviders } from '../ai/providers';
 import { DEFAULT_MODELS, DEFAULT_VOICES, type AgentVoice } from './config';
 import { httpError } from './llm';
@@ -24,7 +25,13 @@ export async function transcribe(
   signal?: AbortSignal,
 ): Promise<string> {
   const { provider } = voice.stt;
-  const model = voice.stt.model || DEFAULT_MODELS.stt[provider];
+  const model = await chooseModel(
+    providers,
+    provider,
+    'stt',
+    voice.stt.model,
+    DEFAULT_MODELS.stt[provider],
+  );
   const wav = encodeWav([resample(samples, SAMPLE_RATE, 16_000)], 16_000);
   const access = await providers.require(provider);
 
