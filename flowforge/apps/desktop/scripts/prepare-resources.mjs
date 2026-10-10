@@ -157,9 +157,12 @@ const BUNDLED = [
   'DEEPGRAM_API_KEY',
   'ELEVENLABS_API_KEY',
   'SARVAM_API_KEY',
+  'GROQ_API_KEY',
   'GEMINI_API_KEY',
   'ANTHROPIC_API_KEY',
   'UPDATE_GITHUB_TOKEN',
+  // The download website; updates come from its /downloads (no token). Found by the build.
+  'UPDATE_URL',
 ];
 const bundled = Object.fromEntries(
   BUNDLED.map((key) => [key, process.env[`BUNDLE_${key}`]?.trim()]).filter(([, value]) => value),

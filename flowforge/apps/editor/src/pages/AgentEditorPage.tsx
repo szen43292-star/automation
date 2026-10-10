@@ -59,6 +59,7 @@ const PROVIDER_NAMES: Record<string, string> = {
   deepgram: 'Deepgram',
   elevenlabs: 'ElevenLabs',
   sarvam: 'Sarvam AI',
+  groq: 'Groq',
 };
 
 const toInput = (a: AgentDetail): AgentInput => ({

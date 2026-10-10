@@ -249,7 +249,7 @@ export class ChatCompletionsBrain implements Brain {
   private pending: string[] = [];
 
   constructor(
-    private readonly provider: 'OpenAI' | 'Gemini',
+    private readonly provider: (typeof CHAT_COMPLETIONS_NAMES)[keyof typeof CHAT_COMPLETIONS_NAMES],
     private readonly access: ProviderAccess,
     private readonly model: string,
     system: string,
@@ -384,22 +384,17 @@ export async function createBrain(
   const model = llmModel(config.provider, config.model);
   if (config.provider === 'anthropic')
     return new ClaudeBrain(await providers.require('anthropic'), model, system, tools);
-  if (config.provider === 'gemini')
-    return new ChatCompletionsBrain(
-      'Gemini',
-      await providers.require('gemini'),
-      model,
-      system,
-      tools,
-    );
   return new ChatCompletionsBrain(
-    'OpenAI',
-    await providers.require('openai'),
+    CHAT_COMPLETIONS_NAMES[config.provider],
+    await providers.require(config.provider),
     model,
     system,
     tools,
   );
 }
+
+/** Providers with an OpenAI-compatible chat completions API, by display name. */
+const CHAT_COMPLETIONS_NAMES = { openai: 'OpenAI', gemini: 'Gemini', groq: 'Groq' } as const;
 
 /** A single answer without tools (call summaries). */
 export async function complete(
@@ -429,7 +424,7 @@ export async function complete(
       throw describeAiError('Anthropic', error);
     }
   }
-  const name = config.provider === 'gemini' ? 'Gemini' : 'OpenAI';
+  const name = CHAT_COMPLETIONS_NAMES[config.provider];
   const access = await providers.require(config.provider);
   const response = await fetch(`${access.baseUrl}/chat/completions`, {
     method: 'POST',

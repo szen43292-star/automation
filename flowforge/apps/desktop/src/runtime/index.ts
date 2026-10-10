@@ -48,6 +48,7 @@ export const BUNDLED_KEYS = [
   'DEEPGRAM_API_KEY',
   'ELEVENLABS_API_KEY',
   'SARVAM_API_KEY',
+  'GROQ_API_KEY',
   'GEMINI_API_KEY',
   'ANTHROPIC_API_KEY',
 ] as const;
@@ -59,6 +60,8 @@ export const BUNDLED_KEYS = [
 export function loadBundledConfig(resourcesDir: string): {
   env: Record<string, string>;
   updateToken: string | null;
+  /** The download website (https://…, no trailing slash): updates come from its /downloads. */
+  updateUrl: string | null;
 } {
   try {
     const raw = JSON.parse(readFileSync(join(resourcesDir, 'config.json'), 'utf8')) as {
@@ -70,9 +73,17 @@ export function loadBundledConfig(resourcesDir: string): {
       if (typeof value === 'string' && value.trim()) env[key] = value.trim();
     }
     const token = raw.env?.UPDATE_GITHUB_TOKEN;
-    return { env, updateToken: typeof token === 'string' && token.trim() ? token.trim() : null };
+    const url = raw.env?.UPDATE_URL;
+    return {
+      env,
+      updateToken: typeof token === 'string' && token.trim() ? token.trim() : null,
+      updateUrl:
+        typeof url === 'string' && /^https:\/\/[^\s/]+(\/[^\s]*)?$/.test(url.trim())
+          ? url.trim().replace(/\/+$/, '')
+          : null,
+    };
   } catch {
-    return { env: {}, updateToken: null };
+    return { env: {}, updateToken: null, updateUrl: null };
   }
 }
 

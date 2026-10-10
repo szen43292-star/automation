@@ -7,6 +7,10 @@ name: Release
 on:
   push:
     tags: ['v*']
+  # Every night: a new version when the apps changed since the last release, so the Windows
+  # app on your PC updates itself without anyone starting a release (03:00 India time).
+  schedule:
+    - cron: '30 21 * * *'
   workflow_dispatch:
     inputs:
       version:
@@ -18,6 +22,8 @@ on:
 
 permissions:
   contents: write
+  deployments: read
+  statuses: read
 
 concurrency:
   group: release
@@ -29,11 +35,30 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.v.outputs.version }}
+      skip: ${{ steps.v.outputs.skip }}
     steps:
+      - uses: actions/checkout@v4
+        if: github.event_name == 'schedule'
+        with:
+          fetch-depth: 0
       - id: v
         env:
           INPUT_VERSION: ${{ inputs.version }}
         run: |
+          if [[ "$GITHUB_EVENT_NAME" == "schedule" ]]; then
+            last="$(git tag --list 'v*' --sort=-v:refname | head -1)"
+            # Only the apps count: website-only changes and the downloads copy need no new apps.
+            if [[ -n "$last" ]] && git diff --quiet "$last" HEAD -- flowforge \
+                ':(exclude)flowforge/downloads' ':(exclude)flowforge/apps/website' ':(exclude)**/*.md'; then
+              echo "Nothing changed in the apps since $last - no release tonight."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            base="${last#v}"; base="${base%%-*}"
+            IFS=. read -r major minor patch <<< "${base:-0.2.9}"
+            INPUT_VERSION="$major.$minor.$((patch + 1))"
+            echo "Nightly release $INPUT_VERSION (changes since ${last:-the start})"
+          fi
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then version="${GITHUB_REF_NAME#v}"; else version="${INPUT_VERSION#v}"; fi
           if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
             echo "::error::Version must look like 1.2.3 (got '$version')"; exit 1
@@ -42,6 +67,7 @@ jobs:
 
   windows:
     needs: version
+    if: needs.version.outputs.skip != 'true'
     uses: ./.github/workflows/desktop.yml
     with:
       version: ${{ needs.version.outputs.version }}
@@ -49,6 +75,7 @@ jobs:
 
   phones:
     needs: version
+    if: needs.version.outputs.skip != 'true'
     uses: ./.github/workflows/mobile.yml
     with:
       version: ${{ needs.version.outputs.version }}

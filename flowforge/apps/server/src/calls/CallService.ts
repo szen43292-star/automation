@@ -276,6 +276,11 @@ export class CallService {
   }
 
   /** Calls that are ringing or in progress right now (e.g. to show the ringing banner after a reload). */
+  /** Calls in progress (ringing, with a person or with the AI agent). */
+  get activeCount(): number {
+    return this.active.size;
+  }
+
   async activeCalls(): Promise<Array<CallDTO & { ringSeconds: number; ringing: boolean }>> {
     const ids = [...this.active.keys()];
     if (!ids.length) return [];

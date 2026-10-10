@@ -87,6 +87,8 @@ const envSchema = z.object({
   ELEVENLABS_BASE_URL: z.string().url().default('https://api.elevenlabs.io'),
   SARVAM_API_KEY: z.string().min(10).optional(),
   SARVAM_BASE_URL: z.string().url().default('https://api.sarvam.ai'),
+  GROQ_API_KEY: z.string().min(10).optional(),
+  GROQ_BASE_URL: z.string().url().default('https://api.groq.com/openai/v1'),
   /**
    * Phone notifications (incoming / missed calls) for the Android and iOS apps: a Firebase
    * service account JSON (or base64 of it). Optional.

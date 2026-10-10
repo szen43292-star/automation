@@ -20,15 +20,28 @@ const GROUP_LABELS: Array<[NodeGroup, string]> = [
   ['annotation', 'Canvas'],
 ];
 
-function score(d: INodeTypeDescription, query: string): number {
-  const q = query.toLowerCase();
+/**
+ * How well a node matches the search: every word must appear in its name, keywords or
+ * description ("send whatsapp", "http req"); matches in the name count most.
+ */
+export function score(d: INodeTypeDescription, query: string): number {
+  const full = query.trim().toLowerCase();
+  const words = full.split(/\s+/).filter(Boolean);
+  if (!words.length) return 0;
   const name = d.displayName.toLowerCase();
-  if (name === q) return 100;
-  if (name.startsWith(q)) return 80;
-  if (name.includes(q)) return 60;
-  if (d.keywords?.some((k) => k.toLowerCase().startsWith(q))) return 40;
-  if (d.description.toLowerCase().includes(q)) return 20;
-  return 0;
+  const nameWords = name.split(/[\s()/-]+/);
+  const keywords = (d.keywords ?? []).map((k) => k.toLowerCase());
+  const description = d.description.toLowerCase();
+  if (name === full) return 1000;
+  let total = name.startsWith(full) ? 500 : 0;
+  for (const word of words) {
+    if (nameWords.some((part) => part.startsWith(word))) total += 60;
+    else if (name.includes(word)) total += 40;
+    else if (keywords.some((k) => k.includes(word))) total += 30;
+    else if (description.includes(word)) total += 10;
+    else return 0;
+  }
+  return total;
 }
 
 export function NodeCreator() {

@@ -40,7 +40,8 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/release"
           gh release download ${TAG:+"$TAG"} --repo "$GITHUB_REPOSITORY" --dir "$RUNNER_TEMP/release" \
-            --pattern release.json --pattern FlowForge.apk --pattern FlowForge.ipa --pattern FlowForge-Setup.exe
+            --pattern release.json --pattern FlowForge.apk --pattern FlowForge.ipa --pattern FlowForge-Setup.exe \
+            --pattern latest.yml --pattern FlowForge-Setup.exe.blockmap
           ls -la "$RUNNER_TEMP/release"
 
       - name: Copy into flowforge/downloads
@@ -51,7 +52,7 @@ jobs:
           HAS_KEYS: >-
             ${{ secrets.META_APP_SECRET != '' || secrets.WHATSAPP_WEBHOOK_VERIFY_TOKEN != '' ||
             secrets.OPENAI_API_KEY != '' || secrets.DEEPGRAM_API_KEY != '' ||
-            secrets.ELEVENLABS_API_KEY != '' || secrets.SARVAM_API_KEY != '' ||
+            secrets.ELEVENLABS_API_KEY != '' || secrets.SARVAM_API_KEY != '' || secrets.GROQ_API_KEY != '' ||
             secrets.GEMINI_API_KEY != '' || secrets.ANTHROPIC_API_KEY != '' ||
             secrets.UPDATE_GITHUB_TOKEN != '' }}
           PUBLISH_PRIVATE_EXE: ${{ vars.PUBLISH_PRIVATE_EXE }}
@@ -69,6 +70,10 @@ jobs:
             else
               # GitHub refuses files over 100 MB: store the installer in parts, the website joins them.
               split -b 90m -d -a 1 "$src/FlowForge-Setup.exe" "$out/FlowForge-Setup.exe.part"
+              # What the Windows app's updater reads (newest version, checksum, delta map).
+              for file in latest.yml FlowForge-Setup.exe.blockmap; do
+                if [[ -f "$src/$file" ]]; then cp "$src/$file" "$out/"; fi
+              done
             fi
           fi
           # release.json lists only the files that are here (the website checks them by SHA-256).
