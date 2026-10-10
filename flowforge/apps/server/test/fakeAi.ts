@@ -518,6 +518,7 @@ export async function startFakeAi(port = 0) {
       DEEPGRAM_BASE_URL: base,
       ELEVENLABS_BASE_URL: base,
       SARVAM_BASE_URL: base,
+      GROQ_BASE_URL: `${base}/v1`,
     },
     close: async () => {
       for (const client of wss.clients) client.terminate();

@@ -102,41 +102,44 @@ body {
   background: color-mix(in srgb, var(--ff-accent) 30%, transparent);
 }
 
-/* Inputs */
-.ff-input {
-  width: 100%;
-  border: 1px solid var(--ff-border);
-  background: var(--ff-panel);
-  color: var(--ff-text);
-  border-radius: 6px;
-  padding: 6px 9px;
-  font-size: 13px;
-  outline: none;
-  transition:
-    border-color 0.12s,
-    box-shadow 0.12s;
-}
-.ff-input:focus {
-  border-color: var(--ff-accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ff-accent) 18%, transparent);
-}
-.ff-input.is-expression {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  background: color-mix(in srgb, var(--ff-success) 6%, var(--ff-panel));
-  border-color: color-mix(in srgb, var(--ff-success) 45%, var(--ff-border));
-}
-.ff-input.drop-target {
-  border-color: var(--ff-accent);
-  border-style: dashed;
-  background: var(--ff-accent-soft);
-}
-select.ff-input {
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 8px center;
-  padding-right: 26px;
+/* Inputs - in the components layer so utility classes on an input (pl-9 next to a search icon,
+   w-40, text-xs, ...) win over these defaults; unlayered CSS would always beat them. */
+@layer components {
+  .ff-input {
+    width: 100%;
+    border: 1px solid var(--ff-border);
+    background: var(--ff-panel);
+    color: var(--ff-text);
+    border-radius: 6px;
+    padding: 6px 9px;
+    font-size: 13px;
+    outline: none;
+    transition:
+      border-color 0.12s,
+      box-shadow 0.12s;
+  }
+  .ff-input:focus {
+    border-color: var(--ff-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ff-accent) 18%, transparent);
+  }
+  .ff-input.is-expression {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    background: color-mix(in srgb, var(--ff-success) 6%, var(--ff-panel));
+    border-color: color-mix(in srgb, var(--ff-success) 45%, var(--ff-border));
+  }
+  .ff-input.drop-target {
+    border-color: var(--ff-accent);
+    border-style: dashed;
+    background: var(--ff-accent-soft);
+  }
+  select.ff-input {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    padding-right: 26px;
+  }
 }
 
 /* React Flow theming */

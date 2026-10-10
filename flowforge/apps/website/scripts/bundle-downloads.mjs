@@ -92,6 +92,12 @@ export async function bundleDownloads(source, target, log = console.log) {
     rmSync(target, { recursive: true, force: true });
     return null;
   }
+  // The Windows app updates itself from here: the updater reads latest.yml (and the delta map).
+  if (downloads.some((d) => d.platform === 'windows')) {
+    for (const file of ['latest.yml', 'FlowForge-Setup.exe.blockmap']) {
+      if (existsSync(join(source, file))) copyFileSync(join(source, file), join(target, file));
+    }
+  }
   const release = { ...manifest, downloads };
   writeFileSync(join(target, 'release.json'), `${JSON.stringify(release, null, 2)}\n`);
   return release;

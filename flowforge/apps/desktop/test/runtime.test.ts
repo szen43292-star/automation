@@ -86,7 +86,7 @@ describe('log rotation', () => {
 describe('private builds', () => {
   it('passes only known keys to the server and keeps the update token for the updater', () => {
     const dir = tempDir();
-    expect(loadBundledConfig(dir)).toEqual({ env: {}, updateToken: null });
+    expect(loadBundledConfig(dir)).toEqual({ env: {}, updateToken: null, updateUrl: null });
     writeFileSync(
       join(dir, 'config.json'),
       JSON.stringify({
@@ -96,13 +96,18 @@ describe('private builds', () => {
           OPENAI_API_KEY: '',
           DATABASE_URL: 'postgresql://evil',
           UPDATE_GITHUB_TOKEN: 'github_pat_x',
+          UPDATE_URL: 'https://my-flowforge.vercel.app/',
         },
       }),
     );
     expect(loadBundledConfig(dir)).toEqual({
       env: { META_APP_ID: '123', META_APP_SECRET: 'secret' },
       updateToken: 'github_pat_x',
+      updateUrl: 'https://my-flowforge.vercel.app',
     });
+    // Only an https address is used for updates.
+    writeFileSync(join(dir, 'config.json'), JSON.stringify({ env: { UPDATE_URL: 'http://x' } }));
+    expect(loadBundledConfig(dir).updateUrl).toBeNull();
     writeFileSync(join(dir, 'config.json'), '{ broken');
     expect(loadBundledConfig(dir).env).toEqual({});
   });

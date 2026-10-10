@@ -471,7 +471,8 @@ export const endpoints = {
     }>(`/api/agents/${id}/chat`, { body: { messages } }),
 };
 
-export type AiProviderId = 'openai' | 'anthropic' | 'gemini' | 'deepgram' | 'elevenlabs' | 'sarvam';
+export type AiProviderId =
+  'openai' | 'anthropic' | 'gemini' | 'deepgram' | 'elevenlabs' | 'sarvam' | 'groq';
 
 export interface AiProvider {
   id: AiProviderId;
@@ -483,8 +484,8 @@ export interface AiProvider {
   hint: string | null;
 }
 
-export type SttProvider = 'openai' | 'deepgram' | 'sarvam';
-export type LlmProvider = 'anthropic' | 'openai' | 'gemini';
+export type SttProvider = 'openai' | 'deepgram' | 'sarvam' | 'groq';
+export type LlmProvider = 'anthropic' | 'openai' | 'gemini' | 'groq';
 export type TtsProvider = 'openai' | 'elevenlabs' | 'sarvam';
 
 export interface AgentInput {

@@ -186,4 +186,15 @@ describe('phone notifications', () => {
     });
     expect(other.headers['access-control-allow-origin']).toBeUndefined();
   });
+
+  it('tells the Windows app on the same PC how many calls are on, nobody else', async () => {
+    const local = await app.inject({ method: 'GET', url: '/readyz' });
+    expect(local.json()).toEqual({ status: 'ok', mode: 'regular', activeCalls: 0 });
+    const remote = await app.inject({
+      method: 'GET',
+      url: '/readyz',
+      remoteAddress: '203.0.113.9',
+    });
+    expect(remote.json()).toEqual({ status: 'ok', mode: 'regular' });
+  });
 });

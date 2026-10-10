@@ -185,7 +185,7 @@ The Phase 2 browser tests check:
 - **After each call:** a summary in the call log, in "call ended" workflows, and optionally on your WhatsApp.
 - **Test chat:** talk to the agent in text with the same persona, knowledge and tools.
 - **Fallback:** without working keys, calls go to voicemail instead of failing.
-- **Keys:** AI keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `DEEPGRAM_API_KEY`, `ELEVENLABS_API_KEY`, `SARVAM_API_KEY`) come from the server environment, or are built into your private app (see _Private build_). Otherwise enter them in **AI agents → AI providers**, where they are stored encrypted. They never reach the apps or browsers.
+- **Keys:** AI keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `DEEPGRAM_API_KEY`, `ELEVENLABS_API_KEY`, `SARVAM_API_KEY`, `GROQ_API_KEY`) come from the server environment, or are built into your private app (see _Private build_). Otherwise enter them in **AI agents → AI providers**, where they are stored encrypted. They never reach the apps or browsers.
 
 > Claude requests use `fallbacks: "default"` (beta `server-side-fallback-2026-07-01`): if Claude declines a request, the API retries it on Anthropic's recommended fallback model instead of failing the call. They also use `output_config.effort: "low"` for fast voice replies.
 
@@ -389,7 +389,10 @@ The installer contains everything FlowForge needs, so it runs on any Windows 10/
   - Optional _Start with Windows_ (on by default).
   - _Open in browser_, _Open logs folder_ and _Quit_.
   - If the server stops unexpectedly, the window shows the error with _Try again_.
-- **Auto-update** from this repository's GitHub Releases (electron-updater, no token).
+- **Updates itself, nothing to click.**
+  - **Where updates come from:** your download website's `/downloads` folder. The build finds the site through the Vercel statuses on GitHub, or uses the `UPDATE_URL` secret, for example for a custom domain. Without a site, updates come from GitHub Releases.
+  - **How they install:** the app checks every hour and downloads in the background. It installs silently once the PC has been idle for 15 minutes and no call is on, then comes back in the tray.
+  - **Where new versions come from:** _Release_ runs every night and publishes a new version whenever the apps changed, so updates arrive by themselves.
 - **Installer:** one-click, per user (no admin prompt), into `%LOCALAPPDATA%\Programs\flowforge`. The installer and uninstaller stop the app, its server and PostgreSQL first. Uninstalling keeps your data folder.
 
 The installer is about 150 MB: Electron, Node.js, PostgreSQL and the server.
@@ -429,14 +432,14 @@ For your own private use, the app can carry your keys, so nothing has to be type
 
 1. **Repository secrets.** In GitHub, go to _Settings → Secrets and variables → Actions → New repository secret_. Add the ones you have; missing ones are simply skipped.
 
-   | Secret                                                                                                              | Used for                                                                                                                       |
-   | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-   | `META_APP_ID`, `META_APP_SECRET`, `META_EMBEDDED_SIGNUP_CONFIG_ID`                                                  | WhatsApp: your Meta app (one-click "Connect WhatsApp")                                                                         |
-   | `WHATSAPP_WEBHOOK_VERIFY_TOKEN`                                                                                     | Optional fixed verify token for the Meta webhook                                                                               |
-   | `PUBLIC_URL`                                                                                                        | Public HTTPS address of the app's server (e.g. a tunnel), needed for Meta to deliver messages                                  |
-   | `OPENAI_API_KEY`, `DEEPGRAM_API_KEY`, `ELEVENLABS_API_KEY`, `SARVAM_API_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY` | AI voice agent providers (Phase 5)                                                                                             |
-   | `ANDROID_KEYSTORE_*`, `IOS_*`, `GOOGLE_SERVICES_JSON`                                                               | Phone apps: signing and notifications (see "Phases 7–8")                                                                       |
-   | `UPDATE_GITHUB_TOKEN`                                                                                               | Lets the app auto-update from your **private** releases. Use a fine-grained token, this repository only, _Contents: Read-only_ |
+   | Secret                                                                                                                              | Used for                                                                                                                       |
+   | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+   | `META_APP_ID`, `META_APP_SECRET`, `META_EMBEDDED_SIGNUP_CONFIG_ID`                                                                  | WhatsApp: your Meta app (one-click "Connect WhatsApp")                                                                         |
+   | `WHATSAPP_WEBHOOK_VERIFY_TOKEN`                                                                                                     | Optional fixed verify token for the Meta webhook                                                                               |
+   | `PUBLIC_URL`                                                                                                                        | Public HTTPS address of the app's server (e.g. a tunnel), needed for Meta to deliver messages                                  |
+   | `OPENAI_API_KEY`, `DEEPGRAM_API_KEY`, `ELEVENLABS_API_KEY`, `SARVAM_API_KEY`, `GROQ_API_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY` | AI voice agent providers (Phase 5)                                                                                             |
+   | `ANDROID_KEYSTORE_*`, `IOS_*`, `GOOGLE_SERVICES_JSON`                                                                               | Phone apps: signing and notifications (see "Phases 7–8")                                                                       |
+   | `UPDATE_GITHUB_TOKEN`                                                                                                               | Lets the app auto-update from your **private** releases. Use a fine-grained token, this repository only, _Contents: Read-only_ |
 
 2. **Build.** Run _Actions → Release → Run workflow_ with a version. It builds the Windows app and the phone apps; the phone apps only get `PUBLIC_URL`, never keys.
    - The build writes the secrets into `resources/runtime/config.json` inside the installer.
@@ -509,7 +512,7 @@ pnpm --filter @flowforge/website build
 4. Import the repository on Vercel (see above) and open `/download`.
    - Version, size and SHA-256 match the release. Compare with `Get-FileHash .\FlowForge-Setup.exe -Algorithm SHA256`.
    - On a phone you get the phone app first, and on a desktop the QR code.
-5. Publish `0.2.1` the same way. The installed app downloads it in the background, and the tray menu offers _Restart to install version 0.2.1_.
+5. Publish `0.2.1` the same way, or wait for the nightly release. The installed app downloads it in the background and installs it by itself when the PC is idle. The tray menu also offers _Restart to install version 0.2.1_ right away.
 
 ## Running locally
 

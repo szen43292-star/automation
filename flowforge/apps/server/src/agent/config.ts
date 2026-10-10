@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-export const STT_PROVIDERS = ['openai', 'deepgram', 'sarvam'] as const;
-export const LLM_PROVIDERS = ['anthropic', 'openai', 'gemini'] as const;
+export const STT_PROVIDERS = ['openai', 'deepgram', 'sarvam', 'groq'] as const;
+export const LLM_PROVIDERS = ['anthropic', 'openai', 'gemini', 'groq'] as const;
 export const TTS_PROVIDERS = ['openai', 'elevenlabs', 'sarvam'] as const;
 
 export type SttProvider = (typeof STT_PROVIDERS)[number];
@@ -11,8 +11,18 @@ export type TtsProvider = (typeof TTS_PROVIDERS)[number];
 /** Models used when the agent leaves the model empty. */
 export const DEFAULT_MODELS = {
   realtime: 'gpt-realtime',
-  stt: { openai: 'gpt-4o-mini-transcribe', deepgram: 'nova-3', sarvam: 'saarika:v2.5' },
-  llm: { anthropic: 'claude-opus-5-5', openai: 'gpt-4o-mini', gemini: 'gemini-2.5-flash' },
+  stt: {
+    openai: 'gpt-4o-mini-transcribe',
+    deepgram: 'nova-3',
+    sarvam: 'saarika:v2.5',
+    groq: 'whisper-large-v3-turbo',
+  },
+  llm: {
+    anthropic: 'claude-opus-5-5',
+    openai: 'gpt-4o-mini',
+    gemini: 'gemini-2.5-flash',
+    groq: 'llama-3.3-70b-versatile',
+  },
   tts: { openai: 'gpt-4o-mini-tts', elevenlabs: 'eleven_flash_v2_5', sarvam: 'bulbul:v2' },
 } as const;
 

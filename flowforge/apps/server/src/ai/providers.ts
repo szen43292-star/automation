@@ -11,6 +11,7 @@ export const PROVIDERS = [
   'deepgram',
   'elevenlabs',
   'sarvam',
+  'groq',
 ] as const;
 export type ProviderId = (typeof PROVIDERS)[number];
 
@@ -46,6 +47,11 @@ export const PROVIDER_INFO: Record<ProviderId, { name: string; usedFor: string; 
       usedFor: 'Speech-to-text and voices for Indian languages',
       keyUrl: 'https://dashboard.sarvam.ai',
     },
+    groq: {
+      name: 'Groq',
+      usedFor: 'Very fast LLM (Llama, GPT-OSS) and speech-to-text (Whisper)',
+      keyUrl: 'https://console.groq.com/keys',
+    },
   };
 
 const ENV: Record<ProviderId, { key: keyof Config; url: keyof Config }> = {
@@ -55,6 +61,7 @@ const ENV: Record<ProviderId, { key: keyof Config; url: keyof Config }> = {
   deepgram: { key: 'DEEPGRAM_API_KEY', url: 'DEEPGRAM_BASE_URL' },
   elevenlabs: { key: 'ELEVENLABS_API_KEY', url: 'ELEVENLABS_BASE_URL' },
   sarvam: { key: 'SARVAM_API_KEY', url: 'SARVAM_BASE_URL' },
+  groq: { key: 'GROQ_API_KEY', url: 'GROQ_BASE_URL' },
 };
 
 export interface ProviderAccess {

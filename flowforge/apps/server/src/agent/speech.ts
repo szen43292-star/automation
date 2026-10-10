@@ -70,7 +70,8 @@ export async function transcribe(
     body: form,
     signal,
   });
-  if (!response.ok) throw await httpError('OpenAI', response);
+  // OpenAI and Groq (Whisper) share the transcription API.
+  if (!response.ok) throw await httpError(provider === 'groq' ? 'Groq' : 'OpenAI', response);
   const body = (await response.json()) as { text?: string };
   return body.text?.trim() ?? '';
 }

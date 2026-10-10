@@ -422,6 +422,45 @@ describe('agents', () => {
   });
 });
 
+describe('Groq', () => {
+  it('runs the agent and speech-to-text with a Groq key and Groq models', async () => {
+    const providers = await setKeys({ groq: 'gsk_groq-key-4321' });
+    expect(providers.find((p) => p.id === 'groq')).toMatchObject({
+      configured: true,
+      hint: '…4321',
+    });
+    const options = (
+      await app.inject({ method: 'GET', url: '/api/agents/options', headers: H() })
+    ).json();
+    expect(options.llmProviders).toContain('groq');
+    expect(options.sttProviders).toContain('groq');
+
+    const agent = await createAgent({ engine: 'pipeline', voice: { llm: { provider: 'groq' } } });
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/agents/${agent.id}/chat`,
+      headers: H(),
+      payload: { messages: [{ role: 'caller', text: 'What does a haircut cost?' }] },
+    });
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.json().model).toBe('groq/llama-3.3-70b-versatile');
+    const chat = fake.requests.find((r) => r.path === '/v1/chat/completions')!;
+    expect(chat.headers.authorization).toBe('Bearer gsk_groq-key-4321');
+    expect(chat.body.model).toBe('llama-3.3-70b-versatile');
+
+    const { transcribe } = await import('../src/agent/speech');
+    const { agentVoiceSchema } = await import('../src/agent/config');
+    fake.requests.length = 0;
+    await transcribe(
+      app.aiProviders,
+      agentVoiceSchema.parse({ stt: { provider: 'groq' } }),
+      new Int16Array(4800),
+    );
+    const stt = fake.requests.find((r) => r.path === '/v1/audio/transcriptions')!;
+    expect(stt.headers.authorization).toBe('Bearer gsk_groq-key-4321');
+  });
+});
+
 describe('AI voice calls', () => {
   it('pipeline: greets, answers from knowledge, hangs up, summarizes and tells the owner', async () => {
     await setKeys({ openai: 'sk-openai-key-9876', anthropic: 'sk-ant-test-key-1234' });

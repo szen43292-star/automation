@@ -1,11 +1,30 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
-import { app, BrowserWindow, Menu, Notification, Tray, nativeImage, shell } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  Menu,
+  Notification,
+  Tray,
+  nativeImage,
+  powerMonitor,
+  shell,
+} from 'electron';
 import { autoUpdater } from 'electron-updater';
 import { LocalRuntime, loadBundledConfig } from './runtime';
 
 const APP_ID = 'com.flowforge.desktop';
-const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
+const UPDATE_CHECK_INTERVAL = 60 * 60 * 1000;
+/** A downloaded update installs by itself once the PC has been idle this long and no call is on. */
+const IDLE_BEFORE_UPDATE_SECONDS = 15 * 60;
+const QUIET_CHECK_INTERVAL = 5 * 60 * 1000;
 
 const dataDir = app.getPath('userData');
 const logDir = join(dataDir, 'logs');
@@ -58,7 +77,21 @@ let runtime: LocalRuntime | null = null;
 let serverUrl: string | null = null;
 let quitting = false;
 let updateReady: string | null = null;
-const startHidden = process.argv.includes('--hidden');
+// After an update installed by itself, FlowForge comes back in the tray, as before.
+const silentUpdateFlag = join(dataDir, 'silent-update.json');
+const startHidden = process.argv.includes('--hidden') || consumeSilentUpdateFlag();
+
+function consumeSilentUpdateFlag(): boolean {
+  if (!existsSync(silentUpdateFlag)) return false;
+  try {
+    const { at } = JSON.parse(readFileSync(silentUpdateFlag, 'utf8')) as { at?: number };
+    return typeof at === 'number' && Date.now() - at < 60 * 60 * 1000;
+  } catch {
+    return false;
+  } finally {
+    rmSync(silentUpdateFlag, { force: true });
+  }
+}
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -259,13 +292,21 @@ function applyLoginItem() {
 }
 
 // ---- Updates ----------------------------------------------------------------------------------
-// Updates come from this repository's GitHub Releases (public, or private with a built-in token).
+// Updates come from your download website (its /downloads folder, found when the app was built -
+// no token needed), else from this repository's GitHub Releases (public, or private with a
+// built-in token). They download in the background and install by themselves while the PC is idle
+// and no call is on, then FlowForge starts again in the tray: nothing to click.
 
 function setupAutoUpdates() {
   if (!app.isPackaged) return;
-  // Private repository: a read-only token built into this private build lets the updater see releases.
-  const { updateToken } = loadBundledConfig(resourcesDir);
-  if (updateToken) process.env.GH_TOKEN = updateToken;
+  const { updateToken, updateUrl } = loadBundledConfig(resourcesDir);
+  if (updateToken) {
+    // Private repository: a read-only token built into this private build lets the updater see releases.
+    process.env.GH_TOKEN = updateToken;
+  } else if (updateUrl) {
+    autoUpdater.setFeedURL({ provider: 'generic', url: `${updateUrl}/downloads` });
+    log(`Updates from ${updateUrl}/downloads`);
+  }
   autoUpdater.logger = { info: log, warn: log, error: log, debug: () => undefined };
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
@@ -275,12 +316,13 @@ function setupAutoUpdates() {
     if (Notification.isSupported()) {
       const notification = new Notification({
         title: `FlowForge ${info.version} is ready`,
-        body: 'Click to restart and update now, or it installs the next time FlowForge quits.',
+        body: 'It installs by itself when your PC is idle and no call is on. Click to update now.',
         icon: join(assets, 'icon.png'),
       });
       notification.on('click', () => void installUpdate());
       notification.show();
     }
+    installWhenQuiet();
   });
   void checkForUpdates(false);
   setInterval(() => void checkForUpdates(false), UPDATE_CHECK_INTERVAL).unref();
@@ -300,11 +342,41 @@ async function checkForUpdates(manual: boolean) {
   }
 }
 
-async function installUpdate() {
+let quietTimer: NodeJS.Timeout | null = null;
+
+/** Installs the downloaded update once nobody is using the PC and no call is in progress. */
+function installWhenQuiet() {
+  if (quietTimer) return;
+  quietTimer = setInterval(() => {
+    void (async () => {
+      if (quitting || powerMonitor.getSystemIdleTime() < IDLE_BEFORE_UPDATE_SECONDS) return;
+      if ((await activeCalls()) !== 0) return;
+      log(`Installing FlowForge ${updateReady} while the PC is idle`);
+      await installUpdate(true);
+    })();
+  }, QUIET_CHECK_INTERVAL);
+  quietTimer.unref();
+}
+
+/** Calls in progress on this PC's server; null when it cannot tell (then wait). */
+async function activeCalls(): Promise<number | null> {
+  if (!serverUrl) return 0;
+  try {
+    const response = await fetch(`${serverUrl}/readyz`, { signal: AbortSignal.timeout(5000) });
+    const body = (await response.json()) as { activeCalls?: number };
+    return typeof body.activeCalls === 'number' ? body.activeCalls : null;
+  } catch {
+    return null;
+  }
+}
+
+async function installUpdate(silent = false) {
   quitting = true;
+  if (silent) writeFileSync(silentUpdateFlag, JSON.stringify({ at: Date.now() }));
   await runtime?.stop();
   runtime = null;
-  autoUpdater.quitAndInstall(false, true);
+  // Silent: no installer window; either way FlowForge starts again afterwards.
+  autoUpdater.quitAndInstall(silent, true);
 }
 
 // ---- Quit -------------------------------------------------------------------------------------

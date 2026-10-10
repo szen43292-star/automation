@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Copy,
   Download,
@@ -9,7 +9,7 @@ import {
   Upload,
   Workflow as WorkflowIcon,
 } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { workflowImportSchema } from '@flowforge/workflow';
@@ -52,11 +52,18 @@ export function WorkflowsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
+  // Ask the server once typing pauses, and keep showing the current list meanwhile.
+  const [searched, setSearched] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setSearched(search.trim()), 250);
+    return () => clearTimeout(timer);
+  }, [search]);
   const fileInput = useRef<HTMLInputElement>(null);
   const byName = useNodeTypes((s) => s.byName);
   const query = useQuery({
-    queryKey: ['workflows', search],
-    queryFn: () => endpoints.workflows({ search }),
+    queryKey: ['workflows', searched],
+    queryFn: () => endpoints.workflows({ search: searched }),
+    placeholderData: keepPreviousData,
   });
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['workflows'] });
@@ -161,14 +168,14 @@ export function WorkflowsPage() {
         ) : !query.data?.data.length ? (
           <EmptyState
             icon={WorkflowIcon}
-            title={search ? 'No workflows match your search' : 'No workflows yet'}
+            title={searched ? 'No workflows match your search' : 'No workflows yet'}
             description={
-              search
+              searched
                 ? undefined
                 : 'Create your first workflow - for example an AI receptionist that answers every WhatsApp call.'
             }
             action={
-              !search && (
+              !searched && (
                 <Button variant="primary" icon={Plus} onClick={() => navigate('/workflow/new')}>
                   Create workflow
                 </Button>

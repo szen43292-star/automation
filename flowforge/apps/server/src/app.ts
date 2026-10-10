@@ -280,10 +280,17 @@ export async function buildApp(
 
   // --- Public routes -------------------------------------------------------
   app.get('/healthz', async () => ({ status: 'ok' }));
-  app.get('/readyz', async (_request, reply) => {
+  app.get('/readyz', async (request, reply) => {
     try {
       await prisma.$queryRaw`SELECT 1`;
-      return { status: 'ok', mode: config.EXECUTIONS_MODE };
+      // The Windows app asks before installing an update, so it never restarts during a call.
+      // Only answered on this computer.
+      const local = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(request.ip);
+      return {
+        status: 'ok',
+        mode: config.EXECUTIONS_MODE,
+        ...(local ? { activeCalls: app.calls.activeCount } : {}),
+      };
     } catch {
       return reply
         .status(503)
