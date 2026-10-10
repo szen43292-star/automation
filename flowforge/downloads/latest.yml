@@ -1,8 +1,8 @@
-version: 0.3.1
+version: 0.3.2
 files:
   - url: FlowForge-Setup.exe
-    sha512: b8ZqTMKZYqu6/yXcMml5PThoLe8kVh8TF2aBqvvCQEtmZJdP1jf5dCR6CnyYXC7ltZbzTbgg72Gwbg0Yf48Gcg==
-    size: 234672605
+    sha512: dN3ywSprcLEfrkJmigPY6ZCJb8/4mHprsQRurJEuaN4ysDDAJHdQOyx8iHHniDvixPRSRkHgfSnaAwoBRIBoYQ==
+    size: 234674479
 path: FlowForge-Setup.exe
-sha512: b8ZqTMKZYqu6/yXcMml5PThoLe8kVh8TF2aBqvvCQEtmZJdP1jf5dCR6CnyYXC7ltZbzTbgg72Gwbg0Yf48Gcg==
-releaseDate: '2026-10-10T14:44:55.673Z'
+sha512: dN3ywSprcLEfrkJmigPY6ZCJb8/4mHprsQRurJEuaN4ysDDAJHdQOyx8iHHniDvixPRSRkHgfSnaAwoBRIBoYQ==
+releaseDate: '2026-10-10T16:33:13.804Z'

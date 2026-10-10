@@ -1,11 +1,11 @@
 {
   "schema": 1,
   "name": "FlowForge",
-  "version": "0.3.1",
-  "tag": "v0.3.1",
-  "publishedAt": "2026-10-10T14:48:53.838Z",
+  "version": "0.3.2",
+  "tag": "v0.3.2",
+  "publishedAt": "2026-10-10T16:36:58.346Z",
   "repo": "szen43292-star/automation",
-  "notes": "### New\n- Groq: very fast AI models and Whisper speech-to-text (add your Groq key in AI agents → AI providers)\n- Search boxes fixed (workflows and nodes)\n- The Windows app now updates itself: it downloads new versions from your website and installs them while your PC is idle and no call is on\n\n### Install\n- **Windows:** FlowForge-Setup.exe\n- **Android:** FlowForge.apk (allow installing apps from your browser)\n- **iPhone:** FlowForge.ipa - unsigned, install with AltStore or Sideloadly",
+  "notes": "### New\n- AI agents use the models your API key can actually use, picked automatically - no model names to type (fixes \"model does not exist or you do not have access to it\" with Groq)\n- The agent builder suggests your key's models and shows which one Automatic uses\n- The Windows app knows all of your download websites, so updates keep working if one is removed\n- Test numbers always get their own phone number\n\n### Install\n- **Windows:** FlowForge-Setup.exe\n- **Android:** FlowForge.apk (allow installing apps from your browser)\n- **iPhone:** FlowForge.ipa - unsigned, install with AltStore or Sideloadly",
   "downloads": [
     {
       "file": "FlowForge-Setup.exe",
@@ -14,9 +14,9 @@
       "kind": "installer",
       "label": "Windows installer (.exe)",
       "requirements": "Windows 10 or 11, 64-bit",
-      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.1/FlowForge-Setup.exe",
-      "size": 234672605,
-      "sha256": "f6d23b22f3dcb0caa3b91b659962182576efa1f1f419c04a621196e4ed9123b3"
+      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.2/FlowForge-Setup.exe",
+      "size": 234674479,
+      "sha256": "928b0176e755b7bd783ed23a512d376123471236339b9a7ccacd7b4d12fe6220"
     },
     {
       "file": "FlowForge.apk",
@@ -25,9 +25,9 @@
       "kind": "app",
       "label": "Android app (.apk)",
       "requirements": "Android 7 or newer - allow \"Install unknown apps\" for your browser",
-      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.1/FlowForge.apk",
-      "size": 4948502,
-      "sha256": "f17a893a42a3e94dc299084f6a8ea317a210f6cc549ed7dec632f62b556af8ee"
+      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.2/FlowForge.apk",
+      "size": 4948758,
+      "sha256": "91587866f1060ef131eb1f2a1f92aa8cd4f5db11cd9b4ab51bdfae7098021b63"
     },
     {
       "file": "FlowForge.ipa",
@@ -36,9 +36,9 @@
       "kind": "app",
       "label": "iPhone app (.ipa)",
       "requirements": "iOS 15 or newer - unsigned: install with AltStore or Sideloadly using your Apple ID",
-      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.1/FlowForge.ipa",
-      "size": 1148025,
-      "sha256": "e62fae6f3e6e784fa3d3fda3ea50c93c8c8fd41f2cebbdf55633b9dcb8ade3aa"
+      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.2/FlowForge.ipa",
+      "size": 1148288,
+      "sha256": "99d88e060da825137d5615f3b1bc1a4f096a607be1020c92aa821780ec9a45f1"
     }
   ]
 }
