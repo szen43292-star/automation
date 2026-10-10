@@ -332,7 +332,20 @@ export class WhatsAppService {
 
   /** A test number: workflows send and receive through the built-in simulator, nothing goes to Meta. */
   async createSimulator(userId: string, input: { name?: string }) {
-    const digits = `1555010${String(randomInt(0, 10_000)).padStart(4, '0')}`;
+    // +1 555-010-xxxx, never one that is already taken (two equal test numbers are confusing).
+    const taken = new Set(
+      (
+        await this.deps.prisma.whatsAppAccount.findMany({
+          where: { mode: 'simulator' },
+          select: { displayPhoneNumber: true },
+        })
+      ).map((a) => a.displayPhoneNumber),
+    );
+    let digits = '';
+    for (let attempt = 0; attempt < 50; attempt++) {
+      digits = `1555010${String(randomInt(0, 10_000)).padStart(4, '0')}`;
+      if (!taken.has(`+1 555-010-${digits.slice(-4)}`)) break;
+    }
     const row = await this.deps.prisma.whatsAppAccount.create({
       data: {
         name: input.name?.trim() || 'Test number',

@@ -1,8 +1,9 @@
-// Finds the download website the Windows app updates itself from, so nobody has to enter it:
+// Finds the download websites the Windows app updates itself from, so nobody has to enter them:
 // Vercel reports every deployment to GitHub (commit statuses "Vercel – <project>" linking to
 // https://vercel.com/<team>/<project>/…, and GitHub deployments). Each project's address is tried
-// and kept only if it answers /api/releases/site for this repository. UPDATE_URL (a repository
-// secret) wins, e.g. for a custom domain. Prints "url=https://…" for $GITHUB_OUTPUT, or nothing.
+// and kept if it answers /api/releases/site for this repository - all of them, so the app still
+// updates when one project is deleted. UPDATE_URL (a repository secret, one address or several)
+// wins, e.g. for a custom domain. Prints "url=https://… https://…" for $GITHUB_OUTPUT, or nothing.
 //   GH_TOKEN=… GITHUB_REPOSITORY=owner/name node scripts/find-update-url.mjs
 import { pathToFileURL } from 'node:url';
 
@@ -20,8 +21,12 @@ export function candidatesFrom(links) {
   return [...new Set(urls)];
 }
 
-export async function findUpdateUrl({ repo, token, override, fetcher = fetch, log = () => {} }) {
-  if (override?.trim()) return override.trim().replace(/\/+$/, '');
+export async function findUpdateUrls({ repo, token, override, fetcher = fetch, log = () => {} }) {
+  if (override?.trim())
+    return override
+      .split(/[\s,]+/)
+      .filter(Boolean)
+      .map((url) => url.replace(/\/+$/, ''));
   const github = async (path) => {
     const response = await fetcher(`https://api.github.com/repos/${repo}${path}`, {
       headers: {
@@ -53,6 +58,7 @@ export async function findUpdateUrl({ repo, token, override, fetcher = fetch, lo
   } catch (error) {
     log(`Deployments: ${error.message}`);
   }
+  const found = [];
   for (const url of candidatesFrom(links)) {
     try {
       const response = await fetcher(`${url}/api/releases/site`, {
@@ -61,23 +67,25 @@ export async function findUpdateUrl({ repo, token, override, fetcher = fetch, lo
       const site = response.ok ? await response.json() : null;
       if (site?.app === 'flowforge-website' && site.repo?.toLowerCase() === repo.toLowerCase()) {
         log(`Download website: ${url}`);
-        return url;
+        found.push(url);
+        continue;
       }
       log(`${url} is not this repository's download website`);
     } catch (error) {
       log(`${url}: ${error.message}`);
     }
   }
-  log('No download website found: the app will update from GitHub Releases instead.');
-  return null;
+  if (!found.length)
+    log('No download website found: the app will update from GitHub Releases instead.');
+  return found;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const url = await findUpdateUrl({
+  const urls = await findUpdateUrls({
     repo: process.env.GITHUB_REPOSITORY ?? '',
     token: process.env.GH_TOKEN ?? '',
     override: process.env.UPDATE_URL,
     log: (line) => console.error(line),
   });
-  if (url) console.log(`url=${url}`);
+  if (urls.length) console.log(`url=${urls.join(' ')}`);
 }

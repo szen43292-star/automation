@@ -18,7 +18,7 @@ import {
   shell,
 } from 'electron';
 import { autoUpdater } from 'electron-updater';
-import { LocalRuntime, loadBundledConfig } from './runtime';
+import { LocalRuntime, loadBundledConfig, pickUpdateSite } from './runtime';
 
 const APP_ID = 'com.flowforge.desktop';
 const UPDATE_CHECK_INTERVAL = 60 * 60 * 1000;
@@ -299,13 +299,12 @@ function applyLoginItem() {
 
 function setupAutoUpdates() {
   if (!app.isPackaged) return;
-  const { updateToken, updateUrl } = loadBundledConfig(resourcesDir);
+  const { updateToken, updateUrls } = loadBundledConfig(resourcesDir);
   if (updateToken) {
     // Private repository: a read-only token built into this private build lets the updater see releases.
     process.env.GH_TOKEN = updateToken;
-  } else if (updateUrl) {
-    autoUpdater.setFeedURL({ provider: 'generic', url: `${updateUrl}/downloads` });
-    log(`Updates from ${updateUrl}/downloads`);
+  } else {
+    updateSites = updateUrls;
   }
   autoUpdater.logger = { info: log, warn: log, error: log, debug: () => undefined };
   autoUpdater.autoDownload = true;
@@ -328,8 +327,23 @@ function setupAutoUpdates() {
   setInterval(() => void checkForUpdates(false), UPDATE_CHECK_INTERVAL).unref();
 }
 
+let updateSites: string[] = [];
+let updateFeed: string | null = null;
+
 async function checkForUpdates(manual: boolean) {
   try {
+    if (updateSites.length) {
+      const site = await pickUpdateSite(updateSites);
+      if (!site) {
+        log(`No download website answered (${updateSites.join(', ')}) - trying again later`);
+        return;
+      }
+      if (site.url !== updateFeed) {
+        autoUpdater.setFeedURL({ provider: 'generic', url: `${site.url}/downloads` });
+        updateFeed = site.url;
+        log(`Updates from ${site.url}/downloads (offers ${site.version})`);
+      }
+    }
     const result = await autoUpdater.checkForUpdates();
     if (manual && Notification.isSupported() && !result?.isUpdateAvailable) {
       new Notification({
