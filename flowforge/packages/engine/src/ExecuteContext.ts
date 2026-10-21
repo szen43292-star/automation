@@ -274,5 +274,11 @@ function unavailableWhatsApp(node: INode): IWhatsAppHelper {
       description: 'Run this workflow on a AutoForge server with a connected WhatsApp number.',
     });
   };
-  return { send: fail, markRead: fail, uploadMedia: fail, downloadMedia: fail, listTemplates: fail };
+  return {
+    send: fail,
+    markRead: fail,
+    uploadMedia: fail,
+    downloadMedia: fail,
+    listTemplates: fail,
+  };
 }
