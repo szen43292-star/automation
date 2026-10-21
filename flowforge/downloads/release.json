@@ -1,11 +1,11 @@
 {
   "schema": 1,
-  "name": "FlowForge",
-  "version": "0.3.3",
-  "tag": "v0.3.3",
-  "publishedAt": "2026-10-21T07:57:29.728Z",
+  "name": "AutoForge",
+  "version": "0.3.4",
+  "tag": "v0.3.4",
+  "publishedAt": "2026-10-21T16:02:40.074Z",
   "repo": "szen43292-star/automation",
-  "notes": "## New\n- **AI Story Shorts – Daily** template (Templates → Content): turns a trending topic into a YouTube Short every evening.\n  - Publishes automatically: scheduled for 20:00 India time by default (or public right away, or Private), set in \"Publish Settings\".\n  - Safety gate: only a first-try approval with every quality score 8+ is published; anything else stays Private for review.\n  - If the editor rejects the first story, the writer gets one more try with the feedback.\n  - After the upload it checks the video's status on YouTube and emails you about any problem (rejected, failed, or locked as private).\n- New nodes: **RSS Read**, **Google Sheets** (get rows, append row), **YouTube** (upload video, with publish time and AI-content disclosure), **Gmail** (send), **Basic LLM Chain** (Google Gemini, with JSON output).\n- New credentials: YouTube, Google Sheets and Gmail (just a client ID and secret) and Google Gemini (PaLM) API.\n- HTTP Request: \"Predefined Credential Type\" sign-in.\n- \"Use template\" picks your existing credentials and tells you which ones are missing.\n- Download page: an \"All files\" list with every app, on any device.\n\n### Install\n- **Windows:** FlowForge-Setup.exe\n- **Android:** FlowForge.apk (allow installing apps from your browser)\n- **iPhone:** FlowForge.ipa - unsigned, install with AltStore or Sideloadly",
+  "notes": "**AutoForge 0.3.4**\n\n- **New name: AutoForge.** Your workflows and credentials stay where they are (`%APPDATA%\\FlowForge`), so installing over the old version keeps everything.\n- **Approve videos from your phone.** The AI Story Shorts workflow emails you a link to watch the new Short and tap Approve or Reject; it uploads only when you approve. The link works from anywhere while your PC is on. There is also a new Approvals tab in the app.\n- **Groq for AI steps.** Basic LLM Chain can use Groq (new \"Groq API\" credential); the AI Story Shorts template now writes and checks stories with Groq.\n- **Gemini:** retired models are skipped automatically.\n- **Make Video:** stock clips come from Coverr; a huge Timeout no longer fails; a clear message when MoneyPrinterTurbo is not running; 3 retries a minute apart.\n- **iPhone:** unsigned FlowForge.ipa for sideloading with AltStore or Sideloadly. Android APK and Windows installer included.\n\n### Install\n- **Windows:** FlowForge-Setup.exe\n- **Android:** FlowForge.apk (allow installing apps from your browser)\n- **iPhone:** FlowForge.ipa - unsigned, install with AltStore or Sideloadly",
   "downloads": [
     {
       "file": "FlowForge-Setup.exe",
@@ -14,9 +14,9 @@
       "kind": "installer",
       "label": "Windows installer (.exe)",
       "requirements": "Windows 10 or 11, 64-bit",
-      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.3/FlowForge-Setup.exe",
-      "size": 236462936,
-      "sha256": "b9a365d2630ea1956573385c7d24a7b985e669c8a0ebf1fc481de8b6d01791ec"
+      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.4/FlowForge-Setup.exe",
+      "size": 236486506,
+      "sha256": "61088caf588027ab6a8eb40e32dd3a750634e3c09aca2cdd9abd889f19e7e6c1"
     },
     {
       "file": "FlowForge.apk",
@@ -25,9 +25,9 @@
       "kind": "app",
       "label": "Android app (.apk)",
       "requirements": "Android 7 or newer - allow \"Install unknown apps\" for your browser",
-      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.3/FlowForge.apk",
-      "size": 4948962,
-      "sha256": "91fb938b3d09af786dac196647e8c7993d0f193fd8d013ed98f78e5482889b10"
+      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.4/FlowForge.apk",
+      "size": 4949778,
+      "sha256": "38eef35604c88280e5e81abf4212fb3df520a11fe27ae700033faca5d5bd67de"
     },
     {
       "file": "FlowForge.ipa",
@@ -36,9 +36,9 @@
       "kind": "app",
       "label": "iPhone app (.ipa)",
       "requirements": "iOS 15 or newer - unsigned: install with AltStore or Sideloadly using your Apple ID",
-      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.3/FlowForge.ipa",
-      "size": 1148506,
-      "sha256": "8afe41dd24f1c9ec10526c7dc7b77d2d873166d4598ea8f80a62dca4a8467d5f"
+      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.4/FlowForge.ipa",
+      "size": 1149324,
+      "sha256": "a6aacb9e50653ca694c1a9412f81a61a3aaa57d14adb55acff75ed479927c6fd"
     }
   ]
 }
