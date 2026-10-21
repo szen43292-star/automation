@@ -227,14 +227,39 @@ export async function dashboardRoutes(app: FastifyInstance, opts: { defaultTimez
     const template = TEMPLATES.find((t) => t.id === id);
     if (!template)
       return reply.status(404).send({ error: 'NotFound', message: 'Template not found' });
+    // The user's own credentials, picked by type (newest first); none are ever stored in templates.
+    const credentialsByType = new Map<string, { id: string; name: string } | null>();
+    for (const type of new Set(template.nodes.flatMap((n) => n.credentialTypes ?? []))) {
+      const [newest] = await app.services.credentials.list(request.currentUser, type);
+      credentialsByType.set(type, newest ? { id: newest.id, name: newest.name } : null);
+    }
+    const nodes = template.nodes.map(({ credentialTypes, ...n }) => {
+      const credentials = Object.fromEntries(
+        (credentialTypes ?? []).flatMap((type) => {
+          const found = credentialsByType.get(type);
+          return found ? [[type, found]] : [];
+        }),
+      );
+      return Object.keys(credentials).length ? { ...n, credentials } : n;
+    });
     const row = await app.services.workflows.create(
       request.currentUser,
       parse(workflowCreateSchema, {
         name: template.name,
-        nodes: template.nodes,
+        nodes,
         connections: template.connections,
+        settings: template.settings ?? {},
+        active: false,
       }),
     );
-    return reply.status(201).send({ id: row.id, name: row.name, setup: template.setup });
+    const missingCredentials = [...credentialsByType]
+      .filter(([, found]) => !found)
+      .map(([type]) => app.services.credentials.types.get(type)?.displayName ?? type);
+    return reply.status(201).send({
+      id: row.id,
+      name: row.name,
+      setup: template.setup,
+      missingCredentials,
+    });
   });
 }

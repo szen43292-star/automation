@@ -19,9 +19,15 @@ export function TemplatesPage() {
     setUsing(id);
     try {
       const created = await endpoints.useTemplate(id);
+      const missing = created.missingCredentials ?? [];
       toast.success(`Created "${created.name}"`, {
-        description: `Next: ${created.setup.join(' → ')}`,
-        duration: 10_000,
+        description: [
+          missing.length ? `Connect: ${missing.join(', ')}.` : '',
+          `Next: ${created.setup.join(' → ')}`,
+        ]
+          .filter(Boolean)
+          .join(' '),
+        duration: 15_000,
       });
       navigate(`/workflow/${created.id}`);
     } catch (error) {

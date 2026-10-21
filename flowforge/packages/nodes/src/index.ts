@@ -4,19 +4,24 @@ import { Code } from './nodes/Code';
 import { DateTimeNode } from './nodes/DateTime';
 import { EditFields } from './nodes/EditFields';
 import { Filter } from './nodes/Filter';
+import { Gmail } from './nodes/Gmail';
+import { GoogleSheets } from './nodes/GoogleSheets';
 import { HttpRequest } from './nodes/HttpRequest';
 import { If } from './nodes/If';
+import { LlmChain } from './nodes/LlmChain';
 import { ManualTrigger } from './nodes/ManualTrigger';
 import { Sort } from './nodes/Sort';
 import { Limit, NoOp, SplitOut, StickyNote, StopAndError } from './nodes/Utility';
 import { LoopOverItems } from './nodes/LoopOverItems';
 import { Merge } from './nodes/Merge';
+import { RssFeedRead } from './nodes/RssFeedRead';
 import { ScheduleTrigger, scheduleToCron } from './nodes/Schedule';
 import { ErrorTrigger, ExecuteWorkflow, ExecuteWorkflowTrigger } from './nodes/SubWorkflow';
 import { Switch } from './nodes/Switch';
 import { Wait } from './nodes/Wait';
 import { RespondToWebhook, Webhook } from './nodes/Webhook';
 import { WhatsApp, WhatsAppTrigger, normalisePhone, sampleMessage } from './nodes/WhatsApp';
+import { YouTube } from './nodes/YouTube';
 
 export * from './credentials';
 export { scheduleToCron, normalisePhone, sampleMessage };
@@ -39,9 +44,14 @@ export {
   DateTimeNode,
   EditFields,
   Filter,
+  Gmail,
+  GoogleSheets,
   HttpRequest,
   If,
   Limit,
+  LlmChain,
+  RssFeedRead,
+  YouTube,
   ManualTrigger,
   NoOp,
   Sort,
@@ -60,6 +70,11 @@ export const builtinNodes: INodeType[] = [
   ErrorTrigger,
   RespondToWebhook,
   WhatsApp,
+  LlmChain,
+  RssFeedRead,
+  GoogleSheets,
+  YouTube,
+  Gmail,
   Merge,
   Switch,
   LoopOverItems,
