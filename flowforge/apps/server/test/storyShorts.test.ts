@@ -141,10 +141,23 @@ describe('AI Story Shorts – Daily template', () => {
   /**
    * Fake Google, Gemini and MoneyPrinterTurbo. The editor answers with `reviews` in order; the
    * writer always answers with `story` (numbered by attempt, so the drafts can be told apart).
+   * `videoStatus` turns the status sent with the upload into what YouTube reports afterwards
+   * (by default: still processing, with the requested privacy and publish time).
    */
-  function fakeWorld(reviews: IDataObject[], { emptySheet = false } = {}) {
+  function fakeWorld(
+    reviews: IDataObject[],
+    {
+      emptySheet = false,
+      videoStatus = (sent: IDataObject): IDataObject | null => ({
+        uploadStatus: 'uploaded',
+        privacyStatus: sent.privacyStatus,
+        ...(sent.publishAt ? { publishAt: sent.publishAt } : {}),
+      }),
+    } = {},
+  ) {
     let progress = 40;
     let drafts = 0;
+    let sentStatus: IDataObject = {};
     const calls: IHttpRequestOptions[] = [];
     const ok = (body: unknown, extra: Partial<IHttpResponse> = {}): IHttpResponse => ({
       statusCode: 200,
@@ -160,14 +173,21 @@ describe('AI Story Shorts – Daily template', () => {
         return ok(
           '<rss><channel><item><title>Diwali 2026</title></item><item><title>Cricket final</title></item></channel></rss>',
         );
-      if (url === 'https://www.googleapis.com/youtube/v3/videos')
+      if (url === 'https://www.googleapis.com/youtube/v3/videos' && r.qs?.chart)
         return ok({
           items: [{ snippet: { title: 'Top song' } }, { snippet: { title: 'Funny cat' } }],
         });
+      if (url === 'https://www.googleapis.com/youtube/v3/videos' && r.qs?.id === 'VID123') {
+        const status = videoStatus(sentStatus);
+        return ok({ items: status ? [{ id: 'VID123', status }] : [] });
+      }
       if (url.includes('sheets.googleapis.com') && r.method === 'GET' && url.includes('1%3A1'))
         return ok({ values: [['title', 'trend_used', 'video_id', 'date', 'attempt']] });
       if (url.includes('sheets.googleapis.com') && r.method === 'GET')
         return ok(emptySheet ? {} : { values: [['title'], ['Old story 1'], ['Old story 2']] });
+      // New column names (publish_mode, publish_time) are added to the header row.
+      if (url.includes('sheets.googleapis.com') && r.method === 'PUT')
+        return ok({ updatedCells: 2 });
       if (url.includes(':append')) return ok({ updates: { updatedRows: 1 } });
       if (url.endsWith('/v1beta/models'))
         return ok({
@@ -201,9 +221,11 @@ describe('AI Story Shorts – Daily template', () => {
           headers: { 'content-type': 'video/mp4' },
           binary: Buffer.from('mp4 bytes'),
         });
-      if (url === 'https://www.googleapis.com/upload/youtube/v3/videos')
+      if (url === 'https://www.googleapis.com/upload/youtube/v3/videos') {
+        sentStatus = (r.body as IDataObject).status as IDataObject;
         return ok(undefined, { headers: { location: 'https://upload.example/s/1' } });
-      if (url === 'https://upload.example/s/1') return ok({ id: 'VID123' });
+      }
+      if (url === 'https://upload.example/s/1') return ok({ id: 'VID123', status: sentStatus });
       if (url.endsWith('/messages/send')) return ok({ id: 'mail-1' });
       return {
         statusCode: 404,
@@ -217,18 +239,23 @@ describe('AI Story Shorts – Daily template', () => {
         .filter((c) => c.url.includes(':generateContent'))
         .map((c) => JSON.parse(JSON.stringify((c.body as IDataObject).contents))[0].parts[0].text)
         .filter((text: string) => !text.includes('strict YouTube Shorts editor')) as string[];
+    const mails = () => calls.filter((c) => c.url.endsWith('/messages/send'));
+    const upload = () =>
+      calls.find((c) => c.url === 'https://www.googleapis.com/upload/youtube/v3/videos')!;
     const mailBody = () => {
-      const mail = calls.find((c) => c.url.endsWith('/messages/send'))!;
+      expect(mails()).toHaveLength(1);
+      const mail = mails()[0]!;
       const message = Buffer.from((mail.body as { raw: string }).raw, 'base64url').toString();
       const body = Buffer.from(
         message.split('\r\n\r\n')[1]!.replace(/\r\n/g, ''),
         'base64',
       ).toString();
-      return { message, body };
+      const subject = message.match(/^Subject: (.*)$/m)![1]!;
+      return { message, subject, body };
     };
     const loggedRow = () =>
       (calls.find((c) => c.url.includes(':append'))!.body as { values: unknown[][] }).values[0]!;
-    return { calls, httpRequest, prompts, mailBody, loggedRow };
+    return { calls, httpRequest, prompts, mails, upload, mailBody, loggedRow };
   }
 
   const credentials: ICredentialsHelper = {
@@ -243,7 +270,10 @@ describe('AI Story Shorts – Daily template', () => {
   };
 
   /** Runs the template as if every credential were connected, resuming each Wait. */
-  async function runTemplate(httpRequest: (r: IHttpRequestOptions) => Promise<IHttpResponse>) {
+  async function runTemplate(
+    httpRequest: (r: IHttpRequestOptions) => Promise<IHttpResponse>,
+    settings: Record<string, string> = {},
+  ) {
     const nodes = template.nodes.map(({ credentialTypes, ...n }) => ({
       ...n,
       ...(credentialTypes
@@ -253,6 +283,17 @@ describe('AI Story Shorts – Daily template', () => {
         ...n.parameters,
         ...(n.type === 'flowforge.googleSheets' ? { documentId: 'SHEET-ID' } : {}),
         ...(n.type === 'flowforge.gmail' ? { sendTo: 'me@example.com' } : {}),
+        ...(n.name === 'Publish Settings'
+          ? {
+              assignments: {
+                assignments: (
+                  n.parameters.assignments as {
+                    assignments: Array<{ name: string; value: string }>;
+                  }
+                ).assignments.map((a) => ({ ...a, value: settings[a.name] ?? a.value })),
+              },
+            }
+          : {}),
       },
     })) as INode[];
     const workflow = new Workflow({
@@ -279,8 +320,12 @@ describe('AI Story Shorts – Daily template', () => {
     let waits = 0;
     while (run.status === 'waiting') {
       waits++;
-      expect(run.data.waitingNode).toBe('Wait 5 Minutes');
-      expect(new Date(run.data.waitTill!).getTime() - Date.now()).toBeGreaterThan(4 * 60_000);
+      const waited = new Date(run.data.waitTill!).getTime() - Date.now();
+      if (run.data.waitingNode === 'Wait 5 Minutes') expect(waited).toBeGreaterThan(4 * 60_000);
+      else {
+        expect(run.data.waitingNode).toBe('Wait for Processing');
+        expect(waited).toBeGreaterThan(60_000);
+      }
       run = await execute({ resumeFrom: run.data });
     }
     const runData = run.data.resultData.runData;
@@ -293,7 +338,8 @@ describe('AI Story Shorts – Daily template', () => {
     const { run, waits, runData, out } = await runTemplate(world.httpRequest);
     expect(run.data.resultData.error).toBeUndefined();
     expect(run.status).toBe('success');
-    expect(waits).toBe(2); // not ready at the first check, ready at the second
+    // Not ready at the first check, ready at the second; then the wait for YouTube's processing.
+    expect(waits).toBe(3);
 
     expect(out('Aggregate Trends')?.[0]).toEqual({
       trends: ['Diwali 2026', 'Cricket final', 'Top song', 'Funny cat'],
@@ -334,9 +380,7 @@ describe('AI Story Shorts – Daily template', () => {
       subtitle_position: 'bottom',
     });
 
-    const upload = world.calls.find(
-      (c) => c.url === 'https://www.googleapis.com/upload/youtube/v3/videos',
-    )!;
+    const upload = world.upload();
     expect(upload.body).toEqual({
       snippet: {
         title: story.title,
@@ -344,18 +388,42 @@ describe('AI Story Shorts – Daily template', () => {
         categoryId: '24',
         tags: story.tags,
       },
-      status: { privacyStatus: 'private', selfDeclaredMadeForKids: false },
+      status: {
+        privacyStatus: 'private',
+        selfDeclaredMadeForKids: false,
+        publishAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T14:30:00Z$/),
+        containsSyntheticMedia: true,
+      },
     });
+    // Scheduled (the default): 20:00 India time = 14:30 UTC, today or - when that has passed - tomorrow.
+    const publishAt = new Date((upload.body as { status: { publishAt: string } }).status.publishAt);
+    expect(publishAt.getTime()).toBeGreaterThan(Date.now());
+    expect(publishAt.getTime() - Date.now()).toBeLessThanOrEqual(24 * 3_600_000);
+    expect(upload.qs).toMatchObject({ notifySubscribers: true });
+    expect(out('Decide Publishing')?.[0]).toEqual({
+      requested_mode: 'scheduled',
+      mode: 'scheduled',
+      review_reason: '',
+    });
+
+    const status = world.calls.find((c) => c.qs?.id === 'VID123')!;
+    expect(status.qs).toMatchObject({ part: 'status,processingDetails' });
+    expect(out('Read Status')?.[0]).toMatchObject({ upload_status: 'uploaded', problem: '' });
 
     const row = world.loggedRow();
     expect(row.slice(0, 3)).toEqual([story.title, story.trend_used, 'VID123']);
     expect(row[3]).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(row[4]).toBe(1);
+    expect(row[5]).toBe('scheduled');
+    expect(row[6]).toMatch(/^\d{4}-\d{2}-\d{2} 20:00$/);
 
-    const { message, body } = world.mailBody();
-    expect(message).toContain('Subject: New Short ready: The Lamp That Remembered');
+    const { subject, body } = world.mailBody();
+    expect(subject).toMatch(/^Going live (tomorrow )?at 8 PM: The Lamp That Remembered$/);
+    expect(body).toMatch(/is scheduled to go public (tomorrow )?at 8 PM\./);
     expect(body).toContain('https://studio.youtube.com/video/VID123/edit');
+    expect(body).toContain('To stop it, open the link and set it to Private before 8 PM.');
     expect(body).toContain('Attempt: 1 of 2');
+    expect(body).toContain('Quality check: hook 8, clarity 9, originality 8, safety 10');
     expect(body).not.toContain('rejected');
   });
 
@@ -395,8 +463,110 @@ describe('AI Story Shorts – Daily template', () => {
     const row = world.loggedRow();
     expect(row[0]).toBe(`${story.title} 2`);
     expect(row[4]).toBe(2);
-    const { body } = world.mailBody();
+    expect(row[5]).toBe('private (review)');
+    expect(row[6]).toBe('');
+    // Safety gate: a second try is never published automatically.
+    const sent = world.upload();
+    expect((sent.body as IDataObject).status).toEqual({
+      privacyStatus: 'private',
+      selfDeclaredMadeForKids: false,
+      containsSyntheticMedia: true,
+    });
+    expect(sent.qs).toMatchObject({ notifySubscribers: false });
+    const { subject, body } = world.mailBody();
+    expect(subject).toBe(`New Short ready: ${story.title} 2`);
+    expect(body).toContain(
+      'is uploaded as Private.\nIt was kept Private for manual review because the story needed a second try.',
+    );
+    expect(body).toContain('Review it and publish it in YouTube Studio:');
+    expect(body).not.toContain('To stop it');
     expect(body).toContain('Attempt: 2 of 2 (the first story was rejected: The hook is weak)');
+  });
+
+  it('keeps it private for review when a score is below 8', async () => {
+    const world = fakeWorld([{ ...approve, hook: 7 }]);
+    const { run, out } = await runTemplate(world.httpRequest);
+    expect(run.status).toBe('success');
+    expect(out('Decide Publishing')?.[0]).toEqual({
+      requested_mode: 'scheduled',
+      mode: 'private',
+      review_reason: 'scores below 8: hook 7',
+    });
+    expect(((world.upload().body as IDataObject).status as IDataObject).publishAt).toBeUndefined();
+    const { subject, body } = world.mailBody();
+    expect(subject).toBe(`New Short ready: ${story.title}`);
+    expect(body).toContain('kept Private for manual review because scores below 8: hook 7.');
+    expect(body).toContain('Quality check: hook 7, clarity 9, originality 8, safety 10');
+  });
+
+  it('publishes right away in "public" mode', async () => {
+    const world = fakeWorld([approve]);
+    const { run } = await runTemplate(world.httpRequest, { publish_mode: 'public' });
+    expect(run.status).toBe('success');
+    const sent = world.upload();
+    expect(((sent.body as IDataObject).status as IDataObject).privacyStatus).toBe('public');
+    expect(((sent.body as IDataObject).status as IDataObject).publishAt).toBeUndefined();
+    expect(sent.qs).toMatchObject({ notifySubscribers: true });
+    expect(world.loggedRow()[5]).toBe('public');
+    const { subject, body } = world.mailBody();
+    expect(subject).toBe(`Now live: ${story.title}`);
+    expect(body).toContain('is live: https://youtube.com/shorts/VID123');
+  });
+
+  it('keeps the old behaviour in "private" mode, and treats unknown modes as private', async () => {
+    for (const [mode, reason] of [
+      ['private', ''],
+      ['sheduled', 'publish_mode "sheduled" is not scheduled, public or private'],
+    ]) {
+      const world = fakeWorld([approve]);
+      const { run, out } = await runTemplate(world.httpRequest, { publish_mode: mode! });
+      expect(run.status).toBe('success');
+      expect(out('Decide Publishing')?.[0]).toMatchObject({
+        mode: 'private',
+        review_reason: reason,
+      });
+      expect(((world.upload().body as IDataObject).status as IDataObject).privacyStatus).toBe(
+        'private',
+      );
+      expect(world.upload().qs).toMatchObject({ notifySubscribers: false });
+      expect(world.mailBody().subject).toBe(`New Short ready: ${story.title}`);
+    }
+  });
+
+  it('sends "Upload problem" when YouTube locks the video as private', async () => {
+    // An unaudited API project: YouTube keeps the upload private and drops the publish time.
+    const world = fakeWorld([approve], {
+      videoStatus: () => ({ uploadStatus: 'processed', privacyStatus: 'private' }),
+    });
+    const { run, runData } = await runTemplate(world.httpRequest);
+    expect(run.status).toBe('success');
+    expect(runData['Notify Me']).toBeUndefined();
+    expect(world.loggedRow()[0]).toBe(story.title); // still logged
+    const { subject, body } = world.mailBody();
+    expect(subject).toBe(`Upload problem: ${story.title}`);
+    expect(body).toContain(
+      'Problem: Locked as private: YouTube dropped the scheduled publish time, so it will not go public.',
+    );
+    expect(body).toContain('- Upload status: processed');
+    expect(body).toContain('https://studio.youtube.com/video/VID123/edit');
+    expect(body).toContain('https://support.google.com/youtube/contact/yt_api_form');
+  });
+
+  it('sends "Upload problem" when YouTube rejects the video', async () => {
+    const world = fakeWorld([approve], {
+      videoStatus: () => ({
+        uploadStatus: 'rejected',
+        rejectionReason: 'duplicate',
+        privacyStatus: 'private',
+      }),
+    });
+    const { run } = await runTemplate(world.httpRequest);
+    expect(run.status).toBe('success');
+    const { subject, body } = world.mailBody();
+    expect(subject).toBe(`Upload problem: ${story.title}`);
+    expect(body).toContain('Problem: YouTube rejected the video: duplicate');
+    expect(body).toContain('- Rejection reason: duplicate');
+    expect(body).not.toContain('yt_api_form');
   });
 
   it('stops with "Rejected twice" when the second draft is rejected too', async () => {

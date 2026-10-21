@@ -315,6 +315,80 @@ describe('YouTube upload', () => {
     expect(Buffer.from(put!.body as Uint8Array).toString()).toBe('fake mp4 bytes');
   });
 
+  /** Download a fake MP4, then upload it with the given YouTube options. */
+  async function upload(options: Record<string, string | boolean>) {
+    const http = fakeHttp(
+      (r) =>
+        r.url.endsWith('final-1.mp4')
+          ? { headers: { 'content-type': 'video/mp4' }, binary: Buffer.from('mp4') }
+          : undefined,
+      (r) =>
+        r.url === 'https://www.googleapis.com/upload/youtube/v3/videos'
+          ? { headers: { location: 'https://upload.example/session/2' } }
+          : undefined,
+      (r) => (r.url === 'https://upload.example/session/2' ? { body: { id: 'V2' } } : undefined),
+    );
+    const { run } = await runGraph(
+      [
+        { name: 'Trigger', type: 'flowforge.manualTrigger', parameters: {} },
+        {
+          name: 'File',
+          type: 'flowforge.httpRequest',
+          parameters: {
+            method: 'GET',
+            url: 'http://x/final-1.mp4',
+            options: { responseFormat: 'binary' },
+          },
+        },
+        {
+          name: 'Upload',
+          type: 'flowforge.youTube',
+          credentials: { youTubeOAuth2Api: { id: 'yt', name: 'YouTube' } },
+          parameters: { title: 'T', binaryPropertyName: 'data', options },
+        },
+      ],
+      [
+        ['Trigger', 'File'],
+        ['File', 'Upload'],
+      ],
+      {},
+      { httpRequest: http.httpRequest, credentials },
+    );
+    const start = http.calls.find((c) => c.url.includes('/upload/youtube/'));
+    return { run, start };
+  }
+
+  it('schedules publishing and declares synthetic content', async () => {
+    const at = new Date(Date.now() + 3_600_000).toISOString();
+    const { run, start } = await upload({
+      privacyStatus: 'private',
+      publishAt: at,
+      containsSyntheticMedia: true,
+      notifySubscribers: true,
+    });
+    expect(errorOf(run)).toBeUndefined();
+    expect((start!.body as IDataObject).status).toEqual({
+      privacyStatus: 'private',
+      selfDeclaredMadeForKids: false,
+      publishAt: at,
+      containsSyntheticMedia: true,
+    });
+    expect(start!.qs).toMatchObject({ notifySubscribers: true });
+  });
+
+  it('refuses a publish time that YouTube would reject', async () => {
+    const future = new Date(Date.now() + 3_600_000).toISOString();
+    for (const [options, message] of [
+      [{ privacyStatus: 'public', publishAt: future }, 'Publish At needs Privacy Status "Private"'],
+      [{ privacyStatus: 'private', publishAt: '2001-01-01T00:00:00Z' }, 'must be in the future'],
+      [{ privacyStatus: 'private', publishAt: 'tonight' }, 'is not a valid Publish At time'],
+    ] as const) {
+      const { run, start } = await upload(options);
+      expect(errorOf(run)?.message).toContain(message);
+      expect(start).toBeUndefined(); // nothing was sent to YouTube
+    }
+  });
+
   it('fails clearly without a video file', async () => {
     const { run } = await runNode(
       'flowforge.youTube',
