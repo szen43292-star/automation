@@ -98,7 +98,7 @@ export async function startWorker(
   const worker = queue.createWorker(config.WORKER_CONCURRENCY, ({ executionId }) =>
     executions.runQueued(executionId),
   );
-  logger.info(`FlowForge worker started (concurrency ${config.WORKER_CONCURRENCY})`);
+  logger.info(`AutoForge worker started (concurrency ${config.WORKER_CONCURRENCY})`);
 
   return {
     worker,

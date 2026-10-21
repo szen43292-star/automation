@@ -18,7 +18,7 @@ export function SiteHeader() {
       <div className="mx-auto flex h-16 max-w-6xl items-center gap-6 px-4 sm:px-6">
         <Link href="/" className="flex items-center gap-2.5 font-semibold tracking-tight">
           <LogoMark />
-          <span className="text-[17px]">FlowForge</span>
+          <span className="text-[17px]">AutoForge</span>
         </Link>
         <nav className="hidden items-center gap-1 text-sm text-muted md:flex">
           <Link href="/#features" className="rounded-md px-3 py-1.5 transition hover:text-fg">
@@ -56,7 +56,7 @@ export function SiteFooter() {
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-10 text-sm text-muted sm:flex-row sm:items-center sm:px-6">
         <div className="flex items-center gap-2.5">
           <LogoMark size={22} />
-          <span className="font-medium text-fg">FlowForge</span>
+          <span className="font-medium text-fg">AutoForge</span>
           <span>· Workflow automation that runs on your PC</span>
         </div>
         <div className="flex items-center gap-5 sm:ml-auto">

@@ -94,7 +94,7 @@ function Team() {
   return (
     <>
       <div className="mb-3 flex items-center">
-        <p className="text-[13px] text-muted">Everyone who can sign in to this FlowForge.</p>
+        <p className="text-[13px] text-muted">Everyone who can sign in to this AutoForge.</p>
         {canManage && (
           <Button
             className="ml-auto"
@@ -301,7 +301,7 @@ function ApiKeys() {
   return (
     <>
       <p className="mb-4 text-[13px] text-muted">
-        Use the FlowForge API from your website, CRM or Zapier. A key acts as you (same role and
+        Use the AutoForge API from your website, CRM or Zapier. A key acts as you (same role and
         access). Send it as <code className="rounded bg-panel-2 px-1">X-API-Key</code>.
       </p>
       <div className="mb-4 flex flex-wrap items-end gap-2">

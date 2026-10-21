@@ -292,7 +292,7 @@ function unavailableApprovals(node: INode): IApprovalHelper {
 function unavailableWhatsApp(node: INode): IWhatsAppHelper {
   const fail = async (): Promise<never> => {
     throw new NodeOperationError(node, 'WhatsApp is not available here', {
-      description: 'Run this workflow on a FlowForge server with a connected WhatsApp number.',
+      description: 'Run this workflow on a AutoForge server with a connected WhatsApp number.',
     });
   };
   return {

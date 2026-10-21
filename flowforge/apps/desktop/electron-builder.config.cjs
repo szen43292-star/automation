@@ -5,9 +5,9 @@ const [owner, repo] = (process.env.GITHUB_REPOSITORY || 'szen43292-star/automati
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
   appId: 'com.flowforge.desktop',
-  productName: 'FlowForge',
+  productName: 'AutoForge',
   executableName: 'FlowForge',
-  copyright: 'FlowForge',
+  copyright: 'AutoForge',
   // The workspace name (@flowforge/desktop) would become the install folder; use a clean one.
   extraMetadata: { name: 'flowforge' },
   directories: { output: 'release', buildResources: 'build' },
@@ -40,7 +40,7 @@ module.exports = {
     oneClick: true,
     perMachine: false,
     artifactName: 'FlowForge-Setup.${ext}',
-    shortcutName: 'FlowForge',
+    shortcutName: 'AutoForge',
     createDesktopShortcut: true,
     createStartMenuShortcut: true,
     runAfterFinish: true,

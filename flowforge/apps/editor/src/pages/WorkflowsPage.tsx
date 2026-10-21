@@ -43,7 +43,7 @@ export async function importWorkflowFile(file: File) {
   });
   if (!result.success) {
     const issue = result.error.issues[0];
-    throw new Error(`Not a FlowForge workflow: ${issue?.path.join('.')} ${issue?.message}`);
+    throw new Error(`Not a AutoForge workflow: ${issue?.path.join('.')} ${issue?.message}`);
   }
   return endpoints.importWorkflow(result.data);
 }

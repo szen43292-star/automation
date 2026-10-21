@@ -6,7 +6,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
  */
 const config: CapacitorConfig = {
   appId: process.env.MOBILE_APP_ID || 'com.flowforge.app',
-  appName: process.env.MOBILE_APP_NAME || 'FlowForge',
+  appName: process.env.MOBILE_APP_NAME || 'AutoForge',
   webDir: 'www',
   server: { androidScheme: 'https' },
   android: {

@@ -26,6 +26,12 @@ const UPDATE_CHECK_INTERVAL = 60 * 60 * 1000;
 const IDLE_BEFORE_UPDATE_SECONDS = 15 * 60;
 const QUIET_CHECK_INTERVAL = 5 * 60 * 1000;
 
+// The data folder (database, secrets.json with the key that encrypts credentials, files) keeps
+// its original name, %APPDATA%\FlowForge: Electron would otherwise follow the app's display name
+// (now AutoForge) to a new, empty folder. Uninstalling leaves this folder in place, so a
+// reinstall finds everything again.
+const DATA_FOLDER_NAME = 'FlowForge';
+app.setPath('userData', join(app.getPath('appData'), DATA_FOLDER_NAME));
 const dataDir = app.getPath('userData');
 const logDir = join(dataDir, 'logs');
 const resourcesDir = app.isPackaged
@@ -106,7 +112,7 @@ if (!app.requestSingleInstanceLock()) {
 async function onReady() {
   app.setAppUserModelId(APP_ID);
   Menu.setApplicationMenu(null);
-  log(`FlowForge ${app.getVersion()} starting (data: ${dataDir})`);
+  log(`AutoForge ${app.getVersion()} starting (data: ${dataDir})`);
   if (firstRun) saveSettings({});
   applyLoginItem();
   createTray();
@@ -124,7 +130,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     show: !startHidden,
-    title: 'FlowForge',
+    title: 'AutoForge',
     icon: join(assets, 'icon.png'),
     autoHideMenuBar: true,
     backgroundColor: '#f7f7f9',
@@ -170,8 +176,8 @@ function createWindow() {
     mainWindow?.hide();
     if (!settings.trayNoticeShown && Notification.isSupported()) {
       new Notification({
-        title: 'FlowForge is still running',
-        body: 'Your automations keep running in the background. Use the tray icon to open or quit FlowForge.',
+        title: 'AutoForge is still running',
+        body: 'Your automations keep running in the background. Use the tray icon to open or quit AutoForge.',
         icon: join(assets, 'icon.png'),
       }).show();
       saveSettings({ trayNoticeShown: true });
@@ -225,7 +231,7 @@ async function startRuntime() {
         .then(() =>
           splash(
             'setError',
-            `The FlowForge server stopped unexpectedly (exit code ${code}).\nLogs: ${logDir}`,
+            `The AutoForge server stopped unexpectedly (exit code ${code}).\nLogs: ${logDir}`,
           ),
         );
     });
@@ -244,7 +250,7 @@ async function startRuntime() {
 function createTray() {
   const image = nativeImage.createFromPath(join(assets, 'tray.png'));
   tray = new Tray(image);
-  tray.setToolTip('FlowForge');
+  tray.setToolTip('AutoForge');
   tray.on('click', () => showWindow());
   tray.on('double-click', () => showWindow());
   updateTray();
@@ -252,10 +258,10 @@ function createTray() {
 
 function updateTray() {
   if (!tray) return;
-  tray.setToolTip(serverUrl ? `FlowForge - running at ${serverUrl}` : 'FlowForge - starting…');
+  tray.setToolTip(serverUrl ? `AutoForge - running at ${serverUrl}` : 'AutoForge - starting…');
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: 'Open FlowForge', click: () => showWindow() },
+      { label: 'Open AutoForge', click: () => showWindow() },
       {
         label: 'Open in browser',
         enabled: Boolean(serverUrl),
@@ -280,8 +286,8 @@ function updateTray() {
           },
       { label: 'Open logs folder', click: () => void shell.openPath(logDir) },
       { type: 'separator' },
-      { label: `FlowForge ${app.getVersion()}`, enabled: false },
-      { label: 'Quit FlowForge', click: () => app.quit() },
+      { label: `AutoForge ${app.getVersion()}`, enabled: false },
+      { label: 'Quit AutoForge', click: () => app.quit() },
     ]),
   );
 }
@@ -314,7 +320,7 @@ function setupAutoUpdates() {
     updateTray();
     if (Notification.isSupported()) {
       const notification = new Notification({
-        title: `FlowForge ${info.version} is ready`,
+        title: `AutoForge ${info.version} is ready`,
         body: 'It installs by itself when your PC is idle and no call is on. Click to update now.',
         icon: join(assets, 'icon.png'),
       });
@@ -347,7 +353,7 @@ async function checkForUpdates(manual: boolean) {
     const result = await autoUpdater.checkForUpdates();
     if (manual && Notification.isSupported() && !result?.isUpdateAvailable) {
       new Notification({
-        title: 'FlowForge is up to date',
+        title: 'AutoForge is up to date',
         body: `You have version ${app.getVersion()}.`,
       }).show();
     }
@@ -365,7 +371,7 @@ function installWhenQuiet() {
     void (async () => {
       if (quitting || powerMonitor.getSystemIdleTime() < IDLE_BEFORE_UPDATE_SECONDS) return;
       if ((await activeCalls()) !== 0) return;
-      log(`Installing FlowForge ${updateReady} while the PC is idle`);
+      log(`Installing AutoForge ${updateReady} while the PC is idle`);
       await installUpdate(true);
     })();
   }, QUIET_CHECK_INTERVAL);
