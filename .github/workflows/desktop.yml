@@ -119,8 +119,8 @@ jobs:
           Start-Process -Wait -FilePath apps/desktop/release/FlowForge-Setup.exe -ArgumentList '/S'
           # Find the install folder the way Windows does: from the app's uninstall entry.
           $entry = Get-ChildItem HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall |
-            Get-ItemProperty | Where-Object { $_.DisplayName -like 'FlowForge*' } | Select-Object -First 1
-          if (-not $entry) { throw 'No FlowForge entry in Apps & features after installing' }
+            Get-ItemProperty | Where-Object { $_.DisplayName -like 'AutoForge*' } | Select-Object -First 1
+          if (-not $entry) { throw 'No AutoForge entry in Apps & features after installing' }
           $entry | Select-Object DisplayName, DisplayVersion, InstallLocation, UninstallString | Format-List
           $dir = if ($entry.InstallLocation) { $entry.InstallLocation.TrimEnd('\') } else { Split-Path ($entry.UninstallString -replace '^"([^"]+)".*$', '$1') }
           if (-not (Test-Path "$dir\FlowForge.exe")) { throw "FlowForge.exe was not installed to $dir" }
@@ -135,7 +135,7 @@ jobs:
           (Invoke-WebRequest -UseBasicParsing http://localhost:5678/api/auth/status).Content
           if (-not (Invoke-WebRequest -UseBasicParsing http://localhost:5678/workflows).Content.Contains('id="root"')) { throw 'Editor not served' }
           # The uninstaller must stop the app, its server and PostgreSQL, then remove the files.
-          Start-Process -Wait -FilePath "$dir\Uninstall FlowForge.exe" -ArgumentList '/S'
+          Start-Process -Wait -FilePath ($entry.UninstallString -replace '^"([^"]+)".*$', '$1') -ArgumentList '/S'
           Start-Sleep -Seconds 5
           $left = Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($dir, [StringComparison]::OrdinalIgnoreCase) }
           if ($left) { $left | Format-Table Id, Path; throw 'Processes still running after uninstall' }
