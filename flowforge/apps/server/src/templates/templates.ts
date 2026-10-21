@@ -19,6 +19,9 @@ export interface WorkflowTemplate {
     /** Credential types the node needs: "Use template" picks the user's own credential of each. */
     credentialTypes?: string[];
     alwaysOutputData?: boolean;
+    retryOnFail?: boolean;
+    maxTries?: number;
+    waitBetweenTries?: number;
     notes?: string;
     width?: number;
     height?: number;
@@ -270,10 +273,10 @@ export const TEMPLATES: WorkflowTemplate[] = [
     id: 'ai-story-shorts-daily',
     name: 'AI Story Shorts – Daily',
     description:
-      "Every evening: picks one of India's trending topics, writes a 45-second story with Gemini, has it checked, turns it into a vertical video with MoneyPrinterTurbo on your PC and publishes it on YouTube (scheduled for 20:00 by default; see Publish Settings).",
+      "Every evening: picks one of India's trending topics, writes a 45-second story with Groq, has it checked, turns it into a vertical video with MoneyPrinterTurbo on your PC and publishes it on YouTube (scheduled for 20:00 by default; see Publish Settings).",
     category: 'Content',
     setup: [
-      'Connect the credentials: YouTube OAuth2 API, Google Gemini (PaLM) API, Google Sheets OAuth2 API and Gmail OAuth2 API',
+      'Connect the credentials: YouTube OAuth2 API, Groq API (free key at https://console.groq.com/keys), Google Sheets OAuth2 API and Gmail OAuth2 API',
       'Pick your spreadsheet in "Get Past Titles" and "Log Post" (it needs a sheet named "Posted")',
       'Enter your email address in "Email Approval Link", "Notify Me" and "Upload Problem"',
       'Choose publish_mode (scheduled, public or private) and publish_time in "Publish Settings"',
@@ -289,7 +292,7 @@ export const TEMPLATES: WorkflowTemplate[] = [
         [-40, -330],
         {
           content:
-            '## AI Story Shorts – Daily\n1. Every day at 18:00 it collects trending searches (Google Trends) and trending videos (YouTube) in India.\n2. Gemini writes a short story about one trend, a second Gemini editor checks it, and MoneyPrinterTurbo turns it into a 9:16 video.\n3. You get an email to watch and approve the video on your phone; once approved it is uploaded to YouTube (scheduled for 20:00 by default, see Publish Settings) and logged in Google Sheets.',
+            '## AI Story Shorts – Daily\n1. Every day at 18:00 it collects trending searches (Google Trends) and trending videos (YouTube) in India.\n2. Groq writes a short story about one trend, a second Groq editor checks it, and MoneyPrinterTurbo turns it into a 9:16 video.\n3. You get an email to watch and approve the video on your phone; once approved it is uploaded to YouTube (scheduled for 20:00 by default, see Publish Settings) and logged in Google Sheets.',
           color: 'blue',
         },
         { width: 760, height: 190 },
@@ -400,7 +403,7 @@ export const TEMPLATES: WorkflowTemplate[] = [
         'flowforge.chainLlm',
         [2640, 0],
         {
-          modelProvider: 'googleGemini',
+          modelProvider: 'groq',
           model: '',
           hasOutputParser: true,
           jsonSchemaExample:
@@ -414,14 +417,14 @@ Script rules: first sentence is a hook under 12 words; never say "In this video"
 Also write: title (under 60 characters, honest, no ALL CAPS); description (2 short lines, then "Story written and narrated with AI assistance.", then 3 hashtags including #shorts); tags (8); search_terms (5 short English stock-footage phrases matching the scenes in order).
 Output only the JSON.{{ $json.feedback ? "\\n\\nYour previous draft was rejected by the editor for this reason: " + $json.feedback + "\\nWrite a completely new story that fixes this problem. You may choose a different trend." : "" }}`,
         },
-        { credentialTypes: ['googlePalmApi'] },
+        { credentialTypes: ['groqApi'] },
       ),
       node(
         'Quality Check',
         'flowforge.chainLlm',
         [2880, 0],
         {
-          modelProvider: 'googleGemini',
+          modelProvider: 'groq',
           model: '',
           hasOutputParser: true,
           jsonSchemaExample:
@@ -429,7 +432,7 @@ Output only the JSON.{{ $json.feedback ? "\\n\\nYour previous draft was rejected
           options: { temperature: 0.2 },
           text: '=You are a strict YouTube Shorts editor. Score this Short 1-10 on hook, clarity, originality, and safety (no misinformation, tragedy exploitation, hate, sexual or violent content, or copyrighted characters). Approve only if every score is 7 or higher. Title: {{ $json.output.title }} Script: {{ $json.output.script }}. Output only the JSON.',
         },
-        { credentialTypes: ['googlePalmApi'] },
+        { credentialTypes: ['groqApi'] },
       ),
       node('Approved?', 'flowforge.if', [3120, 0], {
         conditions: condition('={{ $json.output.approve }}', 'boolean', 'true'),
@@ -501,13 +504,17 @@ Output only the JSON.{{ $json.feedback ? "\\n\\nYour previous draft was rejected
           ],
         },
       }),
-      node('Make Video', 'flowforge.httpRequest', [3600, 0], {
-        method: 'POST',
-        url: 'http://127.0.0.1:8080/api/v1/videos',
-        sendBody: true,
-        contentType: 'json',
-        specifyBody: 'json',
-        jsonBody: `={
+      node(
+        'Make Video',
+        'flowforge.httpRequest',
+        [3600, 0],
+        {
+          method: 'POST',
+          url: 'http://127.0.0.1:8080/api/v1/videos',
+          sendBody: true,
+          contentType: 'json',
+          specifyBody: 'json',
+          jsonBody: `={
   "video_subject": {{ JSON.stringify($('Write Story').first().json.output.title) }},
   "video_script": {{ JSON.stringify($('Write Story').first().json.output.script) }},
   "video_terms": {{ JSON.stringify($('Write Story').first().json.output.search_terms) }},
@@ -522,8 +529,11 @@ Output only the JSON.{{ $json.feedback ? "\\n\\nYour previous draft was rejected
   "subtitle_enabled": true,
   "subtitle_position": "bottom"
 }`,
-        options: { timeout: 120000 },
-      }),
+          options: { timeout: 120000 },
+        },
+        // MoneyPrinterTurbo may still be starting or busy: try again before giving up.
+        { retryOnFail: true, maxTries: 3, waitBetweenTries: 60000 },
+      ),
       node('Save Task ID', 'flowforge.set', [3840, 0], {
         mode: 'manual',
         includeOtherFields: false,

@@ -124,7 +124,9 @@ describe('HTTP Request node', () => {
     const port = (probe.address() as AddressInfo).port;
     await new Promise<void>((resolve) => probe.close(() => resolve()));
     const { run } = await runNode('flowforge.httpRequest', { url: `http://127.0.0.1:${port}/x` });
-    expect(errorOf(run)?.message).toMatch(/refused the connection.*ECONNREFUSED/);
+    expect(errorOf(run)?.message).toMatch(
+      /Nothing is running at this address on this computer.*ECONNREFUSED/,
+    );
   });
 
   it('continues on fail with the error in the item', async () => {

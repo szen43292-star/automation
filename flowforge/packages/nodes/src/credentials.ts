@@ -248,6 +248,26 @@ export const googlePalmApi: ICredentialType = {
   },
 };
 
+export const groqApi: ICredentialType = {
+  name: 'groqApi',
+  displayName: 'Groq API',
+  icon: 'sparkles',
+  documentationUrl: 'https://console.groq.com/keys',
+  properties: [
+    {
+      displayName: 'API Key',
+      name: 'apiKey',
+      type: 'string',
+      default: '',
+      typeOptions: { password: true },
+      required: true,
+      description: 'Create one at https://console.groq.com/keys',
+    },
+  ],
+  authenticate: { type: 'bearer', token: '{{apiKey}}' },
+  test: { request: { url: 'https://api.groq.com/openai/v1/models', method: 'GET' } },
+};
+
 export const builtinCredentialTypes: ICredentialType[] = [
   httpHeaderAuth,
   httpBasicAuth,
@@ -258,6 +278,7 @@ export const builtinCredentialTypes: ICredentialType[] = [
   googleSheetsOAuth2Api,
   gmailOAuth2,
   googlePalmApi,
+  groqApi,
 ];
 
 export class CredentialTypeRegistry implements ICredentialTypes {

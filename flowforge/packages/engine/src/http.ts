@@ -67,6 +67,17 @@ function encodeBody(
   return JSON.stringify(body);
 }
 
+/** Longest timeout timers accept (about 24.8 days); longer values would make the request fail. */
+const MAX_TIMEOUT_MS = 2_147_483_647;
+
+/** The timeout to use: the default when it is missing or not a positive number, capped at the maximum. */
+export function requestTimeout(value: unknown): number {
+  const ms = Number(value);
+  if (value === undefined || value === null || value === '' || Number.isNaN(ms) || ms <= 0)
+    return 300_000;
+  return Math.min(Math.round(ms), MAX_TIMEOUT_MS);
+}
+
 function isTextual(contentType: string): boolean {
   return (
     contentType === '' ||
@@ -87,7 +98,7 @@ export async function httpRequest(
   const body =
     method === 'GET' || method === 'HEAD' ? undefined : encodeBody(options.body, headers);
 
-  const timeout = options.timeout ?? 300_000;
+  const timeout = requestTimeout(options.timeout);
   const signals = [AbortSignal.timeout(timeout)];
   if (signal) signals.push(signal);
 
@@ -110,7 +121,11 @@ export async function httpRequest(
     }
     const code = err.cause?.code ?? 'ENETWORK';
     const host = new URL(url).host;
-    const friendly = NETWORK_MESSAGES[code] ?? err.cause?.message ?? err.message;
+    const local = /^(localhost|127\.|\[::1\])/.test(host);
+    const friendly =
+      code === 'ECONNREFUSED' && local
+        ? 'Nothing is running at this address on this computer - start the program that should answer here'
+        : (NETWORK_MESSAGES[code] ?? err.cause?.message ?? err.message);
     throw new HttpRequestError(`${friendly} (${code} ${host})`, code, { cause: error });
   }
 

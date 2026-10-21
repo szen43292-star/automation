@@ -9,7 +9,19 @@ import {
 import { errorItem } from '../shared/helpers';
 
 const CREDENTIAL = 'googlePalmApi';
+const GROQ_CREDENTIAL = 'groqApi';
 const DEFAULT_HOST = 'https://generativelanguage.googleapis.com';
+const GROQ_HOST = 'https://api.groq.com/openai/v1';
+/** Groq chat models, best first for writing (others the key has follow). */
+const GROQ_PREFERRED = [
+  'llama-3.3-70b-versatile',
+  'openai/gpt-oss-120b',
+  'openai/gpt-oss-20b',
+  'meta-llama/llama-4-maverick-17b-128e-instruct',
+  'meta-llama/llama-4-scout-17b-16e-instruct',
+  'llama-3.1-8b-instant',
+];
+const GROQ_NOT_CHAT = /whisper|tts|playai|orpheus|guard|distil|compound/i;
 /** Used when the model list cannot be read and no model is set. */
 const FALLBACK_MODEL = 'gemini-flash-latest';
 /** Models tried per answer before giving up (the list can name retired models). */
@@ -115,15 +127,32 @@ export function pickGeminiModel(available: string[] | null, requested: string): 
   return rankGeminiModels(available, requested)[0] ?? FALLBACK_MODEL;
 }
 
-/** True when Google refuses the model itself (retired, unknown, not for this key). */
+/** True when the provider refuses the model itself (retired, unknown, not for this key). */
 export function isModelUnavailable(statusCode: number, message: string): boolean {
   if (statusCode === 404) return true;
   return (
     [400, 403].includes(statusCode) &&
-    /no longer available|not found|is not supported|not available|deprecated|retired|discontinued/i.test(
+    /no longer available|not found|is not supported|not available|deprecated|retired|discontinued|decommissioned|does not exist/i.test(
       message,
     )
   );
+}
+
+/**
+ * Groq models to try, best first: the one asked for (when the key has it), then the preferred
+ * chat models, then any other chat model the key lists.
+ */
+export function rankGroqModels(available: string[] | null, requested: string): string[] {
+  const wanted = requested.trim();
+  if (!available?.length) return [...new Set([wanted, GROQ_PREFERRED[0]!].filter(Boolean))];
+  const usable = available.filter((m) => !GROQ_NOT_CHAT.test(m));
+  return [
+    ...new Set([
+      ...(wanted && available.includes(wanted) ? [wanted] : []),
+      ...GROQ_PREFERRED.filter((m) => usable.includes(m)),
+      ...usable.sort(),
+    ]),
+  ];
 }
 
 function answerText(body: IDataObject): { text: string; finishReason?: string } {
@@ -146,13 +175,25 @@ export const LlmChain: INodeType = {
     iconColor: '#7c3aed',
     group: ['ai'],
     version: 1,
-    description: 'Ask a chat model (Google Gemini) and get its answer, optionally as JSON',
-    subtitle: '={{ $parameter.model || "Gemini (automatic)" }}',
+    description: 'Ask a chat model (Google Gemini or Groq) and get its answer, optionally as JSON',
+    subtitle:
+      '={{ $parameter.model || ($parameter.modelProvider === "groq" ? "Groq" : "Gemini") + " (automatic)" }}',
     defaults: { name: 'Basic LLM Chain' },
     inputs: [{ type: 'main' }],
     outputs: [{ type: 'main' }],
-    keywords: ['llm', 'ai', 'gemini', 'google', 'prompt', 'chat', 'gpt', 'json', 'chain'],
-    credentials: [{ name: CREDENTIAL, required: true }],
+    keywords: ['llm', 'ai', 'gemini', 'google', 'groq', 'llama', 'prompt', 'chat', 'gpt', 'json'],
+    credentials: [
+      {
+        name: CREDENTIAL,
+        required: true,
+        displayOptions: { show: { modelProvider: ['googleGemini'] } },
+      },
+      {
+        name: GROQ_CREDENTIAL,
+        required: true,
+        displayOptions: { show: { modelProvider: ['groq'] } },
+      },
+    ],
     properties: [
       {
         displayName: 'Chat Model',
@@ -160,14 +201,17 @@ export const LlmChain: INodeType = {
         type: 'options',
         default: 'googleGemini',
         noDataExpression: true,
-        options: [{ name: 'Google Gemini Chat Model', value: 'googleGemini' }],
+        options: [
+          { name: 'Google Gemini Chat Model', value: 'googleGemini' },
+          { name: 'Groq Chat Model', value: 'groq' },
+        ],
       },
       {
         displayName: 'Model',
         name: 'model',
         type: 'string',
         default: '',
-        placeholder: 'Automatic (e.g. gemini-2.5-flash)',
+        placeholder: 'Automatic (e.g. gemini-2.5-flash or llama-3.3-70b-versatile)',
         description:
           'Leave empty to use the best model your API key can use. A model the key cannot use is replaced automatically.',
       },
@@ -231,8 +275,11 @@ export const LlmChain: INodeType = {
   async execute(this: IExecuteFunctions) {
     const items = this.getInputData();
     const output: INodeExecutionData[] = [];
-    const credentials = await this.getCredentials<IDataObject>(CREDENTIAL);
-    const host = String(credentials.host || DEFAULT_HOST).replace(/\/+$/, '');
+    const groq = this.getNodeParameter<string>('modelProvider', 0, 'googleGemini') === 'groq';
+    const credentialType = groq ? GROQ_CREDENTIAL : CREDENTIAL;
+    const provider = groq ? 'Groq' : 'Gemini';
+    const credentials = await this.getCredentials<IDataObject>(credentialType);
+    const host = String(credentials.host || (groq ? GROQ_HOST : DEFAULT_HOST)).replace(/\/+$/, '');
 
     let models: string[] | null | undefined;
     /** The model that answered, reused for the remaining items of this run. */
@@ -240,6 +287,23 @@ export const LlmChain: INodeType = {
     const availableModels = async () => {
       if (models !== undefined) return models;
       try {
+        if (groq) {
+          const response = await this.helpers.httpRequestWithAuthentication(GROQ_CREDENTIAL, {
+            url: `${host}/models`,
+            method: 'GET',
+            timeout: 30_000,
+            responseType: 'json',
+          });
+          const list = (response.body as { data?: IDataObject[] } | null)?.data;
+          models =
+            response.statusCode < 400 && Array.isArray(list)
+              ? list
+                  .filter((m) => m.active !== false)
+                  .map((m) => String(m.id ?? ''))
+                  .filter(Boolean)
+              : null;
+          return models;
+        }
         const response = await this.helpers.httpRequestWithAuthentication(CREDENTIAL, {
           url: `${host}/v1beta/models`,
           method: 'GET',
@@ -285,7 +349,10 @@ export const LlmChain: INodeType = {
           }
         }
         const requested = String(this.getNodeParameter('model', i, '') ?? '').trim();
-        const candidates = rankGeminiModels(await availableModels(), requested);
+        const candidates = (groq ? rankGroqModels : rankGeminiModels)(
+          await availableModels(),
+          requested,
+        );
         if (working && candidates[0] !== working) {
           const at = candidates.indexOf(working);
           if (at > 0) candidates.splice(at, 1);
@@ -317,7 +384,7 @@ export const LlmChain: INodeType = {
           }
           throw new NodeApiError(
             this.getNode(),
-            `Gemini: none of the models this key can use answered (${refused.length} tried)`,
+            `${provider}: none of the models this key can use answered (${refused.length} tried)`,
             { itemIndex: i, description: refused.join('\n') },
           );
         };
@@ -326,6 +393,7 @@ export const LlmChain: INodeType = {
           model: string,
           text: string,
         ): Promise<{ refused: string } | { text: string; finishReason?: string }> => {
+          if (groq) return askGroq(model, text);
           const response = await this.helpers.httpRequestWithAuthentication(CREDENTIAL, {
             url: `${host}/v1beta/models/${encodeURIComponent(model)}:generateContent`,
             method: 'POST',
@@ -371,6 +439,63 @@ export const LlmChain: INodeType = {
               },
             );
           return answerText(body);
+        };
+
+        const askGroq = async (
+          model: string,
+          text: string,
+        ): Promise<{ refused: string } | { text: string; finishReason?: string }> => {
+          const response = await this.helpers.httpRequestWithAuthentication(GROQ_CREDENTIAL, {
+            url: `${host}/chat/completions`,
+            method: 'POST',
+            timeout: 300_000,
+            responseType: 'json',
+            body: {
+              model,
+              messages: [
+                ...(options.systemMessage
+                  ? [{ role: 'system', content: String(options.systemMessage) }]
+                  : []),
+                {
+                  role: 'user',
+                  // JSON mode needs the shape (and the word JSON) in the prompt.
+                  content: structured
+                    ? `${text}\n\nAnswer with JSON only, in this shape:\n${JSON.stringify(example)}`
+                    : text,
+                },
+              ],
+              temperature: Number(options.temperature ?? 0.7),
+              max_completion_tokens: Number(options.maxOutputTokens ?? 8192),
+              ...(structured ? { response_format: { type: 'json_object' } } : {}),
+            },
+          });
+          const body = (response.body ?? {}) as IDataObject;
+          if (response.statusCode >= 400) {
+            const error = (body.error ?? {}) as IDataObject;
+            const message = String(error.message ?? `HTTP ${response.statusCode}`);
+            // The model wrote something that is not JSON: let the format check ask again.
+            if (error.code === 'json_validate_failed')
+              return { text: String(error.failed_generation ?? '') };
+            if (
+              isModelUnavailable(response.statusCode, message) ||
+              error.code === 'model_decommissioned'
+            )
+              return { refused: message };
+            throw new NodeApiError(
+              this.getNode(),
+              response.statusCode === 429
+                ? `Groq rate limit reached (${model}): ${message}`
+                : response.statusCode === 401
+                  ? `Groq did not accept the API key: ${message}`
+                  : `Groq (${model}): ${message}`,
+              { httpCode: response.statusCode, responseBody: body, itemIndex: i },
+            );
+          }
+          const choice = (body.choices as IDataObject[] | undefined)?.[0];
+          return {
+            text: String((choice?.message as IDataObject | undefined)?.content ?? ''),
+            finishReason: choice?.finish_reason === 'length' ? 'MAX_TOKENS' : undefined,
+          };
         };
 
         let answer = await ask(prompt);
