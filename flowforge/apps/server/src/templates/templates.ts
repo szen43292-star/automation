@@ -68,6 +68,20 @@ const daily = (hour: number) => ({
   rule: { interval: [{ field: 'days', daysInterval: 1, triggerAtHour: hour, triggerAtMinute: 0 }] },
 });
 
+// "AI Story Shorts – Daily": publish settings and the safety gate, shared by several nodes.
+const SHORTS_SETTINGS = "$('Publish Settings').first().json";
+const SHORTS_MODE_RAW = `String(${SHORTS_SETTINGS}.publish_mode).trim().toLowerCase()`;
+const SHORTS_MODE_VALID = `['scheduled', 'public', 'private'].includes(${SHORTS_MODE_RAW})`;
+const SHORTS_REQUESTED = `(${SHORTS_MODE_VALID} ? ${SHORTS_MODE_RAW} : 'private')`;
+const SHORTS_FIRST_TRY = "$('Set Attempt').first().json.attempt === 1";
+const SHORTS_LOW_SCORES =
+  "['hook', 'clarity', 'originality', 'safety'].filter(k => !(Number($json.output[k]) >= 8))";
+const SHORTS_DECISION = "$('Decide Publishing').first().json";
+const SHORTS_TZ = `(${SHORTS_SETTINGS}.publish_timezone || 'Asia/Kolkata')`;
+/** The publish time as "8 PM" / "8:15 PM", from the publish_at the node's input carries. */
+const SHORTS_LIVE_TIME = `(at => at.toFormat(at.minute ? 'h:mm a' : 'h a'))(DateTime.fromISO($json.publish_at).setZone(${SHORTS_TZ}))`;
+const SHORTS_LIVE_WHEN = `((DateTime.fromISO($json.publish_at).setZone(${SHORTS_TZ}).hasSame($now.setZone(${SHORTS_TZ}), 'day') ? 'at ' : 'tomorrow at ') + ${SHORTS_LIVE_TIME})`;
+
 export const TEMPLATES: WorkflowTemplate[] = [
   {
     id: 'whatsapp-auto-reply',
@@ -256,12 +270,14 @@ export const TEMPLATES: WorkflowTemplate[] = [
     id: 'ai-story-shorts-daily',
     name: 'AI Story Shorts – Daily',
     description:
-      "Every evening: picks one of India's trending topics, writes a 45-second story with Gemini, has it checked, turns it into a vertical video with MoneyPrinterTurbo on your PC and uploads it to YouTube as Private.",
+      "Every evening: picks one of India's trending topics, writes a 45-second story with Gemini, has it checked, turns it into a vertical video with MoneyPrinterTurbo on your PC and publishes it on YouTube (scheduled for 20:00 by default; see Publish Settings).",
     category: 'Content',
     setup: [
       'Connect the credentials: YouTube OAuth2 API, Google Gemini (PaLM) API, Google Sheets OAuth2 API and Gmail OAuth2 API',
       'Pick your spreadsheet in "Get Past Titles" and "Log Post" (it needs a sheet named "Posted")',
-      'Enter your email address in "Notify Me"',
+      'Enter your email address in "Notify Me" and "Upload Problem"',
+      'Choose publish_mode (scheduled, public or private) and publish_time in "Publish Settings"',
+      'Scheduled and public uploads need your Google Cloud project to pass the YouTube API audit; until then YouTube keeps them private and you get an "Upload problem" email',
       'Start MoneyPrinterTurbo on this PC and check the field names of "Make Video" at http://127.0.0.1:8080/docs',
       'Run it once with "Test workflow", then activate',
     ],
@@ -273,19 +289,41 @@ export const TEMPLATES: WorkflowTemplate[] = [
         [-40, -330],
         {
           content:
-            '## AI Story Shorts – Daily\n1. Every day at 18:00 it collects trending searches (Google Trends) and trending videos (YouTube) in India.\n2. Gemini writes a short story about one trend, a second Gemini editor checks it, and MoneyPrinterTurbo turns it into a 9:16 video.\n3. The video is uploaded to YouTube as Private, logged in Google Sheets and you get an email with the YouTube Studio link.',
+            '## AI Story Shorts – Daily\n1. Every day at 18:00 it collects trending searches (Google Trends) and trending videos (YouTube) in India.\n2. Gemini writes a short story about one trend, a second Gemini editor checks it, and MoneyPrinterTurbo turns it into a 9:16 video.\n3. The video is uploaded to YouTube (scheduled for 20:00 by default, see Publish Settings), logged in Google Sheets and you get an email with the YouTube Studio link.',
           color: 'blue',
         },
         { width: 760, height: 190 },
       ),
       node('Every day 18:00', 'flowforge.scheduleTrigger', [0, 0], daily(18)),
-      node('Google Trends RSS', 'flowforge.rssFeedRead', [240, -100], {
+      node('Publish Settings', 'flowforge.set', [240, 0], {
+        mode: 'manual',
+        includeOtherFields: false,
+        assignments: {
+          assignments: [
+            { id: '1', name: 'publish_mode', value: 'scheduled', type: 'string' },
+            { id: '2', name: 'publish_time', value: '20:00', type: 'string' },
+            { id: '3', name: 'publish_timezone', value: 'Asia/Kolkata', type: 'string' },
+          ],
+        },
+      }),
+      node(
+        'About Publish Settings',
+        'flowforge.stickyNote',
+        [120, 220],
+        {
+          content:
+            '**publish_mode**\n- scheduled (default): goes public at publish_time\n- public: public right away\n- private: stays Private for review\n\nScheduled and public need a first-try approval with every score 8+; otherwise the video stays Private.',
+          color: 'green',
+        },
+        { width: 340, height: 200 },
+      ),
+      node('Google Trends RSS', 'flowforge.rssFeedRead', [480, -100], {
         url: 'https://trends.google.com/trending/rss?geo=IN',
       }),
       node(
         'YouTube Trending',
         'flowforge.httpRequest',
-        [240, 100],
+        [480, 100],
         {
           method: 'GET',
           url: 'https://www.googleapis.com/youtube/v3/videos',
@@ -303,11 +341,11 @@ export const TEMPLATES: WorkflowTemplate[] = [
         },
         { credentialTypes: ['youTubeOAuth2Api'] },
       ),
-      node('Split Out Videos', 'flowforge.splitOut', [480, 100], {
+      node('Split Out Videos', 'flowforge.splitOut', [720, 100], {
         fieldToSplitOut: 'items',
         include: 'noOtherFields',
       }),
-      node('Keep Video Titles', 'flowforge.set', [720, 100], {
+      node('Keep Video Titles', 'flowforge.set', [960, 100], {
         mode: 'manual',
         includeOtherFields: false,
         assignments: {
@@ -316,8 +354,8 @@ export const TEMPLATES: WorkflowTemplate[] = [
           ],
         },
       }),
-      node('Merge Trends', 'flowforge.merge', [960, 0], { mode: 'append' }),
-      node('Aggregate Trends', 'flowforge.aggregate', [1200, 0], {
+      node('Merge Trends', 'flowforge.merge', [1200, 0], { mode: 'append' }),
+      node('Aggregate Trends', 'flowforge.aggregate', [1440, 0], {
         aggregate: 'aggregateIndividualFields',
         fieldsToAggregate: {
           fieldToAggregate: [
@@ -328,15 +366,15 @@ export const TEMPLATES: WorkflowTemplate[] = [
       node(
         'Get Past Titles',
         'flowforge.googleSheets',
-        [1440, 0],
+        [1680, 0],
         { operation: 'read', documentId: '', sheetName: 'Posted', returnColumns: 'title' },
         { credentialTypes: ['googleSheetsOAuth2Api'], alwaysOutputData: true },
       ),
-      node('Last 30 Titles', 'flowforge.limit', [1680, 0], { maxItems: 30, keep: 'lastItems' }),
+      node('Last 30 Titles', 'flowforge.limit', [1920, 0], { maxItems: 30, keep: 'lastItems' }),
       node(
         'Aggregate Past Titles',
         'flowforge.aggregate',
-        [1920, 0],
+        [2160, 0],
         {
           aggregate: 'aggregateIndividualFields',
           fieldsToAggregate: {
@@ -347,7 +385,7 @@ export const TEMPLATES: WorkflowTemplate[] = [
         },
         { alwaysOutputData: true },
       ),
-      node('Set Attempt', 'flowforge.set', [2160, 0], {
+      node('Set Attempt', 'flowforge.set', [2400, 0], {
         mode: 'manual',
         includeOtherFields: true,
         assignments: {
@@ -360,7 +398,7 @@ export const TEMPLATES: WorkflowTemplate[] = [
       node(
         'Write Story',
         'flowforge.chainLlm',
-        [2400, 0],
+        [2640, 0],
         {
           modelProvider: 'googleGemini',
           model: '',
@@ -381,7 +419,7 @@ Output only the JSON.{{ $json.feedback ? "\\n\\nYour previous draft was rejected
       node(
         'Quality Check',
         'flowforge.chainLlm',
-        [2640, 0],
+        [2880, 0],
         {
           modelProvider: 'googleGemini',
           model: '',
@@ -393,11 +431,11 @@ Output only the JSON.{{ $json.feedback ? "\\n\\nYour previous draft was rejected
         },
         { credentialTypes: ['googlePalmApi'] },
       ),
-      node('Approved?', 'flowforge.if', [2880, 0], {
+      node('Approved?', 'flowforge.if', [3120, 0], {
         conditions: condition('={{ $json.output.approve }}', 'boolean', 'true'),
         looseTypeValidation: true,
       }),
-      node('First Attempt?', 'flowforge.if', [3120, 200], {
+      node('First Attempt?', 'flowforge.if', [3600, 200], {
         conditions: condition(
           "={{ $('Set Attempt').first().json.attempt }}",
           'number',
@@ -406,7 +444,7 @@ Output only the JSON.{{ $json.feedback ? "\\n\\nYour previous draft was rejected
         ),
         looseTypeValidation: true,
       }),
-      node('Retry With Feedback', 'flowforge.set', [3360, 200], {
+      node('Retry With Feedback', 'flowforge.set', [3840, 200], {
         mode: 'manual',
         includeOtherFields: false,
         assignments: {
@@ -422,14 +460,14 @@ Output only the JSON.{{ $json.feedback ? "\\n\\nYour previous draft was rejected
           ],
         },
       }),
-      node('Rejected', 'flowforge.stopAndError', [3360, 400], {
+      node('Rejected', 'flowforge.stopAndError', [3840, 400], {
         errorType: 'errorMessage',
         errorMessage: '=Rejected twice: {{ $json.output.reason }}',
       }),
       node(
         'MoneyPrinterTurbo fields',
         'flowforge.stickyNote',
-        [3080, -250],
+        [3320, -250],
         {
           content:
             'Check these field names at http://127.0.0.1:8080/docs under POST /api/v1/videos.',
@@ -437,7 +475,33 @@ Output only the JSON.{{ $json.feedback ? "\\n\\nYour previous draft was rejected
         },
         { width: 300, height: 120 },
       ),
-      node('Make Video', 'flowforge.httpRequest', [3120, 0], {
+      node('Decide Publishing', 'flowforge.set', [3360, 0], {
+        mode: 'manual',
+        includeOtherFields: false,
+        assignments: {
+          assignments: [
+            {
+              id: '1',
+              name: 'requested_mode',
+              value: `={{ ${SHORTS_REQUESTED} }}`,
+              type: 'string',
+            },
+            {
+              id: '2',
+              name: 'mode',
+              value: `={{ ${SHORTS_REQUESTED} !== 'private' && ${SHORTS_FIRST_TRY} && ${SHORTS_LOW_SCORES}.length === 0 ? ${SHORTS_REQUESTED} : 'private' }}`,
+              type: 'string',
+            },
+            {
+              id: '3',
+              name: 'review_reason',
+              value: `={{ !${SHORTS_MODE_VALID} ? 'publish_mode "' + ${SHORTS_SETTINGS}.publish_mode + '" is not scheduled, public or private' : ${SHORTS_REQUESTED} === 'private' ? '' : [!(${SHORTS_FIRST_TRY}) ? 'the story needed a second try' : '', ${SHORTS_LOW_SCORES}.length ? 'scores below 8: ' + ${SHORTS_LOW_SCORES}.map(k => k + ' ' + $json.output[k]).join(', ') : ''].filter(Boolean).join(' and ') }}`,
+              type: 'string',
+            },
+          ],
+        },
+      }),
+      node('Make Video', 'flowforge.httpRequest', [3600, 0], {
         method: 'POST',
         url: 'http://127.0.0.1:8080/api/v1/videos',
         sendBody: true,
@@ -460,7 +524,7 @@ Output only the JSON.{{ $json.feedback ? "\\n\\nYour previous draft was rejected
 }`,
         options: { timeout: 120000 },
       }),
-      node('Save Task ID', 'flowforge.set', [3360, 0], {
+      node('Save Task ID', 'flowforge.set', [3840, 0], {
         mode: 'manual',
         includeOtherFields: false,
         assignments: {
@@ -474,16 +538,16 @@ Output only the JSON.{{ $json.feedback ? "\\n\\nYour previous draft was rejected
           ],
         },
       }),
-      node('Wait 5 Minutes', 'flowforge.wait', [3600, 0], {
+      node('Wait 5 Minutes', 'flowforge.wait', [4080, 0], {
         resume: 'timeInterval',
         amount: 5,
         unit: 'minutes',
       }),
-      node('Check Task', 'flowforge.httpRequest', [3840, 0], {
+      node('Check Task', 'flowforge.httpRequest', [4320, 0], {
         method: 'GET',
         url: "=http://127.0.0.1:8080/api/v1/tasks/{{ $('Save Task ID').first().json.task_id }}",
       }),
-      node('Done?', 'flowforge.if', [4080, 0], {
+      node('Done?', 'flowforge.if', [4560, 0], {
         conditions: condition(
           '={{ $json.data?.progress ?? $json.progress }}',
           'number',
@@ -492,23 +556,23 @@ Output only the JSON.{{ $json.feedback ? "\\n\\nYour previous draft was rejected
         ),
         looseTypeValidation: true,
       }),
-      node('Count Tries', 'flowforge.set', [4320, 200], {
+      node('Count Tries', 'flowforge.set', [4800, 200], {
         mode: 'manual',
         includeOtherFields: true,
         assignments: {
           assignments: [{ id: '1', name: 'tries', value: '={{ $runIndex + 1 }}', type: 'number' }],
         },
       }),
-      node('Too Many Tries?', 'flowforge.if', [4560, 200], {
+      node('Too Many Tries?', 'flowforge.if', [5040, 200], {
         conditions: condition('={{ $json.tries }}', 'number', 'gte', 6),
         looseTypeValidation: true,
       }),
-      node('Give Up', 'flowforge.stopAndError', [4800, 300], {
+      node('Give Up', 'flowforge.stopAndError', [5280, 300], {
         errorType: 'errorMessage',
         errorMessage:
           '=The video was not ready after {{ $json.tries }} checks (30 minutes). Check MoneyPrinterTurbo on your PC.',
       }),
-      node('Download Video', 'flowforge.httpRequest', [4320, 0], {
+      node('Download Video', 'flowforge.httpRequest', [4800, 0], {
         method: 'GET',
         // MoneyPrinterTurbo returns "/tasks/..." when its endpoint setting is empty (the default).
         url: "={{ (v => (v.startsWith('http') ? '' : 'http://127.0.0.1:8080') + v)(String(($json.data?.videos ?? $json.videos)[0])) }}",
@@ -517,7 +581,7 @@ Output only the JSON.{{ $json.feedback ? "\\n\\nYour previous draft was rejected
       node(
         'YouTube Upload',
         'flowforge.youTube',
-        [4560, 0],
+        [5040, 0],
         {
           resource: 'video',
           operation: 'upload',
@@ -528,8 +592,12 @@ Output only the JSON.{{ $json.feedback ? "\\n\\nYour previous draft was rejected
           options: {
             description: "={{ $('Write Story').first().json.output.description }}",
             tags: "={{ $('Write Story').first().json.output.tags }}",
-            privacyStatus: 'private',
+            privacyStatus: `={{ ${SHORTS_DECISION}.mode === 'public' ? 'public' : 'private' }}`,
             selfDeclaredMadeForKids: false,
+            notifySubscribers: `={{ ${SHORTS_DECISION}.mode !== 'private' }}`,
+            // Today at publish_time in the publish timezone, or tomorrow when that has passed.
+            publishAt: `={{ ${SHORTS_DECISION}.mode !== 'scheduled' ? '' : (() => { const [h, m] = String(${SHORTS_SETTINGS}.publish_time).split(':').map(Number); let at = $now.setZone(${SHORTS_TZ}).set({ hour: h, minute: m || 0, second: 0, millisecond: 0 }); if (at <= $now) at = at.plus({ days: 1 }); return at.toUTC().toISO({ suppressMilliseconds: true }); })() }}`,
+            containsSyntheticMedia: true,
           },
         },
         { credentialTypes: ['youTubeOAuth2Api'] },
@@ -537,7 +605,7 @@ Output only the JSON.{{ $json.feedback ? "\\n\\nYour previous draft was rejected
       node(
         'Log Post',
         'flowforge.googleSheets',
-        [4800, 0],
+        [5280, 0],
         {
           operation: 'append',
           documentId: '',
@@ -553,35 +621,149 @@ Output only the JSON.{{ $json.feedback ? "\\n\\nYour previous draft was rejected
               { column: 'video_id', value: '={{ $json.id }}' },
               { column: 'date', value: "={{ $now.toFormat('yyyy-MM-dd') }}" },
               { column: 'attempt', value: "={{ $('Set Attempt').first().json.attempt }}" },
+              {
+                column: 'publish_mode',
+                value: `={{ ${SHORTS_DECISION}.mode + (${SHORTS_DECISION}.review_reason ? ' (review)' : '') }}`,
+              },
+              {
+                column: 'publish_time',
+                value: `={{ ${SHORTS_DECISION}.mode === 'scheduled' ? ($('YouTube Upload').first().json.status?.publishAt ? DateTime.fromISO($('YouTube Upload').first().json.status.publishAt).setZone(${SHORTS_TZ}).toFormat('yyyy-MM-dd HH:mm') : 'not scheduled') : ${SHORTS_DECISION}.mode === 'public' ? $now.setZone(${SHORTS_TZ}).toFormat('yyyy-MM-dd HH:mm') : '' }}`,
+              },
             ],
           },
         },
         { credentialTypes: ['googleSheetsOAuth2Api'] },
       ),
+      node('Wait for Processing', 'flowforge.wait', [5760, 0], {
+        resume: 'timeInterval',
+        amount: 2,
+        unit: 'minutes',
+      }),
+      node(
+        'Check Status',
+        'flowforge.httpRequest',
+        [6000, 0],
+        {
+          method: 'GET',
+          url: 'https://www.googleapis.com/youtube/v3/videos',
+          authentication: 'predefinedCredentialType',
+          nodeCredentialType: 'youTubeOAuth2Api',
+          sendQuery: true,
+          queryParameters: {
+            parameters: [
+              { name: 'part', value: 'status,processingDetails' },
+              { name: 'id', value: "={{ $('YouTube Upload').first().json.id }}" },
+            ],
+          },
+        },
+        { credentialTypes: ['youTubeOAuth2Api'] },
+      ),
+      node('Read Status', 'flowforge.set', [6240, 0], {
+        mode: 'manual',
+        includeOtherFields: false,
+        assignments: {
+          assignments: [
+            {
+              id: '1',
+              name: 'video_id',
+              value: "={{ $('YouTube Upload').first().json.id }}",
+              type: 'string',
+            },
+            {
+              id: '2',
+              name: 'upload_status',
+              value: "={{ $json.items?.[0]?.status?.uploadStatus ?? 'not found' }}",
+              type: 'string',
+            },
+            {
+              id: '3',
+              name: 'privacy_status',
+              value: "={{ $json.items?.[0]?.status?.privacyStatus ?? '' }}",
+              type: 'string',
+            },
+            {
+              id: '4',
+              name: 'publish_at',
+              value: "={{ $json.items?.[0]?.status?.publishAt ?? '' }}",
+              type: 'string',
+            },
+            {
+              id: '5',
+              name: 'failure_reason',
+              value: "={{ $json.items?.[0]?.status?.failureReason ?? '' }}",
+              type: 'string',
+            },
+            {
+              id: '6',
+              name: 'rejection_reason',
+              value: "={{ $json.items?.[0]?.status?.rejectionReason ?? '' }}",
+              type: 'string',
+            },
+            {
+              id: '7',
+              name: 'problem',
+              value: `={{ (() => { const v = $json.items?.[0]; const s = v?.status ?? {}; const mode = ${SHORTS_DECISION}.mode; if (!v) return 'YouTube cannot find the video (it may have been deleted).'; if (s.uploadStatus === 'failed') return 'The upload failed: ' + (s.failureReason || 'no reason given'); if (s.uploadStatus === 'rejected') return 'YouTube rejected the video: ' + (s.rejectionReason || 'no reason given'); if (s.uploadStatus === 'deleted') return 'The video was deleted.'; if (mode === 'public' && s.privacyStatus !== 'public') return 'Locked as private: it was uploaded as public, but YouTube keeps it ' + s.privacyStatus + '.'; if (mode === 'scheduled' && !s.publishAt) return 'Locked as private: YouTube dropped the scheduled publish time, so it will not go public.'; return ''; })() }}`,
+              type: 'string',
+            },
+          ],
+        },
+      }),
+      node('Upload OK?', 'flowforge.if', [6480, 0], {
+        conditions: condition('={{ $json.problem }}', 'string', 'empty'),
+      }),
       node(
         'Notify Me',
         'flowforge.gmail',
-        [5040, 0],
+        [6720, 0],
         {
           resource: 'message',
           operation: 'send',
           sendTo: '',
-          subject: "=New Short ready: {{ $('Write Story').first().json.output.title }}",
+          subject: `={{ ${SHORTS_DECISION}.mode === 'public' ? 'Now live: ' : ${SHORTS_DECISION}.mode === 'scheduled' ? 'Going live ' + ${SHORTS_LIVE_WHEN} + ': ' : 'New Short ready: ' }}{{ $('Write Story').first().json.output.title }}`,
           emailType: 'text',
-          message: `=Your new Short "{{ $('Write Story').first().json.output.title }}" is uploaded as Private.
+          message: `=Your new Short "{{ $('Write Story').first().json.output.title }}" {{ ${SHORTS_DECISION}.mode === 'public' ? 'is live: https://youtube.com/shorts/' + $json.video_id : ${SHORTS_DECISION}.mode === 'scheduled' ? 'is scheduled to go public ' + ${SHORTS_LIVE_WHEN} + '.' : 'is uploaded as Private.' + (${SHORTS_DECISION}.review_reason ? "\\nIt was kept Private for manual review because " + ${SHORTS_DECISION}.review_reason + '.' : '') }}
 
-Review it and publish it in YouTube Studio:
-https://studio.youtube.com/video/{{ $('YouTube Upload').first().json.id }}/edit
+{{ ${SHORTS_DECISION}.mode === 'private' ? 'Review it and publish it in YouTube Studio:' : 'YouTube Studio:' }}
+https://studio.youtube.com/video/{{ $json.video_id }}/edit{{ ${SHORTS_DECISION}.mode === 'scheduled' ? "\\nTo stop it, open the link and set it to Private before " + ${SHORTS_LIVE_TIME} + '.' : '' }}
 
 Trend used: {{ $('Write Story').first().json.output.trend_used }}
-Attempt: {{ $('Set Attempt').first().json.attempt }} of 2{{ $('Set Attempt').first().json.attempt > 1 ? ' (the first story was rejected: ' + $('Set Attempt').first().json.feedback + ')' : '' }}`,
+Attempt: {{ $('Set Attempt').first().json.attempt }} of 2{{ $('Set Attempt').first().json.attempt > 1 ? ' (the first story was rejected: ' + $('Set Attempt').first().json.feedback + ')' : '' }}
+Quality check: hook {{ $('Quality Check').first().json.output.hook }}, clarity {{ $('Quality Check').first().json.output.clarity }}, originality {{ $('Quality Check').first().json.output.originality }}, safety {{ $('Quality Check').first().json.output.safety }}`,
+        },
+        { credentialTypes: ['gmailOAuth2'] },
+      ),
+      node(
+        'Upload Problem',
+        'flowforge.gmail',
+        [6720, 220],
+        {
+          resource: 'message',
+          operation: 'send',
+          sendTo: '',
+          subject: "=Upload problem: {{ $('Write Story').first().json.output.title }}",
+          emailType: 'text',
+          message: `=Something is wrong with "{{ $('Write Story').first().json.output.title }}" after the upload.
+
+Problem: {{ $json.problem }}
+
+What YouTube reports:
+- Upload status: {{ $json.upload_status }}
+- Privacy: {{ $json.privacy_status || 'unknown' }}
+- Scheduled publish time: {{ $json.publish_at || 'none' }}
+- Failure reason: {{ $json.failure_reason || 'none' }}
+- Rejection reason: {{ $json.rejection_reason || 'none' }}
+- Asked for: {{ ${SHORTS_DECISION}.mode }}
+
+YouTube Studio:
+https://studio.youtube.com/video/{{ $json.video_id }}/edit{{ $json.problem.startsWith('Locked') ? "\\n\\nVideos uploaded through the API stay private until your Google Cloud project passes YouTube's API audit. Request it here: https://support.google.com/youtube/contact/yt_api_form" : '' }}`,
         },
         { credentialTypes: ['gmailOAuth2'] },
       ),
     ],
     connections: [
-      link('Every day 18:00', 'Google Trends RSS'),
-      link('Every day 18:00', 'YouTube Trending'),
+      link('Every day 18:00', 'Publish Settings'),
+      link('Publish Settings', 'Google Trends RSS'),
+      link('Publish Settings', 'YouTube Trending'),
       link('YouTube Trending', 'Split Out Videos'),
       link('Split Out Videos', 'Keep Video Titles'),
       link('Google Trends RSS', 'Merge Trends', 0, 0),
@@ -594,7 +776,8 @@ Attempt: {{ $('Set Attempt').first().json.attempt }} of 2{{ $('Set Attempt').fir
       link('Set Attempt', 'Write Story'),
       link('Write Story', 'Quality Check'),
       link('Quality Check', 'Approved?'),
-      link('Approved?', 'Make Video', 0),
+      link('Approved?', 'Decide Publishing', 0),
+      link('Decide Publishing', 'Make Video'),
       link('Approved?', 'First Attempt?', 1),
       link('First Attempt?', 'Retry With Feedback', 0),
       link('First Attempt?', 'Rejected', 1),
@@ -610,7 +793,12 @@ Attempt: {{ $('Set Attempt').first().json.attempt }} of 2{{ $('Set Attempt').fir
       link('Too Many Tries?', 'Wait 5 Minutes', 1),
       link('Download Video', 'YouTube Upload'),
       link('YouTube Upload', 'Log Post'),
-      link('Log Post', 'Notify Me'),
+      link('Log Post', 'Wait for Processing'),
+      link('Wait for Processing', 'Check Status'),
+      link('Check Status', 'Read Status'),
+      link('Read Status', 'Upload OK?'),
+      link('Upload OK?', 'Notify Me', 0),
+      link('Upload OK?', 'Upload Problem', 1),
     ],
   },
 ];

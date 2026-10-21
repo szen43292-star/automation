@@ -137,6 +137,23 @@ export const YouTube: INodeType = {
             type: 'boolean',
             default: false,
           },
+          {
+            displayName: 'Publish At',
+            name: 'publishAt',
+            type: 'string',
+            default: '',
+            placeholder: '2026-10-21T14:30:00Z',
+            description:
+              'Make the video public at this time (ISO 8601). Only for Privacy Status "Private"; empty = no schedule.',
+          },
+          {
+            displayName: 'Contains Altered or Synthetic Content',
+            name: 'containsSyntheticMedia',
+            type: 'boolean',
+            default: false,
+            description:
+              "YouTube's disclosure for realistic AI-made or altered content (Studio: Altered content = Yes)",
+          },
         ],
       },
     ],
@@ -162,6 +179,33 @@ export const YouTube: INodeType = {
         const video = Buffer.from(file.data, 'base64');
         const mimeType = file.mimeType?.startsWith('video/') ? file.mimeType : 'video/mp4';
         const tags = toList(options.tags);
+        const privacyStatus = String(options.privacyStatus || 'private');
+        const publishAt = String(options.publishAt ?? '').trim();
+        if (publishAt) {
+          const at = new Date(publishAt);
+          if (Number.isNaN(at.getTime()))
+            throw new NodeOperationError(
+              this.getNode(),
+              `"${publishAt}" is not a valid Publish At time`,
+              {
+                itemIndex: i,
+                description: 'Use ISO 8601, e.g. 2026-10-21T14:30:00Z',
+              },
+            );
+          if (privacyStatus !== 'private')
+            throw new NodeOperationError(
+              this.getNode(),
+              'Publish At needs Privacy Status "Private"',
+              {
+                itemIndex: i,
+                description: 'YouTube keeps a scheduled video private until the publish time.',
+              },
+            );
+          if (at.getTime() <= Date.now())
+            throw new NodeOperationError(this.getNode(), 'Publish At must be in the future', {
+              itemIndex: i,
+            });
+        }
         const metadata = {
           snippet: {
             title: title.slice(0, 100),
@@ -173,8 +217,12 @@ export const YouTube: INodeType = {
               : {}),
           },
           status: {
-            privacyStatus: String(options.privacyStatus ?? 'private'),
+            privacyStatus,
             selfDeclaredMadeForKids: Boolean(options.selfDeclaredMadeForKids),
+            ...(publishAt ? { publishAt } : {}),
+            ...(options.containsSyntheticMedia !== undefined
+              ? { containsSyntheticMedia: Boolean(options.containsSyntheticMedia) }
+              : {}),
           },
         };
 
