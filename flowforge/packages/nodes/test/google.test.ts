@@ -8,7 +8,9 @@ import { buildRawMessage } from '../src/nodes/Gmail';
 import {
   extractJson,
   missingKeys,
+  isModelUnavailable,
   pickGeminiModel,
+  rankGeminiModels,
   schemaFromExample,
 } from '../src/nodes/LlmChain';
 
@@ -481,7 +483,128 @@ describe('Basic LLM Chain', () => {
     expect(pickGeminiModel(['gemini-2.0-flash'], 'gemini-9-ultra')).toBe('gemini-2.0-flash');
     expect(pickGeminiModel(['gemini-2.5-pro'], 'models/gemini-2.5-pro')).toBe('gemini-2.5-pro');
     expect(pickGeminiModel(['embedding-001', 'gemini-3.1-flash'], '')).toBe('gemini-3.1-flash');
-    expect(pickGeminiModel(null, '')).toBe('gemini-2.5-flash');
+    expect(pickGeminiModel(null, '')).toBe('gemini-flash-latest');
+    expect(pickGeminiModel(null, 'gemini-3.8-flash')).toBe('gemini-3.8-flash');
+  });
+
+  it('ranks the newest stable Flash first, previews and other families after', () => {
+    expect(
+      rankGeminiModels(
+        [
+          'gemini-2.5-flash',
+          'gemini-3.8-flash-preview-09-2026',
+          'gemini-2.5-pro',
+          'gemini-3.8-flash',
+          'gemini-3.8-flash-lite',
+          'text-embedding-004',
+          'gemini-2.5-flash-preview-tts',
+          'gemini-3.5-pro',
+          'gemini-2.0-flash-001',
+        ],
+        '',
+      ),
+    ).toEqual([
+      'gemini-3.8-flash',
+      'gemini-2.5-flash',
+      'gemini-2.0-flash-001',
+      'gemini-3.8-flash-preview-09-2026',
+      'gemini-3.5-pro',
+      'gemini-2.5-pro',
+      'gemini-3.8-flash-lite',
+    ]);
+    // The "-latest" alias follows Google's newest model, so it goes first.
+    expect(rankGeminiModels(['gemini-3.8-flash', 'gemini-flash-latest'], '')[0]).toBe(
+      'gemini-flash-latest',
+    );
+    // The model asked for comes first when the key has it.
+    expect(rankGeminiModels(['gemini-3.8-flash', 'gemini-2.5-pro'], 'gemini-2.5-pro')[0]).toBe(
+      'gemini-2.5-pro',
+    );
+  });
+
+  it('tells a refused model apart from other errors', () => {
+    const retired =
+      'This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash';
+    expect(isModelUnavailable(400, retired)).toBe(true);
+    expect(isModelUnavailable(404, 'models/gemini-x is not found')).toBe(true);
+    expect(isModelUnavailable(400, 'API key not valid. Please pass a valid API key.')).toBe(false);
+    expect(isModelUnavailable(429, 'Quota exceeded')).toBe(false);
+  });
+
+  it('moves on to the model Google suggests when one is retired', async () => {
+    const http = fakeHttp(
+      (r) =>
+        r.url.endsWith('/v1beta/models')
+          ? {
+              body: {
+                models: ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-3.8-flash-lite'].map(
+                  (name) => ({
+                    name: `models/${name}`,
+                    supportedGenerationMethods: ['generateContent'],
+                  }),
+                ),
+              },
+            }
+          : undefined,
+      (r) =>
+        r.url.includes('/gemini-2.5-flash:')
+          ? {
+              statusCode: 400,
+              body: {
+                error: {
+                  code: 400,
+                  message:
+                    'This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and improvements.',
+                },
+              },
+            }
+          : undefined,
+      (r) =>
+        r.url.includes('/gemini-3.8-flash:')
+          ? { body: { candidates: [{ content: { parts: [{ text: 'Hi' }] } }] } }
+          : undefined,
+    );
+    const { output, run } = await runNode(
+      'flowforge.chainLlm',
+      { text: 'Say hi' },
+      [{}, {}],
+      { credentials: { googlePalmApi: { id: 'k', name: 'Gemini' } } },
+      { httpRequest: http.httpRequest, credentials },
+    );
+    expect(errorOf(run)).toBeUndefined();
+    expect(output()).toEqual([{ text: 'Hi' }, { text: 'Hi' }]);
+    // The retired model is tried once; afterwards the suggested one is used straight away.
+    expect(
+      http.calls
+        .filter((c) => c.url.includes(':generateContent'))
+        .map((c) => c.url.split('/').pop()),
+    ).toEqual([
+      'gemini-2.5-flash:generateContent',
+      'gemini-3.8-flash:generateContent',
+      'gemini-3.8-flash:generateContent',
+    ]);
+  });
+
+  it('says which models were tried when none answers', async () => {
+    const http = fakeHttp(
+      (r) =>
+        r.url.endsWith('/v1beta/models')
+          ? { body: { models: [{ name: 'models/gemini-2.5-flash' }] } }
+          : undefined,
+      (r) =>
+        r.url.includes(':generateContent')
+          ? { statusCode: 404, body: { error: { message: 'Model not found' } } }
+          : undefined,
+    );
+    const { run } = await runNode(
+      'flowforge.chainLlm',
+      { text: 'Go' },
+      [{}],
+      { credentials: { googlePalmApi: { id: 'k', name: 'Gemini' } } },
+      { httpRequest: http.httpRequest, credentials },
+    );
+    expect(errorOf(run)?.message).toContain('none of the models this key can use answered');
+    expect(errorOf(run)?.description).toContain('gemini-2.5-flash: Model not found');
   });
 
   function gemini(answers: string[]) {
