@@ -18,7 +18,13 @@ test('phone layout: bottom tabs, More menu, and pages fit the screen', async ({ 
 
   await tabs.getByRole('link', { name: 'Calls' }).click();
   await expect(page.getByRole('heading', { name: 'Calls' })).toBeVisible();
-  await tabs.getByRole('link', { name: 'Agents' }).click();
+  await tabs.getByRole('link', { name: 'Approvals' }).click();
+  await expect(page.getByRole('heading', { name: 'Approvals' })).toBeVisible();
+  await expect(page.getByText('Nothing to approve')).toBeVisible();
+
+  // AI agents moved into the More menu.
+  await tabs.getByRole('button', { name: 'More' }).click();
+  await page.getByRole('link', { name: 'AI agents' }).click();
   await expect(page.getByRole('heading', { name: 'AI agents' })).toBeVisible();
 
   await tabs.getByRole('button', { name: 'More' }).click();
@@ -26,7 +32,15 @@ test('phone layout: bottom tabs, More menu, and pages fit the screen', async ({ 
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
 
   // Nothing is wider than the phone.
-  for (const path of ['/dashboard', '/calls', '/whatsapp', '/agents', '/settings', '/templates']) {
+  for (const path of [
+    '/dashboard',
+    '/calls',
+    '/whatsapp',
+    '/agents',
+    '/approvals',
+    '/settings',
+    '/templates',
+  ]) {
     await page.goto(path);
     await page.waitForLoadState('networkidle');
     const overflow = await page.evaluate(

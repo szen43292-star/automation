@@ -23,6 +23,9 @@ import { QueueService } from './queue/QueueService';
 import { ActiveWorkflowManager, WaitTracker } from './triggers/ActiveWorkflowManager';
 import { VariablesService, variableRoutes } from './variables/routes';
 import { TestWebhooks, webhookRoutes } from './webhooks/webhooks';
+import { ApprovalService } from './approvals/ApprovalService';
+import { approvalApiRoutes, approvalPublicRoutes } from './approvals/routes';
+import { RemoteAccess } from './remote/RemoteAccess';
 import { WorkflowService } from './workflows/WorkflowService';
 import { workflowRoutes } from './workflows/routes';
 import { GraphClient } from './whatsapp/graph';
@@ -65,6 +68,8 @@ declare module 'fastify' {
     calls: CallService;
     aiProviders: AiProviders;
     agents: AgentService;
+    approvals: ApprovalService;
+    remoteAccess: RemoteAccess;
     flowforgeVersion: string;
     /** Start schedules, webhooks, the wait tracker and queue relays (not done in tests unless asked). */
     startBackgroundServices(): Promise<void>;
@@ -137,6 +142,21 @@ export async function buildApp(
   });
   const variables = new VariablesService(prisma);
   const whatsappHelper = whatsapp.helper();
+  const remoteAccess = new RemoteAccess({
+    publicUrl: config.PUBLIC_URL,
+    port: config.PORT,
+    mode: config.REMOTE_ACCESS,
+    dataDir: config.dataDir,
+    binary: config.CLOUDFLARED_PATH,
+    logger: app.log,
+  });
+  const approvals = new ApprovalService({
+    prisma,
+    dataDir: config.dataDir,
+    publicUrl: config.PUBLIC_URL,
+    remote: remoteAccess,
+    logger: app.log,
+  });
   const executions = new ExecutionService({
     prisma,
     nodeTypes,
@@ -147,8 +167,10 @@ export async function buildApp(
     config,
     logger: app.log,
     whatsapp: whatsappHelper,
+    approvals: approvals.helper(),
     ...(queue ? { queue } : {}),
   });
+  approvals.resume = (executionId, data) => executions.resume(executionId, data);
   const activeWorkflows = new ActiveWorkflowManager(
     prisma,
     nodeTypes,
@@ -224,6 +246,13 @@ export async function buildApp(
   app.decorate('calls', calls);
   app.decorate('aiProviders', aiProviders);
   app.decorate('agents', agents);
+  app.decorate('approvals', approvals);
+  app.decorate('remoteAccess', remoteAccess);
+  // Through the quick tunnel only the approval pages are reachable.
+  app.addHook('onRequest', async (request, reply) => {
+    if (!remoteAccess.allows(request.headers.host, request.url, request.headers))
+      return reply.status(404).send({ error: 'NotFound', message: 'Not available from here' });
+  });
   app.decorate('startBackgroundServices', async () => {
     if (queue) {
       // Relay live events from workers to WebSocket clients.
@@ -303,6 +332,7 @@ export async function buildApp(
   await app.register(oauthCallbackRoutes, { config });
   await app.register(webhookRoutes, { config });
   await app.register(whatsappWebhookRoutes);
+  await app.register(approvalPublicRoutes, { approvals });
 
   // --- Authenticated API -----------------------------------------------------
   await app.register(async (api) => {
@@ -327,6 +357,7 @@ export async function buildApp(
     await api.register(userRoutes, { editorUrl: config.editorUrl });
     await api.register(dashboardRoutes, { defaultTimezone: config.DEFAULT_TIMEZONE });
     await api.register(deviceRoutes, { notifications: phones });
+    await api.register(approvalApiRoutes, { approvals });
   });
 
   // --- Editor (single page app) ---------------------------------------------
@@ -355,6 +386,7 @@ export async function buildApp(
   }
 
   app.addHook('onClose', async () => {
+    remoteAccess.stop();
     waitTracker.stop();
     activeWorkflows.shutdown();
     await calls.shutdown();

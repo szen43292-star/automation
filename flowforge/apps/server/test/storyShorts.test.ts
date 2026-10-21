@@ -5,6 +5,7 @@ import {
   type IDataObject,
   type IHttpRequestOptions,
   type IHttpResponse,
+  type IApprovalRequest,
   type INode,
   type IRun,
 } from '@flowforge/workflow';
@@ -12,6 +13,7 @@ import {
   CodeSandbox,
   WorkflowExecute,
   createAdditionalData,
+  type IApprovalService,
   type ICredentialsHelper,
   type WorkflowRunOptions,
 } from '@flowforge/engine';
@@ -242,9 +244,7 @@ describe('AI Story Shorts – Daily template', () => {
     const mails = () => calls.filter((c) => c.url.endsWith('/messages/send'));
     const upload = () =>
       calls.find((c) => c.url === 'https://www.googleapis.com/upload/youtube/v3/videos')!;
-    const mailBody = () => {
-      expect(mails()).toHaveLength(1);
-      const mail = mails()[0]!;
+    const decode = (mail: IHttpRequestOptions) => {
       const message = Buffer.from((mail.body as { raw: string }).raw, 'base64url').toString();
       const body = Buffer.from(
         message.split('\r\n\r\n')[1]!.replace(/\r\n/g, ''),
@@ -253,9 +253,23 @@ describe('AI Story Shorts – Daily template', () => {
       const subject = message.match(/^Subject: (.*)$/m)![1]!;
       return { message, subject, body };
     };
+    const isApprovalMail = (mail: IHttpRequestOptions) =>
+      decode(mail).subject.startsWith('Approve your new Short');
+    /** The approval request email. */
+    const approvalMail = () => {
+      const found = mails().filter(isApprovalMail);
+      expect(found).toHaveLength(1);
+      return decode(found[0]!);
+    };
+    /** The one email after the upload (Notify Me or Upload Problem). */
+    const mailBody = () => {
+      const after = mails().filter((m) => !isApprovalMail(m));
+      expect(after).toHaveLength(1);
+      return decode(after[0]!);
+    };
     const loggedRow = () =>
       (calls.find((c) => c.url.includes(':append'))!.body as { values: unknown[][] }).values[0]!;
-    return { calls, httpRequest, prompts, mails, upload, mailBody, loggedRow };
+    return { calls, httpRequest, prompts, mails, upload, mailBody, approvalMail, loggedRow };
   }
 
   const credentials: ICredentialsHelper = {
@@ -269,11 +283,32 @@ describe('AI Story Shorts – Daily template', () => {
     }),
   };
 
-  /** Runs the template as if every credential were connected, resuming each Wait. */
+  /**
+   * Runs the template as if every credential were connected, resuming each Wait. `answer` is what
+   * you do on the approval page ("timeout": nothing within 24 hours).
+   */
   async function runTemplate(
     httpRequest: (r: IHttpRequestOptions) => Promise<IHttpResponse>,
     settings: Record<string, string> = {},
+    answer: 'approve' | 'reject' | 'timeout' = 'approve',
   ) {
+    const saved = new Map<string, { data: Buffer; mimeType: string }>();
+    const approvals: IApprovalService = {
+      create: async (owner, request) => {
+        expect(owner.executionId).toBe('shorts');
+        const id = `approval-${saved.size + 1}`;
+        saved.set(id, { data: request.media!.data, mimeType: request.media!.mimeType });
+        approvalRequests.push(request);
+        return {
+          id,
+          url: `https://quiet-lamp-1234.trycloudflare.com/approve/${id}`,
+          localUrl: `http://localhost:5678/approve/${id}`,
+          expiresAt: request.expiresAt.toISOString(),
+        };
+      },
+      media: async (id) => saved.get(id)!,
+    };
+    const approvalRequests: IApprovalRequest[] = [];
     const nodes = template.nodes.map(({ credentialTypes, ...n }) => ({
       ...n,
       ...(credentialTypes
@@ -314,6 +349,7 @@ describe('AI Story Shorts – Daily template', () => {
           codeSandbox,
           httpRequest,
           credentials,
+          approvals,
         }),
       ).run(options);
     let run: IRun = await execute({ startNode: 'Every day 18:00', triggerItems: [{ json: {} }] });
@@ -321,6 +357,21 @@ describe('AI Story Shorts – Daily template', () => {
     while (run.status === 'waiting') {
       waits++;
       const waited = new Date(run.data.waitTill!).getTime() - Date.now();
+      if (run.data.waitingNode === 'Wait for Approval') {
+        // Waits up to 24 hours for the answer from the approval page.
+        expect(waited).toBeGreaterThan(23 * 3_600_000);
+        run = await execute(
+          answer === 'timeout'
+            ? { resumeFrom: run.data }
+            : {
+                resumeFrom: run.data,
+                resumeData: [
+                  { json: { approved: answer === 'approve', approval_id: 'approval-1' } },
+                ],
+              },
+        );
+        continue;
+      }
       if (run.data.waitingNode === 'Wait 5 Minutes') expect(waited).toBeGreaterThan(4 * 60_000);
       else {
         expect(run.data.waitingNode).toBe('Wait for Processing');
@@ -330,16 +381,16 @@ describe('AI Story Shorts – Daily template', () => {
     }
     const runData = run.data.resultData.runData;
     const out = (name: string, i = -1) => runData[name]?.at(i)?.data?.main[0]?.map((x) => x.json);
-    return { run, waits, runData, out };
+    return { run, waits, runData, out, approvalRequests };
   }
 
   it('makes, uploads, logs and announces a Short (with the wait loop)', async () => {
     const world = fakeWorld([approve]);
-    const { run, waits, runData, out } = await runTemplate(world.httpRequest);
+    const { run, waits, runData, out, approvalRequests } = await runTemplate(world.httpRequest);
     expect(run.data.resultData.error).toBeUndefined();
     expect(run.status).toBe('success');
-    // Not ready at the first check, ready at the second; then the wait for YouTube's processing.
-    expect(waits).toBe(3);
+    // Not ready at the first check, ready at the second; your approval; YouTube's processing.
+    expect(waits).toBe(4);
 
     expect(out('Aggregate Trends')?.[0]).toEqual({
       trends: ['Diwali 2026', 'Cricket final', 'Top song', 'Funny cat'],
@@ -369,7 +420,7 @@ describe('AI Story Shorts – Daily template', () => {
       video_script: story.script,
       video_terms: story.search_terms,
       video_aspect: '9:16',
-      video_source: 'pexels',
+      video_source: 'coverr',
       video_clip_duration: 3,
       video_count: 1,
       voice_name: 'en-US-AndrewNeural-Male',
@@ -425,6 +476,20 @@ describe('AI Story Shorts – Daily template', () => {
     expect(body).toContain('Attempt: 1 of 2');
     expect(body).toContain('Quality check: hook 8, clarity 9, originality 8, safety 10');
     expect(body).not.toContain('rejected');
+
+    // You were asked first: the video, with the link that opens it on your phone.
+    expect(approvalRequests).toHaveLength(1);
+    expect(approvalRequests[0]).toMatchObject({ title: story.title });
+    expect(approvalRequests[0]!.media!.data.toString()).toBe('mp4 bytes');
+    expect(approvalRequests[0]!.description).toContain('Quality check: hook 8, clarity 9');
+    expect(approvalRequests[0]!.description).toContain('If you approve: goes public at 20:00');
+    const asked = world.approvalMail();
+    expect(asked.subject).toBe(`Approve your new Short: ${story.title}`);
+    expect(asked.body).toContain('https://quiet-lamp-1234.trycloudflare.com/approve/approval-1');
+    // The approved video (loaded back from the approval) is what gets uploaded.
+    expect(out('Load Approved Video')?.[0]).toMatchObject({ approval_id: 'approval-1' });
+    const putVideo = world.calls.find((c) => c.url === 'https://upload.example/s/1')!;
+    expect(Buffer.from(putVideo.body as Uint8Array).toString()).toBe('mp4 bytes');
   });
 
   it('gives the writer one more try with the editor feedback', async () => {
@@ -567,6 +632,27 @@ describe('AI Story Shorts – Daily template', () => {
     expect(body).toContain('Problem: YouTube rejected the video: duplicate');
     expect(body).toContain('- Rejection reason: duplicate');
     expect(body).not.toContain('yt_api_form');
+  });
+
+  it('uploads nothing when you reject the video or do not answer', async () => {
+    for (const answer of ['reject', 'timeout'] as const) {
+      const world = fakeWorld([approve]);
+      const { run, runData } = await runTemplate(world.httpRequest, {}, answer);
+      expect(run.status, answer).toBe('success');
+      expect(runData['Not Approved'], answer).toHaveLength(1);
+      expect(runData['YouTube Upload'], answer).toBeUndefined();
+      expect(
+        world.calls.some((c) => c.url.includes('/upload/youtube/')),
+        answer,
+      ).toBe(false);
+      expect(
+        world.calls.some((c) => c.url.includes(':append')),
+        answer,
+      ).toBe(false);
+      // Only the approval request was emailed.
+      expect(world.mails(), answer).toHaveLength(1);
+      expect(world.approvalMail().subject).toContain('Approve your new Short');
+    }
   });
 
   it('stops with "Rejected twice" when the second draft is rejected too', async () => {

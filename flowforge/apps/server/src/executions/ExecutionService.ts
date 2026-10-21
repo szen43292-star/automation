@@ -15,6 +15,7 @@ import {
   type IWorkflowBase,
 } from '@flowforge/workflow';
 import { CodeSandbox, WorkflowExecute, createAdditionalData } from '@flowforge/engine';
+import type { IApprovalService } from '@flowforge/engine';
 import type { AuthUser } from '../auth/auth';
 import type { Config } from '../config';
 import type { CredentialsService } from '../credentials/CredentialsService';
@@ -49,6 +50,8 @@ export interface ExecutionServiceDeps {
   inProcessOnly?: boolean;
   /** Connected WhatsApp numbers for WhatsApp nodes. */
   whatsapp?: IWhatsAppHelper;
+  /** Approvals for Ask for Approval nodes. */
+  approvals?: IApprovalService;
 }
 
 /**
@@ -234,6 +237,7 @@ export class ExecutionService {
         credentials: this.deps.credentials.helper(owner),
         publicUrl: this.deps.config.PUBLIC_URL,
         whatsapp: this.deps.whatsapp,
+        approvals: this.deps.approvals,
         sendWebhookResponse: options.sendWebhookResponse,
         executeWorkflow: (source, items, opts) =>
           this.executeSubWorkflow(source, items, opts, { executionId, workflowId, owner }),

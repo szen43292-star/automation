@@ -275,10 +275,10 @@ export const TEMPLATES: WorkflowTemplate[] = [
     setup: [
       'Connect the credentials: YouTube OAuth2 API, Google Gemini (PaLM) API, Google Sheets OAuth2 API and Gmail OAuth2 API',
       'Pick your spreadsheet in "Get Past Titles" and "Log Post" (it needs a sheet named "Posted")',
-      'Enter your email address in "Notify Me" and "Upload Problem"',
+      'Enter your email address in "Email Approval Link", "Notify Me" and "Upload Problem"',
       'Choose publish_mode (scheduled, public or private) and publish_time in "Publish Settings"',
       'Scheduled and public uploads need your Google Cloud project to pass the YouTube API audit; until then YouTube keeps them private and you get an "Upload problem" email',
-      'Start MoneyPrinterTurbo on this PC and check the field names of "Make Video" at http://127.0.0.1:8080/docs',
+      'Start MoneyPrinterTurbo on this PC (with a free Coverr API key in its config.toml) and check the field names of "Make Video" at http://127.0.0.1:8080/docs',
       'Run it once with "Test workflow", then activate',
     ],
     settings: { timezone: 'Asia/Kolkata' },
@@ -289,7 +289,7 @@ export const TEMPLATES: WorkflowTemplate[] = [
         [-40, -330],
         {
           content:
-            '## AI Story Shorts – Daily\n1. Every day at 18:00 it collects trending searches (Google Trends) and trending videos (YouTube) in India.\n2. Gemini writes a short story about one trend, a second Gemini editor checks it, and MoneyPrinterTurbo turns it into a 9:16 video.\n3. The video is uploaded to YouTube (scheduled for 20:00 by default, see Publish Settings), logged in Google Sheets and you get an email with the YouTube Studio link.',
+            '## AI Story Shorts – Daily\n1. Every day at 18:00 it collects trending searches (Google Trends) and trending videos (YouTube) in India.\n2. Gemini writes a short story about one trend, a second Gemini editor checks it, and MoneyPrinterTurbo turns it into a 9:16 video.\n3. You get an email to watch and approve the video on your phone; once approved it is uploaded to YouTube (scheduled for 20:00 by default, see Publish Settings) and logged in Google Sheets.',
           color: 'blue',
         },
         { width: 760, height: 190 },
@@ -512,7 +512,7 @@ Output only the JSON.{{ $json.feedback ? "\\n\\nYour previous draft was rejected
   "video_script": {{ JSON.stringify($('Write Story').first().json.output.script) }},
   "video_terms": {{ JSON.stringify($('Write Story').first().json.output.search_terms) }},
   "video_aspect": "9:16",
-  "video_source": "pexels",
+  "video_source": "coverr",
   "video_clip_duration": 3,
   "video_count": 1,
   "voice_name": "en-US-AndrewNeural-Male",
@@ -563,11 +563,11 @@ Output only the JSON.{{ $json.feedback ? "\\n\\nYour previous draft was rejected
           assignments: [{ id: '1', name: 'tries', value: '={{ $runIndex + 1 }}', type: 'number' }],
         },
       }),
-      node('Too Many Tries?', 'flowforge.if', [5040, 200], {
+      node('Too Many Tries?', 'flowforge.if', [6240, 200], {
         conditions: condition('={{ $json.tries }}', 'number', 'gte', 6),
         looseTypeValidation: true,
       }),
-      node('Give Up', 'flowforge.stopAndError', [5280, 300], {
+      node('Give Up', 'flowforge.stopAndError', [6480, 300], {
         errorType: 'errorMessage',
         errorMessage:
           '=The video was not ready after {{ $json.tries }} checks (30 minutes). Check MoneyPrinterTurbo on your PC.',
@@ -578,10 +578,55 @@ Output only the JSON.{{ $json.feedback ? "\\n\\nYour previous draft was rejected
         url: "={{ (v => (v.startsWith('http') ? '' : 'http://127.0.0.1:8080') + v)(String(($json.data?.videos ?? $json.videos)[0])) }}",
         options: { responseFormat: 'binary', timeout: 600000 },
       }),
+      node('Request Approval', 'flowforge.approval', [5040, 0], {
+        operation: 'request',
+        title: "={{ $('Write Story').first().json.output.title }}",
+        description: `={{ $('Write Story').first().json.output.description }}
+
+Trend: {{ $('Write Story').first().json.output.trend_used }}
+Quality check: hook {{ $('Quality Check').first().json.output.hook }}, clarity {{ $('Quality Check').first().json.output.clarity }}, originality {{ $('Quality Check').first().json.output.originality }}, safety {{ $('Quality Check').first().json.output.safety }}
+If you approve: {{ ${SHORTS_DECISION}.mode === 'public' ? 'published right away' : ${SHORTS_DECISION}.mode === 'scheduled' ? 'goes public at ' + ${SHORTS_SETTINGS}.publish_time : 'uploaded as Private' + (${SHORTS_DECISION}.review_reason ? ' (' + ${SHORTS_DECISION}.review_reason + ')' : '') }}`,
+        binaryPropertyName: 'data',
+        expiresAfterHours: 24,
+      }),
+      node(
+        'Email Approval Link',
+        'flowforge.gmail',
+        [5280, 0],
+        {
+          resource: 'message',
+          operation: 'send',
+          sendTo: '',
+          subject: "=Approve your new Short: {{ $('Write Story').first().json.output.title }}",
+          emailType: 'text',
+          message: `=Your new Short "{{ $('Write Story').first().json.output.title }}" is ready.
+
+Watch it and approve or reject it here:
+{{ $json.approval_url }}
+
+The link works on your phone from anywhere while your PC is on. If you do not answer within 24 hours, nothing is uploaded.`,
+        },
+        { credentialTypes: ['gmailOAuth2'] },
+      ),
+      node('Wait for Approval', 'flowforge.wait', [5520, 0], {
+        resume: 'webhook',
+        limitWaitTime: true,
+        limitHours: 24,
+      }),
+      node('Approved by You?', 'flowforge.if', [5760, 0], {
+        conditions: condition('={{ $json.approved }}', 'boolean', 'true'),
+        looseTypeValidation: true,
+      }),
+      node('Not Approved', 'flowforge.noOp', [6000, 220]),
+      node('Load Approved Video', 'flowforge.approval', [6000, 0], {
+        operation: 'media',
+        approvalId: "={{ $('Request Approval').first().json.approval_id }}",
+        outputBinaryPropertyName: 'data',
+      }),
       node(
         'YouTube Upload',
         'flowforge.youTube',
-        [5040, 0],
+        [6240, 0],
         {
           resource: 'video',
           operation: 'upload',
@@ -605,7 +650,7 @@ Output only the JSON.{{ $json.feedback ? "\\n\\nYour previous draft was rejected
       node(
         'Log Post',
         'flowforge.googleSheets',
-        [5280, 0],
+        [6480, 0],
         {
           operation: 'append',
           documentId: '',
@@ -634,7 +679,7 @@ Output only the JSON.{{ $json.feedback ? "\\n\\nYour previous draft was rejected
         },
         { credentialTypes: ['googleSheetsOAuth2Api'] },
       ),
-      node('Wait for Processing', 'flowforge.wait', [5760, 0], {
+      node('Wait for Processing', 'flowforge.wait', [6960, 0], {
         resume: 'timeInterval',
         amount: 2,
         unit: 'minutes',
@@ -642,7 +687,7 @@ Output only the JSON.{{ $json.feedback ? "\\n\\nYour previous draft was rejected
       node(
         'Check Status',
         'flowforge.httpRequest',
-        [6000, 0],
+        [7200, 0],
         {
           method: 'GET',
           url: 'https://www.googleapis.com/youtube/v3/videos',
@@ -658,7 +703,7 @@ Output only the JSON.{{ $json.feedback ? "\\n\\nYour previous draft was rejected
         },
         { credentialTypes: ['youTubeOAuth2Api'] },
       ),
-      node('Read Status', 'flowforge.set', [6240, 0], {
+      node('Read Status', 'flowforge.set', [7440, 0], {
         mode: 'manual',
         includeOtherFields: false,
         assignments: {
@@ -708,13 +753,13 @@ Output only the JSON.{{ $json.feedback ? "\\n\\nYour previous draft was rejected
           ],
         },
       }),
-      node('Upload OK?', 'flowforge.if', [6480, 0], {
+      node('Upload OK?', 'flowforge.if', [7680, 0], {
         conditions: condition('={{ $json.problem }}', 'string', 'empty'),
       }),
       node(
         'Notify Me',
         'flowforge.gmail',
-        [6720, 0],
+        [7920, 0],
         {
           resource: 'message',
           operation: 'send',
@@ -735,7 +780,7 @@ Quality check: hook {{ $('Quality Check').first().json.output.hook }}, clarity {
       node(
         'Upload Problem',
         'flowforge.gmail',
-        [6720, 220],
+        [7920, 220],
         {
           resource: 'message',
           operation: 'send',
@@ -791,7 +836,13 @@ https://studio.youtube.com/video/{{ $json.video_id }}/edit{{ $json.problem.start
       link('Count Tries', 'Too Many Tries?'),
       link('Too Many Tries?', 'Give Up', 0),
       link('Too Many Tries?', 'Wait 5 Minutes', 1),
-      link('Download Video', 'YouTube Upload'),
+      link('Download Video', 'Request Approval'),
+      link('Request Approval', 'Email Approval Link'),
+      link('Email Approval Link', 'Wait for Approval'),
+      link('Wait for Approval', 'Approved by You?'),
+      link('Approved by You?', 'Load Approved Video', 0),
+      link('Approved by You?', 'Not Approved', 1),
+      link('Load Approved Video', 'YouTube Upload'),
       link('YouTube Upload', 'Log Post'),
       link('Log Post', 'Wait for Processing'),
       link('Wait for Processing', 'Check Status'),

@@ -1,5 +1,6 @@
 import type { INodeType, INodeTypeDescription, INodeTypes } from '@flowforge/workflow';
 import { Aggregate } from './nodes/Aggregate';
+import { Approval } from './nodes/Approval';
 import { Code } from './nodes/Code';
 import { DateTimeNode } from './nodes/DateTime';
 import { EditFields } from './nodes/EditFields';
@@ -27,6 +28,7 @@ export * from './credentials';
 export { scheduleToCron, normalisePhone, sampleMessage, rankGeminiModels };
 
 export {
+  Approval,
   ErrorTrigger,
   ExecuteWorkflow,
   ExecuteWorkflowTrigger,
@@ -79,6 +81,7 @@ export const builtinNodes: INodeType[] = [
   Switch,
   LoopOverItems,
   Wait,
+  Approval,
   ExecuteWorkflow,
   HttpRequest,
   Code,

@@ -25,6 +25,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { InvitePage } from './pages/InvitePage';
 import { SettingsPage } from './pages/SettingsPage';
 import { TemplatesPage } from './pages/TemplatesPage';
+import { ApprovalsPage } from './pages/ApprovalsPage';
 import { AgentsPage } from './pages/AgentsPage';
 import { CallsPage } from './pages/CallsPage';
 import { WorkflowsPage } from './pages/WorkflowsPage';
@@ -62,6 +63,7 @@ const routes: RouteObject[] = [
           { index: true, element: <Navigate to="/dashboard" replace /> },
           { path: 'dashboard', element: <DashboardPage /> },
           { path: 'templates', element: <TemplatesPage /> },
+          { path: 'approvals', element: <ApprovalsPage /> },
           { path: 'settings', element: <SettingsPage /> },
           { path: 'workflows', element: <WorkflowsPage /> },
           { path: 'executions', element: <ExecutionsPage /> },

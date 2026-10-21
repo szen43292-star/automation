@@ -2,6 +2,7 @@ import { clsx } from 'clsx';
 import {
   Bot,
   Braces,
+  CircleCheck,
   LayoutDashboard,
   LayoutTemplate,
   Settings,
@@ -17,6 +18,7 @@ import {
   Zap,
   Menu as Menu2,
 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { startNative } from '../lib/native';
@@ -24,7 +26,28 @@ import { CallBar } from './calls/CallBar';
 import { push } from '../lib/push';
 import { useTheme, type ThemeMode } from '../lib/theme';
 import { useAuth } from '../stores/auth';
+import { endpoints } from '../lib/api';
 import { Menu } from './ui';
+
+/** How many approvals wait for an answer (checked every 30 s). */
+function PendingCount({ dot }: { dot?: boolean }) {
+  const approvals = useQuery({
+    queryKey: ['approvals'],
+    queryFn: endpoints.approvals,
+    refetchInterval: 30_000,
+  });
+  const count = approvals.data?.data.length ?? 0;
+  if (!count) return null;
+  return dot ? (
+    <span className="absolute -right-2 -top-1 min-w-4 rounded-full bg-danger px-1 text-center text-[10px] leading-4 text-white">
+      {count}
+    </span>
+  ) : (
+    <span className="ml-auto rounded-full bg-danger px-1.5 text-[11px] font-semibold leading-5 text-white">
+      {count}
+    </span>
+  );
+}
 
 export function ConnectionDot() {
   const [connected, setConnected] = useState(push.connected);
@@ -95,6 +118,10 @@ export function Layout() {
           <NavLink to="/executions" className={link}>
             <History size={16} /> Executions
           </NavLink>
+          <NavLink to="/approvals" className={link}>
+            <CircleCheck size={16} /> Approvals
+            <PendingCount />
+          </NavLink>
           <NavLink to="/credentials" className={link}>
             <KeyRound size={16} /> Credentials
           </NavLink>
@@ -156,6 +183,7 @@ function MobileNav({ onLogout }: { onLogout: () => void }) {
       isActive ? 'text-accent' : 'text-muted',
     );
   const extra: Array<[string, string, typeof Bot]> = [
+    ['/agents', 'AI agents', Bot],
     ['/workflows', 'Workflows', WorkflowIcon],
     ['/executions', 'Executions', History],
     ['/templates', 'Templates', LayoutTemplate],
@@ -208,8 +236,12 @@ function MobileNav({ onLogout }: { onLogout: () => void }) {
         <NavLink to="/whatsapp" className={tab}>
           <MessageCircle size={20} /> Chats
         </NavLink>
-        <NavLink to="/agents" className={tab}>
-          <Bot size={20} /> Agents
+        <NavLink to="/approvals" className={tab}>
+          <span className="relative">
+            <CircleCheck size={20} />
+            <PendingCount dot />
+          </span>
+          Approvals
         </NavLink>
         <button
           className={tab({ isActive: more })}

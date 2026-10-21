@@ -90,6 +90,31 @@ export interface IWhatsAppHelper {
   ): Promise<{ callId: string | null; status: 'calling' | 'queued' }>;
 }
 
+/** A decision asked from a person, e.g. "publish this video?" (Ask for Approval node). */
+export interface IApprovalRequest {
+  title: string;
+  description?: string;
+  /** A video (or image) shown with the question. */
+  media?: { data: Buffer; mimeType: string; fileName?: string };
+  expiresAt: Date;
+}
+
+export interface IApprovalCreated {
+  id: string;
+  /** Opens the approval page from anywhere (secure internet link) - put it in a message. */
+  url: string;
+  /** The same page on this computer / local network. */
+  localUrl: string;
+  expiresAt: string;
+}
+
+/** Approvals of the current execution (server and workers). */
+export interface IApprovalHelper {
+  create(request: IApprovalRequest): Promise<IApprovalCreated>;
+  /** The media saved with an approval. */
+  media(approvalId: string): Promise<{ data: Buffer; mimeType: string; fileName?: string }>;
+}
+
 export interface IWebhookRequest {
   method: string;
   path: string;
@@ -284,4 +309,6 @@ export interface IExecuteHelpers {
   prepareBinaryData(data: Buffer, fileName?: string, mimeType?: string): IBinaryData;
   /** Connected WhatsApp numbers (throws when the host has none configured). */
   whatsapp: IWhatsAppHelper;
+  /** Ask a person to approve something (throws when the host has no approvals). */
+  approvals: IApprovalHelper;
 }

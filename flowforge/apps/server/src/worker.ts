@@ -1,6 +1,7 @@
 import pino from 'pino';
 import { PrismaClient } from '@prisma/client';
 import { CredentialTypeRegistry, createNodeTypes } from '@flowforge/nodes';
+import { ApprovalService } from './approvals/ApprovalService';
 import type { FastifyBaseLogger } from 'fastify';
 import { loadConfig } from './config';
 import { Cipher } from './credentials/cipher';
@@ -66,12 +67,22 @@ export async function startWorker(
     queue.sendCommand({ type: 'startCall', accountId, to: contact, ...options });
     return { callId: null, status: 'queued' };
   };
+  // Approvals made on a worker link to PUBLIC_URL; the main server shows them and takes answers
+  // (both need the same DATA_DIR for the saved videos).
+  const approvals = new ApprovalService({
+    prisma,
+    dataDir: config.dataDir,
+    publicUrl: config.PUBLIC_URL,
+    remote: null,
+    logger,
+  });
   const executions = new ExecutionService({
     prisma,
     nodeTypes,
     workflows,
     credentials: new CredentialsService(prisma, cipher, new CredentialTypeRegistry()),
     whatsapp: whatsappHelper,
+    approvals: approvals.helper(),
     variables: new VariablesService(prisma),
     push,
     config,
