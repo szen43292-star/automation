@@ -192,11 +192,11 @@ describe('AI Story Shorts – Daily template', () => {
           data: {
             state: now === 100 ? 1 : 4,
             progress: now,
-            videos: now === 100 ? ['http://127.0.0.1:8080/tasks/task-42/final-1.mp4'] : [],
+            videos: now === 100 ? ['/tasks/task-42/final-1.mp4'] : [],
           },
         });
       }
-      if (url.endsWith('final-1.mp4'))
+      if (url === 'http://127.0.0.1:8080/tasks/task-42/final-1.mp4')
         return ok(undefined, {
           headers: { 'content-type': 'video/mp4' },
           binary: Buffer.from('mp4 bytes'),

@@ -510,7 +510,8 @@ Output only the JSON.{{ $json.feedback ? "\\n\\nYour previous draft was rejected
       }),
       node('Download Video', 'flowforge.httpRequest', [4320, 0], {
         method: 'GET',
-        url: '={{ ($json.data?.videos ?? $json.videos)[0] }}',
+        // MoneyPrinterTurbo returns "/tasks/..." when its endpoint setting is empty (the default).
+        url: "={{ (v => (v.startsWith('http') ? '' : 'http://127.0.0.1:8080') + v)(String(($json.data?.videos ?? $json.videos)[0])) }}",
         options: { responseFormat: 'binary', timeout: 600000 },
       }),
       node(
