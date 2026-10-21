@@ -8,7 +8,7 @@ export { WorkflowExecute, WAIT_FOREVER } from './WorkflowExecute';
 export { IsolatedExpressionEvaluator } from './sandbox/ExpressionSandbox';
 export type { ExpressionSandboxOptions } from './sandbox/ExpressionSandbox';
 export { ExecuteContext, prepareBinaryData } from './ExecuteContext';
-export { httpRequest, HttpRequestError, buildUrl } from './http';
+export { httpRequest, HttpRequestError, buildUrl, requestTimeout } from './http';
 export { CodeSandbox, CodeExecutionError } from './sandbox/CodeSandbox';
 export type { CodeSandboxOptions, SandboxRunInput, SandboxRunOutput } from './sandbox/CodeSandbox';
 export type * from './types';

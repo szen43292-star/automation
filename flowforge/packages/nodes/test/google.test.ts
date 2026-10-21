@@ -11,6 +11,7 @@ import {
   isModelUnavailable,
   pickGeminiModel,
   rankGeminiModels,
+  rankGroqModels,
   schemaFromExample,
 } from '../src/nodes/LlmChain';
 
@@ -41,7 +42,9 @@ const credentials: ICredentialsHelper = {
   getDecrypted: async (_node, type) =>
     type === 'googlePalmApi'
       ? { host: 'https://generativelanguage.googleapis.com', apiKey: 'gem-key' }
-      : {},
+      : type === 'groqApi'
+        ? { apiKey: 'gsk-key' }
+        : {},
   authenticateRequest: async (_node, type, options) => ({
     ...options,
     headers: {
@@ -708,6 +711,139 @@ describe('Basic LLM Chain', () => {
       { httpRequest: http.httpRequest, credentials },
     );
     expect(errorOf(run)?.message).toContain('Quota exceeded');
+  });
+});
+
+describe('Basic LLM Chain with Groq', () => {
+  const example = { title: '', score: 0, tags: [''] };
+  const groqCredentials = { credentials: { groqApi: { id: 'g', name: 'Groq' } } };
+
+  function groq(
+    answer: (body: IDataObject) => Partial<IHttpResponse>,
+    models = ['whisper-large-v3', 'llama-3.1-8b-instant', 'llama-3.3-70b-versatile'],
+  ) {
+    return fakeHttp(
+      (r) =>
+        r.url === 'https://api.groq.com/openai/v1/models'
+          ? { body: { data: models.map((id) => ({ id, active: true })) } }
+          : undefined,
+      (r) =>
+        r.url === 'https://api.groq.com/openai/v1/chat/completions'
+          ? answer(r.body as IDataObject)
+          : undefined,
+    );
+  }
+  const reply = (content: string) => ({
+    body: { choices: [{ message: { role: 'assistant', content }, finish_reason: 'stop' }] },
+  });
+
+  it('ranks the preferred chat models first and skips speech models', () => {
+    expect(
+      rankGroqModels(['whisper-large-v3', 'llama-3.1-8b-instant', 'llama-3.3-70b-versatile'], ''),
+    ).toEqual(['llama-3.3-70b-versatile', 'llama-3.1-8b-instant']);
+    expect(rankGroqModels(['llama-3.1-8b-instant', 'qwen/qwen3-32b'], 'qwen/qwen3-32b')[0]).toBe(
+      'qwen/qwen3-32b',
+    );
+    expect(rankGroqModels(null, '')).toEqual(['llama-3.3-70b-versatile']);
+  });
+
+  it('returns structured output using JSON mode', async () => {
+    const http = groq(() => reply(JSON.stringify({ title: 'T', score: 9, tags: ['a'] })));
+    const { output, run } = await runNode(
+      'flowforge.chainLlm',
+      {
+        modelProvider: 'groq',
+        text: 'Write it',
+        hasOutputParser: true,
+        jsonSchemaExample: JSON.stringify(example),
+        options: { systemMessage: 'Be brief', temperature: 0.2 },
+      },
+      [{}],
+      groqCredentials,
+      { httpRequest: http.httpRequest, credentials },
+    );
+    expect(errorOf(run)).toBeUndefined();
+    expect(output()).toEqual([{ output: { title: 'T', score: 9, tags: ['a'] } }]);
+    const call = http.calls.find((c) => c.url.endsWith('/chat/completions'))!;
+    expect(call.headers?.authorization).toBe('Bearer token-groqApi');
+    const body = call.body as IDataObject;
+    expect(body).toMatchObject({
+      model: 'llama-3.3-70b-versatile',
+      temperature: 0.2,
+      response_format: { type: 'json_object' },
+    });
+    const messages = body.messages as Array<{ role: string; content: string }>;
+    expect(messages[0]).toEqual({ role: 'system', content: 'Be brief' });
+    expect(messages[1]!.content).toBe(
+      `Write it\n\nAnswer with JSON only, in this shape:\n${JSON.stringify(example)}`,
+    );
+  });
+
+  it('asks again when Groq could not produce valid JSON', async () => {
+    const answers = [
+      {
+        statusCode: 400,
+        body: { error: { code: 'json_validate_failed', failed_generation: 'oops' } },
+      },
+      reply('{"title":"T","score":1,"tags":[]}'),
+    ];
+    const http = groq(() => answers.shift()!);
+    const { output, run } = await runNode(
+      'flowforge.chainLlm',
+      {
+        modelProvider: 'groq',
+        text: 'Go',
+        hasOutputParser: true,
+        jsonSchemaExample: JSON.stringify(example),
+      },
+      [{}],
+      groqCredentials,
+      { httpRequest: http.httpRequest, credentials },
+    );
+    expect(errorOf(run)).toBeUndefined();
+    expect(output()).toEqual([{ output: { title: 'T', score: 1, tags: [] } }]);
+  });
+
+  it('moves on when a model is decommissioned', async () => {
+    const http = groq((body) =>
+      body.model === 'llama-3.3-70b-versatile'
+        ? {
+            statusCode: 400,
+            body: {
+              error: {
+                code: 'model_decommissioned',
+                message: 'The model `llama-3.3-70b-versatile` has been decommissioned',
+              },
+            },
+          }
+        : reply('Hello'),
+    );
+    const { output, run } = await runNode(
+      'flowforge.chainLlm',
+      { modelProvider: 'groq', text: 'Hi' },
+      [{}],
+      groqCredentials,
+      { httpRequest: http.httpRequest, credentials },
+    );
+    expect(errorOf(run)).toBeUndefined();
+    expect(output()).toEqual([{ text: 'Hello' }]);
+  });
+
+  it('explains a wrong key and rate limits', async () => {
+    for (const [statusCode, text] of [
+      [401, 'did not accept the API key'],
+      [429, 'rate limit'],
+    ] as const) {
+      const http = groq(() => ({ statusCode, body: { error: { message: 'nope' } } }));
+      const { run } = await runNode(
+        'flowforge.chainLlm',
+        { modelProvider: 'groq', text: 'Hi' },
+        [{}],
+        groqCredentials,
+        { httpRequest: http.httpRequest, credentials },
+      );
+      expect(errorOf(run)?.message).toContain(text);
+    }
   });
 });
 

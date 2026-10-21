@@ -76,11 +76,11 @@ describe('Google credentials', () => {
 
 describe('AI Story Shorts – Daily template', () => {
   it('uses the credentials you have, reports the missing ones and stays inactive', async () => {
-    const gemini = (
+    const groq = (
       await call('POST', '/api/credentials', {
-        name: 'Gemini',
-        type: 'googlePalmApi',
-        data: { apiKey: 'AIza-test' },
+        name: 'Groq',
+        type: 'groqApi',
+        data: { apiKey: 'gsk-test' },
       })
     ).json();
     const youtube = (
@@ -103,7 +103,7 @@ describe('AI Story Shorts – Daily template', () => {
     expect(wf.settings.timezone).toBe('Asia/Kolkata');
     const byName = new Map<string, INode>(wf.nodes.map((n: INode) => [n.name, n]));
     expect(byName.get('Write Story')!.credentials).toEqual({
-      googlePalmApi: { id: gemini.id, name: 'Gemini' },
+      groqApi: { id: groq.id, name: 'Groq' },
     });
     expect(byName.get('YouTube Trending')!.credentials).toEqual({
       youTubeOAuth2Api: { id: youtube.id, name: 'YouTube' },
@@ -111,7 +111,9 @@ describe('AI Story Shorts – Daily template', () => {
     expect(byName.get('Get Past Titles')!.credentials).toBeUndefined();
     expect(byName.get('Get Past Titles')!.alwaysOutputData).toBe(true);
     // No secrets in the workflow itself.
-    expect(JSON.stringify(wf)).not.toContain('AIza-test');
+    expect(JSON.stringify(wf)).not.toContain('gsk-test');
+    // MoneyPrinterTurbo gets a few tries before the run fails.
+    expect(byName.get('Make Video')).toMatchObject({ retryOnFail: true, maxTries: 3 });
   });
 
   const story = {
@@ -141,7 +143,7 @@ describe('AI Story Shorts – Daily template', () => {
   });
 
   /**
-   * Fake Google, Gemini and MoneyPrinterTurbo. The editor answers with `reviews` in order; the
+   * Fake Google, Groq and MoneyPrinterTurbo. The editor answers with `reviews` in order; the
    * writer always answers with `story` (numbered by attempt, so the drafts can be told apart).
    * `videoStatus` turns the status sent with the upload into what YouTube reports afterwards
    * (by default: still processing, with the requested privacy and publish time).
@@ -191,18 +193,16 @@ describe('AI Story Shorts – Daily template', () => {
       if (url.includes('sheets.googleapis.com') && r.method === 'PUT')
         return ok({ updatedCells: 2 });
       if (url.includes(':append')) return ok({ updates: { updatedRows: 1 } });
-      if (url.endsWith('/v1beta/models'))
-        return ok({
-          models: [
-            { name: 'models/gemini-2.5-flash', supportedGenerationMethods: ['generateContent'] },
-          ],
-        });
-      if (url.includes(':generateContent')) {
-        const prompt = JSON.stringify((r.body as IDataObject).contents);
+      if (url === 'https://api.groq.com/openai/v1/models')
+        return ok({ data: [{ id: 'whisper-large-v3' }, { id: 'llama-3.3-70b-versatile' }] });
+      if (url === 'https://api.groq.com/openai/v1/chat/completions') {
+        const prompt = JSON.stringify((r.body as IDataObject).messages);
         const answer = prompt.includes('strict YouTube Shorts editor')
           ? (reviews.shift() ?? approve)
           : { ...story, title: ++drafts === 1 ? story.title : `${story.title} ${drafts}` };
-        return ok({ candidates: [{ content: { parts: [{ text: JSON.stringify(answer) }] } }] });
+        return ok({
+          choices: [{ message: { role: 'assistant', content: JSON.stringify(answer) } }],
+        });
       }
       if (url === 'http://127.0.0.1:8080/api/v1/videos')
         return ok({ status: 200, message: 'success', data: { task_id: 'task-42' } });
@@ -236,11 +236,15 @@ describe('AI Story Shorts – Daily template', () => {
         body: { error: `no fake for ${url}` },
       };
     };
+    /** The writer's prompts, without the JSON shape the node adds for Groq. */
     const prompts = () =>
       calls
-        .filter((c) => c.url.includes(':generateContent'))
-        .map((c) => JSON.parse(JSON.stringify((c.body as IDataObject).contents))[0].parts[0].text)
-        .filter((text: string) => !text.includes('strict YouTube Shorts editor')) as string[];
+        .filter((c) => c.url.endsWith('/chat/completions'))
+        .map(
+          (c) => ((c.body as IDataObject).messages as Array<{ content: string }>).at(-1)!.content,
+        )
+        .map((text) => text.split('\n\nAnswer with JSON only, in this shape:\n')[0]!)
+        .filter((text) => !text.includes('strict YouTube Shorts editor'));
     const mails = () => calls.filter((c) => c.url.endsWith('/messages/send'));
     const upload = () =>
       calls.find((c) => c.url === 'https://www.googleapis.com/upload/youtube/v3/videos')!;
@@ -273,10 +277,7 @@ describe('AI Story Shorts – Daily template', () => {
   }
 
   const credentials: ICredentialsHelper = {
-    getDecrypted: async (_node, type) =>
-      type === 'googlePalmApi'
-        ? { host: 'https://generativelanguage.googleapis.com', apiKey: 'k' }
-        : {},
+    getDecrypted: async (_node, type) => (type === 'groqApi' ? { apiKey: 'k' } : {}),
     authenticateRequest: async (_node, type, options) => ({
       ...options,
       headers: { ...(options.headers ?? {}), authorization: `Bearer ${type}` },
