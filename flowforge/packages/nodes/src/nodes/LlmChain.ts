@@ -10,15 +10,10 @@ import { errorItem } from '../shared/helpers';
 
 const CREDENTIAL = 'googlePalmApi';
 const DEFAULT_HOST = 'https://generativelanguage.googleapis.com';
-/** Tried in order when the model is left empty or the key cannot use the one asked for. */
-const PREFERRED_MODELS = [
-  'gemini-2.5-flash',
-  'gemini-flash-latest',
-  'gemini-2.5-pro',
-  'gemini-2.0-flash',
-  'gemini-2.5-flash-lite',
-  'gemini-2.0-flash-lite',
-];
+/** Used when the model list cannot be read and no model is set. */
+const FALLBACK_MODEL = 'gemini-flash-latest';
+/** Models tried per answer before giving up (the list can name retired models). */
+const MAX_MODEL_TRIES = 5;
 const NOT_CHAT = /embed|aqa|imagen|veo|image|tts|audio|live|vision|learnlm|computer-use|robotics/i;
 
 type Schema = IDataObject;
@@ -86,14 +81,49 @@ export function extractJson(text: string): unknown {
   throw new Error('The answer is not valid JSON');
 }
 
-/** The model to use: the one asked for when the key has it, else the best available one. */
-export function pickGeminiModel(available: string[] | null, requested: string): string {
+const FAMILIES = ['flash', 'pro', 'flash-lite'];
+
+/** Sort key of a Gemini model: family (Flash first), stable before preview, newest first. */
+function modelRank(model: string): [number, number, number] {
+  const alias = model.match(/^gemini-(flash|pro|flash-lite)-latest$/);
+  if (alias) return [FAMILIES.indexOf(alias[1]!), 0, -Infinity];
+  const named = model.match(/^gemini-(\d+(?:\.\d+)?)-(flash-lite|flash|pro)(?:-(.+))?$/);
+  if (!named) return [FAMILIES.length, 1, 0];
+  const stable = !named[3] || /^\d{3}$/.test(named[3]);
+  return [FAMILIES.indexOf(named[2]!), stable ? 0 : 1, -Number(named[1])];
+}
+
+/**
+ * Models to try, best first: the one asked for (when the key has it), then the newest stable
+ * Flash, Pro and Flash-Lite models, then previews. New Gemini versions are picked up by
+ * themselves, and a model Google retires is skipped when it answers with an error.
+ */
+export function rankGeminiModels(available: string[] | null, requested: string): string[] {
   const wanted = requested.trim().replace(/^models\//, '');
-  if (!available?.length) return wanted || PREFERRED_MODELS[0]!;
-  if (wanted && available.includes(wanted)) return wanted;
-  for (const model of PREFERRED_MODELS) if (available.includes(model)) return model;
-  const usable = available.filter((m) => m.startsWith('gemini') && !NOT_CHAT.test(m));
-  return usable.sort().reverse()[0] ?? (wanted || PREFERRED_MODELS[0]!);
+  if (!available?.length) return [...new Set([wanted, FALLBACK_MODEL].filter(Boolean))];
+  const usable = available
+    .filter((m) => m.startsWith('gemini') && !NOT_CHAT.test(m))
+    .sort((a, b) => {
+      const [x, y] = [modelRank(a), modelRank(b)];
+      return x[0] - y[0] || x[1] - y[1] || x[2] - y[2] || a.localeCompare(b);
+    });
+  return [...new Set([...(wanted && available.includes(wanted) ? [wanted] : []), ...usable])];
+}
+
+/** The model to use first (see rankGeminiModels). */
+export function pickGeminiModel(available: string[] | null, requested: string): string {
+  return rankGeminiModels(available, requested)[0] ?? FALLBACK_MODEL;
+}
+
+/** True when Google refuses the model itself (retired, unknown, not for this key). */
+export function isModelUnavailable(statusCode: number, message: string): boolean {
+  if (statusCode === 404) return true;
+  return (
+    [400, 403].includes(statusCode) &&
+    /no longer available|not found|is not supported|not available|deprecated|retired|discontinued/i.test(
+      message,
+    )
+  );
 }
 
 function answerText(body: IDataObject): { text: string; finishReason?: string } {
@@ -205,6 +235,8 @@ export const LlmChain: INodeType = {
     const host = String(credentials.host || DEFAULT_HOST).replace(/\/+$/, '');
 
     let models: string[] | null | undefined;
+    /** The model that answered, reused for the remaining items of this run. */
+    let working: string | undefined;
     const availableModels = async () => {
       if (models !== undefined) return models;
       try {
@@ -252,12 +284,48 @@ export const LlmChain: INodeType = {
             });
           }
         }
-        const model = pickGeminiModel(
-          await availableModels(),
-          String(this.getNodeParameter('model', i, '') ?? ''),
-        );
+        const requested = String(this.getNodeParameter('model', i, '') ?? '').trim();
+        const candidates = rankGeminiModels(await availableModels(), requested);
+        if (working && candidates[0] !== working) {
+          const at = candidates.indexOf(working);
+          if (at > 0) candidates.splice(at, 1);
+          candidates.unshift(working);
+        }
 
         const ask = async (text: string) => {
+          const refused: string[] = [];
+          for (let k = 0; k < candidates.length && k < MAX_MODEL_TRIES; k++) {
+            const model = candidates[k]!;
+            const result = await askModel(model, text);
+            if ('refused' in result) {
+              refused.push(`${model}: ${result.refused}`);
+              // Google often names the model to use instead ("... use models/gemini-x-flash").
+              const suggested = [...result.refused.matchAll(/models\/(gemini-[\w.-]*[\w])/g)]
+                .map((m) => m[1]!)
+                .find((name) => name !== model);
+              if (suggested && !candidates.slice(0, k + 1).includes(suggested)) {
+                const at = candidates.indexOf(suggested);
+                if (at > k) candidates.splice(at, 1);
+                candidates.splice(k + 1, 0, suggested);
+              }
+              continue;
+            }
+            if (working !== model && requested && model !== requested.replace(/^models\//, ''))
+              this.addHint(`The model "${requested}" could not be used; answered with "${model}".`);
+            working = model;
+            return result;
+          }
+          throw new NodeApiError(
+            this.getNode(),
+            `Gemini: none of the models this key can use answered (${refused.length} tried)`,
+            { itemIndex: i, description: refused.join('\n') },
+          );
+        };
+
+        const askModel = async (
+          model: string,
+          text: string,
+        ): Promise<{ refused: string } | { text: string; finishReason?: string }> => {
           const response = await this.helpers.httpRequestWithAuthentication(CREDENTIAL, {
             url: `${host}/v1beta/models/${encodeURIComponent(model)}:generateContent`,
             method: 'POST',
@@ -283,6 +351,8 @@ export const LlmChain: INodeType = {
           const body = (response.body ?? {}) as IDataObject;
           if (response.statusCode >= 400) {
             const message = (body.error as IDataObject | undefined)?.message;
+            if (isModelUnavailable(response.statusCode, String(message ?? '')))
+              return { refused: String(message ?? `HTTP ${response.statusCode}`) };
             throw new NodeApiError(
               this.getNode(),
               response.statusCode === 429

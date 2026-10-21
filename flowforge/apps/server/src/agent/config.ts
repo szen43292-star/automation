@@ -20,7 +20,7 @@ export const DEFAULT_MODELS = {
   llm: {
     anthropic: 'claude-opus-5-5',
     openai: 'gpt-4o-mini',
-    gemini: 'gemini-2.5-flash',
+    gemini: 'gemini-flash-latest',
     groq: 'llama-3.3-70b-versatile',
   },
   tts: { openai: 'gpt-4o-mini-tts', elevenlabs: 'eleven_flash_v2_5', sarvam: 'bulbul:v2' },

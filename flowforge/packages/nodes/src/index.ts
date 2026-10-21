@@ -9,7 +9,7 @@ import { Gmail } from './nodes/Gmail';
 import { GoogleSheets } from './nodes/GoogleSheets';
 import { HttpRequest } from './nodes/HttpRequest';
 import { If } from './nodes/If';
-import { LlmChain } from './nodes/LlmChain';
+import { LlmChain, rankGeminiModels } from './nodes/LlmChain';
 import { ManualTrigger } from './nodes/ManualTrigger';
 import { Sort } from './nodes/Sort';
 import { Limit, NoOp, SplitOut, StickyNote, StopAndError } from './nodes/Utility';
@@ -25,7 +25,7 @@ import { WhatsApp, WhatsAppTrigger, normalisePhone, sampleMessage } from './node
 import { YouTube } from './nodes/YouTube';
 
 export * from './credentials';
-export { scheduleToCron, normalisePhone, sampleMessage };
+export { scheduleToCron, normalisePhone, sampleMessage, rankGeminiModels };
 
 export {
   Approval,
