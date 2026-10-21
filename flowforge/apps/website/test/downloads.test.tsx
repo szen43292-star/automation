@@ -2,7 +2,9 @@ import { createHash } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import DownloadPage from '@/app/download/page';
 import { GET } from '@/app/download/[platform]/route';
 import { getLatestRelease } from '@/lib/releases';
 // @ts-expect-error - plain JavaScript build script
@@ -151,5 +153,21 @@ describe('apps bundled into the website', () => {
       '/downloads/FlowForge.ipa',
       '/download/windows',
     ]);
+  });
+
+  it('the download page lists every file, the Windows installer too, on any device', async () => {
+    vi.stubEnv(
+      'FLOWFORGE_BUNDLED_RELEASE',
+      bundled([
+        { file: 'FlowForge-Setup.exe', platform: 'windows' },
+        { file: 'FlowForge.apk', platform: 'android' },
+        { file: 'FlowForge.ipa', platform: 'ios' },
+      ]),
+    );
+    const html = renderToStaticMarkup(await DownloadPage());
+    const list = html.slice(html.indexOf('data-testid="all-files"'));
+    for (const file of ['FlowForge-Setup.exe', 'FlowForge.apk', 'FlowForge.ipa'])
+      expect(list).toContain(`href="/downloads/${file}"`);
+    expect(list).toContain('Windows (.exe)');
   });
 });

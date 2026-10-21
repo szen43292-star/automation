@@ -64,6 +64,40 @@ export default async function DownloadPage() {
         </aside>
       </div>
 
+      {release && (
+        <section id="all-files" className="mt-14 scroll-mt-20" aria-labelledby="files-heading">
+          <h2 id="files-heading" className="text-2xl font-bold tracking-tight">
+            All files
+          </h2>
+          <p className="mt-2 max-w-2xl text-muted">
+            Every app of version {release.version}. Download any of them on any device - for example
+            the Windows installer from your phone, to copy to your PC.
+          </p>
+          <ul className="mt-6 grid gap-3 md:grid-cols-3" data-testid="all-files">
+            {release.downloads.map((file) => (
+              <li
+                key={file.file}
+                className="flex min-w-0 items-center gap-3 rounded-2xl border border-line bg-panel p-5"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="font-semibold">{FILE_TITLES[file.platform] ?? file.label}</div>
+                  <div className="truncate text-sm text-muted">{file.file}</div>
+                  <div className="text-sm text-muted">{formatSize(file.size)}</div>
+                </div>
+                <a
+                  href={file.url}
+                  download
+                  className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-accent px-4 text-sm font-semibold text-white hover:bg-accent-strong"
+                  data-testid={`file-${file.platform}`}
+                >
+                  <FileDown size={16} /> Download
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {(android || ios) && (
         <section className="mt-14" aria-labelledby="phones-heading">
           <h2 id="phones-heading" className="text-2xl font-bold tracking-tight">
@@ -300,6 +334,12 @@ function Faq({ q, children }: { q: string; children: ReactNode }) {
     </details>
   );
 }
+
+const FILE_TITLES: Record<string, string> = {
+  windows: 'Windows (.exe)',
+  android: 'Android (.apk)',
+  ios: 'iPhone (.ipa)',
+};
 
 function PhoneCard({
   download,

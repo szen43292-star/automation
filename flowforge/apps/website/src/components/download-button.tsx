@@ -61,6 +61,13 @@ export function DownloadButton({
             .filter(Boolean)
             .join(' · ')}
         </p>
+        <Link
+          href="/download#all-files"
+          className="text-sm font-medium text-accent-strong underline-offset-4 hover:underline"
+          data-testid="all-files-link"
+        >
+          All files: Windows (.exe), Android (.apk), iPhone (.ipa)
+        </Link>
       </div>
     );
   }
