@@ -80,7 +80,7 @@ export function Layout() {
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent text-white">
             <Zap size={16} fill="currentColor" />
           </div>
-          <span className="font-semibold">FlowForge</span>
+          <span className="font-semibold">AutoForge</span>
           <span className="ml-auto">
             <ConnectionDot />
           </span>

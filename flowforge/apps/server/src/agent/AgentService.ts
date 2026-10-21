@@ -517,7 +517,7 @@ export class AgentService {
     };
     const tools = buildTools(readTools(agent.tools), toolContext);
     const instructions = this.instructions(agent, {
-      business: 'Test chat in FlowForge',
+      business: 'Test chat in AutoForge',
       caller: `Name: ${user.name}. This is a test conversation by the business itself.`,
       timezone: this.deps.defaultTimezone,
       testChat: true,

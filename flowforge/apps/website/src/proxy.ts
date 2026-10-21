@@ -10,11 +10,11 @@ export function proxy(request: NextRequest) {
   if (request.nextUrl.pathname === '/admin' || request.nextUrl.pathname.startsWith('/admin/')) {
     const admin = process.env.ADMIN_PASSWORD;
     if (!admin) return new NextResponse('Not found', { status: 404 });
-    return passwordGate(request, admin, 'FlowForge admin');
+    return passwordGate(request, admin, 'AutoForge admin');
   }
   const password = process.env.SITE_PASSWORD;
   if (!password) return NextResponse.next();
-  return passwordGate(request, password, 'FlowForge');
+  return passwordGate(request, password, 'AutoForge');
 }
 
 function passwordGate(request: NextRequest, password: string, realm: string) {

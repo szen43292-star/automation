@@ -136,7 +136,7 @@ jobs:
           if gh release view "$tag" > /dev/null 2>&1; then
             gh release upload "$tag" "${present[@]}" --clobber
           else
-            gh release create "$tag" --target "$GITHUB_SHA" --title "FlowForge $VERSION" --notes-file notes.md --latest "${present[@]}"
+            gh release create "$tag" --target "$GITHUB_SHA" --title "AutoForge $VERSION" --notes-file notes.md --latest "${present[@]}"
           fi
 
   website:

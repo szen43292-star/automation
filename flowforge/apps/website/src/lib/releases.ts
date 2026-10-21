@@ -31,7 +31,7 @@ const downloadSchema = z.object({
 });
 
 export const releaseSchema = z.object({
-  name: z.string().default('FlowForge'),
+  name: z.string().default('AutoForge'),
   version: z.string().min(1),
   tag: z.string().min(1),
   publishedAt: z.string(),
@@ -133,7 +133,7 @@ export function fromGithubRelease(data: unknown, repo: string): Release | null {
   }
   if (!downloads.length) return null;
   return {
-    name: 'FlowForge',
+    name: 'AutoForge',
     version: release.tag_name.replace(/^v/, ''),
     tag: release.tag_name,
     publishedAt: release.published_at ?? new Date(0).toISOString(),

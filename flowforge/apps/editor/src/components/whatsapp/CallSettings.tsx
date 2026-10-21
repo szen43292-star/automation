@@ -15,7 +15,7 @@ import { Badge, Button, Field, Modal, Spinner, Toggle } from '../ui';
 const MODES: Array<{ value: CallMode; title: string; text: string; icon: typeof Phone }> = [
   {
     value: 'app',
-    title: 'Ring in FlowForge',
+    title: 'Ring in AutoForge',
     text: 'Answer from this app on your PC or phone.',
     icon: Phone,
   },

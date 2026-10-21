@@ -84,7 +84,7 @@ export class ServerProcess {
     this.port = (await isPortFree(preferredPort)) ? preferredPort : await freePort();
     await this.migrate();
 
-    log('Starting FlowForge…');
+    log('Starting AutoForge…');
     rotateLog(this.logFile);
     const fd = openSync(this.logFile, 'a');
     const child = spawn(nodePath, ['--no-node-snapshot', join(serverDir, 'dist', 'index.js')], {
@@ -101,7 +101,7 @@ export class ServerProcess {
       child.once('exit', (code) => {
         this.child = null;
         reject(
-          new Error(`The FlowForge server stopped (exit code ${code}).\n${tail(this.logFile)}`),
+          new Error(`The AutoForge server stopped (exit code ${code}).\n${tail(this.logFile)}`),
         );
       });
       child.once('error', reject);
@@ -122,7 +122,7 @@ export class ServerProcess {
       await sleep(300);
     }
     throw new Error(
-      `FlowForge did not become ready within ${timeoutMs / 1000}s.\n${tail(this.logFile)}`,
+      `AutoForge did not become ready within ${timeoutMs / 1000}s.\n${tail(this.logFile)}`,
     );
   }
 
@@ -134,7 +134,7 @@ export class ServerProcess {
   async stop(): Promise<void> {
     const child = this.child;
     if (!child || child.exitCode !== null) return;
-    this.options.log('Stopping FlowForge…');
+    this.options.log('Stopping AutoForge…');
     const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()));
     try {
       child.send('shutdown');

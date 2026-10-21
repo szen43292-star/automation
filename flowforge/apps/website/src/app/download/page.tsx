@@ -22,7 +22,7 @@ export const revalidate = 300;
 export const metadata: Metadata = {
   title: 'Download for Windows',
   description:
-    'Download FlowForge for Windows 10 and 11. One-click install, no administrator rights, no API keys. SHA-256 checksums and release notes.',
+    'Download AutoForge for Windows 10 and 11. One-click install, no administrator rights, no API keys. SHA-256 checksums and release notes.',
 };
 
 export default async function DownloadPage() {
@@ -37,7 +37,7 @@ export default async function DownloadPage() {
     <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-20">
       <div className="grid gap-10 lg:grid-cols-[1fr_340px]">
         <div>
-          <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">Download FlowForge</h1>
+          <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">Download AutoForge</h1>
           <p className="mt-4 max-w-2xl text-lg leading-relaxed text-muted">
             Everything is included: the editor, the automation server and its database. Install it
             and start building - no API keys, no account, no configuration.
@@ -105,7 +105,7 @@ export default async function DownloadPage() {
           </h2>
           <p className="mt-2 max-w-2xl text-muted">
             Answer WhatsApp calls, chat with customers and watch your AI agent from your phone. The
-            app connects to your FlowForge (the Windows app or your server).
+            app connects to your AutoForge (the Windows app or your server).
           </p>
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             {android && (
@@ -115,7 +115,7 @@ export default async function DownloadPage() {
                 steps={[
                   'Download FlowForge.apk on your phone.',
                   'Open it and allow your browser to install apps when asked.',
-                  'Sign in with your FlowForge account.',
+                  'Sign in with your AutoForge account.',
                 ]}
               />
             )}
@@ -128,12 +128,12 @@ export default async function DownloadPage() {
                     ? [
                         'Install AltStore or Sideloadly on your computer.',
                         'Download FlowForge.ipa and install it with your Apple ID.',
-                        'Sign in with your FlowForge account.',
+                        'Sign in with your AutoForge account.',
                       ]
                     : [
                         'Download FlowForge.ipa on an iPhone registered in your Apple developer account.',
                         'Open it to install, then trust the developer in Settings → General → VPN & Device Management.',
-                        'Sign in with your FlowForge account.',
+                        'Sign in with your AutoForge account.',
                       ]
                 }
               />
@@ -228,10 +228,10 @@ export default async function DownloadPage() {
             <strong className="font-medium text-fg">Run anyway</strong>. See the note below.
           </InstallStep>
           <InstallStep n={3} title="Create your account">
-            FlowForge opens by itself. Create the owner account - it is stored only on your PC.
+            AutoForge opens by itself. Create the owner account - it is stored only on your PC.
           </InstallStep>
           <InstallStep n={4} title="Build & leave it running">
-            Close the window any time: FlowForge keeps your workflows running from the tray.
+            Close the window any time: AutoForge keeps your workflows running from the tray.
           </InstallStep>
         </ol>
 
@@ -243,7 +243,7 @@ export default async function DownloadPage() {
             </div>
             <p className="mt-1 text-muted">
               Windows SmartScreen shows this for apps that are new or not yet code-signed with a
-              paid certificate - it does not mean a virus was found. FlowForge is built
+              paid certificate - it does not mean a virus was found. AutoForge is built
               automatically by GitHub Actions from its source code, and you can check that your
               download is untouched by comparing its SHA-256 checksum with the one above.
             </p>
@@ -257,7 +257,7 @@ export default async function DownloadPage() {
         </h2>
         <div className="mt-6 grid gap-3 md:grid-cols-2">
           <Faq q="Do I need any API keys or accounts?">
-            No. FlowForge creates its own database and security keys on your PC the first time it
+            No. AutoForge creates its own database and security keys on your PC the first time it
             starts. You only add keys later for the services you decide to connect - for example an
             API your workflow calls.
           </Faq>
@@ -272,17 +272,17 @@ export default async function DownloadPage() {
             safe.
           </Faq>
           <Faq q="How do updates work?">
-            FlowForge checks for new versions in the background, downloads them, and installs them
+            AutoForge checks for new versions in the background, downloads them, and installs them
             the next time it restarts. You can also choose &ldquo;Check for updates&rdquo; from the
             tray icon.
           </Faq>
           <Faq q="Does it keep running when I close it?">
             Yes - it stays in the system tray so webhooks and schedules keep working, and starts
-            with Windows. Both can be changed from the tray menu; &ldquo;Quit FlowForge&rdquo; stops
+            with Windows. Both can be changed from the tray menu; &ldquo;Quit AutoForge&rdquo; stops
             it completely.
           </Faq>
           <Faq q="How do I uninstall it?">
-            Settings → Apps → FlowForge → Uninstall. Your data folder is kept in case you reinstall;
+            Settings → Apps → AutoForge → Uninstall. Your data folder is kept in case you reinstall;
             delete{' '}
             <code className="rounded bg-bg-2 px-1 font-mono text-[13px]">%APPDATA%\FlowForge</code>{' '}
             to remove it too.

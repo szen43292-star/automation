@@ -22,7 +22,7 @@ export function AuthPage() {
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent text-white shadow-card">
             <Workflow size={26} />
           </div>
-          <h1 className="text-xl font-semibold">FlowForge</h1>
+          <h1 className="text-xl font-semibold">AutoForge</h1>
           <p className="text-[13px] text-muted">
             {setupRequired
               ? 'Create the owner account for this instance'
