@@ -1,3 +1,4 @@
+import { rankGeminiModels } from '@flowforge/nodes';
 import type { AiProviders, ProviderId } from './providers';
 
 /**
@@ -12,7 +13,6 @@ const PREFERRED: Record<ModelPurpose, Partial<Record<ProviderId, string[]>>> = {
   llm: {
     anthropic: ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'],
     openai: ['gpt-4o-mini', 'gpt-4.1-mini', 'gpt-4o', 'gpt-4.1'],
-    gemini: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'],
     groq: [
       'llama-3.3-70b-versatile',
       'openai/gpt-oss-120b',
@@ -65,6 +65,9 @@ export function pickModel(
   const wanted = requested.trim();
   if (!available?.length) return wanted || fallback;
   if (wanted && available.includes(wanted)) return wanted;
+  // Gemini retires models often: rank by version (newest stable Flash first) instead of a list.
+  if (purpose === 'llm' && provider === 'gemini')
+    return rankGeminiModels(available, '')[0] ?? (wanted || fallback);
   const usable = available.filter((m) => suitable(purpose, m));
   for (const model of [fallback, ...(PREFERRED[purpose][provider] ?? [])]) {
     if (usable.includes(model)) return model;
