@@ -191,7 +191,10 @@ export class CredentialsService {
     const row = await this.prisma.credential.findUnique({ where: { id } });
     if (!row)
       throw new Error('The credential used by this node no longer exists. Select another one.');
-    return { row, data: this.cipher.decryptJson<IDataObject>(row.data) };
+    const data = this.cipher.decryptJson<IDataObject>(row.data);
+    // Ready-made OAuth2 credentials (Google, ...) keep their fixed settings in the type.
+    const defaults = this.types.get(row.type)?.oauth2Defaults;
+    return { row, data: defaults ? { ...data, ...defaults } : data };
   }
 
   async storeData(id: string, data: IDataObject) {

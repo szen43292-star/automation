@@ -415,9 +415,12 @@ export const endpoints = {
     api<DashboardData>(`/api/dashboard?days=${days}&timezone=${encodeURIComponent(timezone)}`),
   templates: () => api<{ data: WorkflowTemplate[] }>('/api/templates'),
   useTemplate: (id: string) =>
-    api<{ id: string; name: string; setup: string[] }>(`/api/templates/${id}/use`, {
-      method: 'POST',
-    }),
+    api<{ id: string; name: string; setup: string[]; missingCredentials?: string[] }>(
+      `/api/templates/${id}/use`,
+      {
+        method: 'POST',
+      },
+    ),
   users: () => api<{ data: TeamMember[] }>('/api/users'),
   inviteUser: (body: { email: string; name: string; role: User['role'] }) =>
     api<{ user: TeamMember; inviteUrl: string }>('/api/users', { body }),

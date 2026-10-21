@@ -20,6 +20,14 @@ const GENERIC_AUTH_TYPES = [
   'oAuth2Api',
 ];
 
+/** Ready-made credentials of apps (the request is signed the way that app wants). */
+const PREDEFINED_TYPES: Array<{ name: string; value: string }> = [
+  { name: 'YouTube OAuth2 API', value: 'youTubeOAuth2Api' },
+  { name: 'Google Sheets OAuth2 API', value: 'googleSheetsOAuth2Api' },
+  { name: 'Gmail OAuth2 API', value: 'gmailOAuth2' },
+  { name: 'Google Gemini (PaLM) API', value: 'googlePalmApi' },
+];
+
 function pairsToObject(pairs: NameValue[] | undefined): Record<string, string> {
   const out: Record<string, string> = {};
   for (const { name, value } of pairs ?? []) {
@@ -43,13 +51,22 @@ export const HttpRequest: INodeType = {
     inputs: [{ type: 'main' }],
     outputs: [{ type: 'main' }],
     keywords: ['api', 'rest', 'fetch', 'curl', 'request', 'webhook'],
-    credentials: GENERIC_AUTH_TYPES.map((name) => ({
-      name,
-      required: true,
-      displayOptions: {
-        show: { authentication: ['genericCredentialType'], genericAuthType: [name] },
-      },
-    })),
+    credentials: [
+      ...GENERIC_AUTH_TYPES.map((name) => ({
+        name,
+        required: true,
+        displayOptions: {
+          show: { authentication: ['genericCredentialType'], genericAuthType: [name] },
+        },
+      })),
+      ...PREDEFINED_TYPES.map(({ value: name }) => ({
+        name,
+        required: true,
+        displayOptions: {
+          show: { authentication: ['predefinedCredentialType'], nodeCredentialType: [name] },
+        },
+      })),
+    ],
     properties: [
       {
         displayName: 'Method',
@@ -78,10 +95,23 @@ export const HttpRequest: INodeType = {
         options: [
           { name: 'None', value: 'none' },
           {
+            name: 'Predefined Credential Type (YouTube, Google Sheets, Gmail, Gemini)',
+            value: 'predefinedCredentialType',
+          },
+          {
             name: 'Credential (header, basic, query, bearer, OAuth2)',
             value: 'genericCredentialType',
           },
         ],
+      },
+      {
+        displayName: 'Credential Type',
+        name: 'nodeCredentialType',
+        type: 'options',
+        default: 'youTubeOAuth2Api',
+        noDataExpression: true,
+        displayOptions: { show: { authentication: ['predefinedCredentialType'] } },
+        options: PREDEFINED_TYPES,
       },
       {
         displayName: 'Credential Type',
@@ -348,13 +378,15 @@ export const HttpRequest: INodeType = {
         let response;
         try {
           const authentication = this.getNodeParameter<string>('authentication', i, 'none');
-          response =
+          const credentialType =
             authentication === 'genericCredentialType'
-              ? await this.helpers.httpRequestWithAuthentication(
-                  this.getNodeParameter<string>('genericAuthType', i),
-                  request,
-                )
-              : await this.helpers.httpRequest(request);
+              ? this.getNodeParameter<string>('genericAuthType', i)
+              : authentication === 'predefinedCredentialType'
+                ? this.getNodeParameter<string>('nodeCredentialType', i)
+                : null;
+          response = credentialType
+            ? await this.helpers.httpRequestWithAuthentication(credentialType, request)
+            : await this.helpers.httpRequest(request);
         } catch (error) {
           if ((error as Error).name === 'HttpRequestError') {
             throw new NodeApiError(this.getNode(), (error as Error).message, {

@@ -131,6 +131,11 @@ export interface ICredentialType {
   test?: { request: IHttpRequestOptions; expectStatus?: number };
   /** OAuth2 credentials store tokens in `oauthTokenData`. */
   oauth2?: boolean;
+  /**
+   * Fixed OAuth2 settings of a ready-made credential (e.g. Google: authUrl, accessTokenUrl, scope).
+   * The server adds them to the stored data, so the user only enters the client ID and secret.
+   */
+  oauth2Defaults?: IDataObject;
 }
 
 export type ICredentialAuthenticate =
