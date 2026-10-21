@@ -1,11 +1,11 @@
 {
   "schema": 1,
   "name": "FlowForge",
-  "version": "0.3.2",
-  "tag": "v0.3.2",
-  "publishedAt": "2026-10-10T16:36:58.346Z",
+  "version": "0.3.3",
+  "tag": "v0.3.3",
+  "publishedAt": "2026-10-21T07:57:29.728Z",
   "repo": "szen43292-star/automation",
-  "notes": "### New\n- AI agents use the models your API key can actually use, picked automatically - no model names to type (fixes \"model does not exist or you do not have access to it\" with Groq)\n- The agent builder suggests your key's models and shows which one Automatic uses\n- The Windows app knows all of your download websites, so updates keep working if one is removed\n- Test numbers always get their own phone number\n\n### Install\n- **Windows:** FlowForge-Setup.exe\n- **Android:** FlowForge.apk (allow installing apps from your browser)\n- **iPhone:** FlowForge.ipa - unsigned, install with AltStore or Sideloadly",
+  "notes": "## New\n- **AI Story Shorts – Daily** template (Templates → Content): turns a trending topic into a YouTube Short every evening.\n  - Publishes automatically: scheduled for 20:00 India time by default (or public right away, or Private), set in \"Publish Settings\".\n  - Safety gate: only a first-try approval with every quality score 8+ is published; anything else stays Private for review.\n  - If the editor rejects the first story, the writer gets one more try with the feedback.\n  - After the upload it checks the video's status on YouTube and emails you about any problem (rejected, failed, or locked as private).\n- New nodes: **RSS Read**, **Google Sheets** (get rows, append row), **YouTube** (upload video, with publish time and AI-content disclosure), **Gmail** (send), **Basic LLM Chain** (Google Gemini, with JSON output).\n- New credentials: YouTube, Google Sheets and Gmail (just a client ID and secret) and Google Gemini (PaLM) API.\n- HTTP Request: \"Predefined Credential Type\" sign-in.\n- \"Use template\" picks your existing credentials and tells you which ones are missing.\n- Download page: an \"All files\" list with every app, on any device.\n\n### Install\n- **Windows:** FlowForge-Setup.exe\n- **Android:** FlowForge.apk (allow installing apps from your browser)\n- **iPhone:** FlowForge.ipa - unsigned, install with AltStore or Sideloadly",
   "downloads": [
     {
       "file": "FlowForge-Setup.exe",
@@ -14,9 +14,9 @@
       "kind": "installer",
       "label": "Windows installer (.exe)",
       "requirements": "Windows 10 or 11, 64-bit",
-      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.2/FlowForge-Setup.exe",
-      "size": 234674479,
-      "sha256": "928b0176e755b7bd783ed23a512d376123471236339b9a7ccacd7b4d12fe6220"
+      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.3/FlowForge-Setup.exe",
+      "size": 236462936,
+      "sha256": "b9a365d2630ea1956573385c7d24a7b985e669c8a0ebf1fc481de8b6d01791ec"
     },
     {
       "file": "FlowForge.apk",
@@ -25,9 +25,9 @@
       "kind": "app",
       "label": "Android app (.apk)",
       "requirements": "Android 7 or newer - allow \"Install unknown apps\" for your browser",
-      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.2/FlowForge.apk",
-      "size": 4948758,
-      "sha256": "91587866f1060ef131eb1f2a1f92aa8cd4f5db11cd9b4ab51bdfae7098021b63"
+      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.3/FlowForge.apk",
+      "size": 4948962,
+      "sha256": "91fb938b3d09af786dac196647e8c7993d0f193fd8d013ed98f78e5482889b10"
     },
     {
       "file": "FlowForge.ipa",
@@ -36,9 +36,9 @@
       "kind": "app",
       "label": "iPhone app (.ipa)",
       "requirements": "iOS 15 or newer - unsigned: install with AltStore or Sideloadly using your Apple ID",
-      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.2/FlowForge.ipa",
-      "size": 1148288,
-      "sha256": "99d88e060da825137d5615f3b1bc1a4f096a607be1020c92aa821780ec9a45f1"
+      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.3/FlowForge.ipa",
+      "size": 1148506,
+      "sha256": "8afe41dd24f1c9ec10526c7dc7b77d2d873166d4598ea8f80a62dca4a8467d5f"
     }
   ]
 }
