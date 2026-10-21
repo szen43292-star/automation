@@ -122,14 +122,15 @@ test('call a customer: ask permission, they allow it, you call them and they ans
 
   await desk.getByRole('button', { name: 'Hang up' }).click();
   await expect(phone.getByTestId('current-call')).toHaveCount(0, { timeout: 10_000 });
-  const calls = await (
-    await request.get(`/api/calls?accountId=${account.id}`, { headers: H() })
-  ).json();
-  expect(calls.data[0]).toMatchObject({
-    direction: 'outbound',
-    status: 'ended',
-    handledBy: 'person',
-  });
+  // The phone clears the call before the server has saved it as ended.
+  await expect
+    .poll(
+      async () =>
+        (await (await request.get(`/api/calls?accountId=${account.id}`, { headers: H() })).json())
+          .data[0],
+      { timeout: 10_000 },
+    )
+    .toMatchObject({ direction: 'outbound', status: 'ended', handledBy: 'person' });
 
   await business.close();
   await customerContext.close();
