@@ -420,7 +420,7 @@ describe('AI Story Shorts – Daily template', () => {
       video_script: story.script,
       video_terms: story.search_terms,
       video_aspect: '9:16',
-      video_source: 'pexels',
+      video_source: 'pixabay',
       video_clip_duration: 3,
       video_count: 1,
       voice_name: 'en-US-AndrewNeural-Male',
