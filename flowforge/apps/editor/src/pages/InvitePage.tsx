@@ -44,7 +44,7 @@ export function InvitePage() {
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-white">
             <Zap size={17} fill="currentColor" />
           </div>
-          <span className="text-lg font-semibold">Join FlowForge</span>
+          <span className="text-lg font-semibold">Join AutoForge</span>
         </div>
         {invitation.isLoading ? (
           <Spinner />

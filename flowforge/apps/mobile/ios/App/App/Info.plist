@@ -5,7 +5,7 @@
   <key>CAPACITOR_DEBUG</key>
 	<string>$(CAPACITOR_DEBUG)</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>FlowForge uses the microphone when you answer or make WhatsApp calls.</string>
+	<string>AutoForge uses the microphone when you answer or make WhatsApp calls.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
@@ -14,7 +14,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>FlowForge</string>
+        <string>AutoForge</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

@@ -109,7 +109,7 @@ export function DownloadButton({
         <div className="flex max-w-md items-start gap-2.5 rounded-xl border border-line bg-panel px-4 py-3 text-sm text-muted">
           <Smartphone size={18} className="mt-0.5 shrink-0 text-accent" />
           <span>
-            The {platformNames[platform]} app is not in this release yet. FlowForge runs on a
+            The {platformNames[platform]} app is not in this release yet. AutoForge runs on a
             Windows PC - open this page there to install it.
           </span>
         </div>
@@ -118,7 +118,7 @@ export function DownloadButton({
         <div className="flex max-w-md items-start gap-2.5 rounded-xl border border-line bg-panel px-4 py-3 text-sm text-muted">
           <Monitor size={18} className="mt-0.5 shrink-0 text-accent" />
           <span>
-            FlowForge is available for Windows. {platformNames[platform]} support is planned.
+            AutoForge is available for Windows. {platformNames[platform]} support is planned.
           </span>
         </div>
       )}

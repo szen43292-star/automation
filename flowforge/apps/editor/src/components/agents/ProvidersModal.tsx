@@ -59,7 +59,7 @@ export function ProvidersModal({ open, onClose }: { open: boolean; onClose: () =
       }
     >
       <p className="mb-4 text-[13px] text-muted">
-        Keys stay on your FlowForge server - the apps and browsers never see them. Keys built into
+        Keys stay on your AutoForge server - the apps and browsers never see them. Keys built into
         your private app or set on the server are used automatically.
         {!isOwner && ' Only the owner can change keys.'}
       </p>

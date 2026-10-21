@@ -97,7 +97,7 @@ function callbackPage(ok: boolean, message: string) {
     /[&<>"]/g,
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!,
   );
-  return `<!doctype html><html><head><meta charset="utf-8"><title>FlowForge</title>
+  return `<!doctype html><html><head><meta charset="utf-8"><title>AutoForge</title>
 <style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f5f6f8;color:#1b1f27}
 div{background:#fff;padding:32px 40px;border-radius:12px;box-shadow:0 4px 24px rgb(0 0 0/8%);text-align:center;max-width:420px}
 h1{font-size:18px;margin:0 0 8px;color:${ok ? '#16a34a' : '#dc2626'}}</style></head>

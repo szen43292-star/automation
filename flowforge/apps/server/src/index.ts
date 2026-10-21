@@ -13,12 +13,12 @@ async function setupRequired(problem: string) {
     reply.status(503).send({
       error: 'SetupRequired',
       message:
-        'The FlowForge server is not configured yet. Add these environment variables (on Vercel: Settings → Environment Variables) and redeploy.',
+        'The AutoForge server is not configured yet. Add these environment variables (on Vercel: Settings → Environment Variables) and redeploy.',
       problems: message.filter((line) => line.trim().startsWith('-')).map((line) => line.trim()),
     }),
   );
   await app.listen({ port: Number(process.env.PORT) || 5678, host: process.env.HOST ?? '0.0.0.0' });
-  console.error(`FlowForge is waiting for configuration:\n${problem}`);
+  console.error(`AutoForge is waiting for configuration:\n${problem}`);
 }
 
 async function main() {
@@ -34,7 +34,7 @@ async function main() {
   await app.listen({ port: config.PORT, host: config.HOST });
   await app.startBackgroundServices();
   app.log.info(
-    `FlowForge ${app.flowforgeVersion} ready on ${config.PUBLIC_URL} (executions: ${config.EXECUTIONS_MODE})`,
+    `AutoForge ${app.flowforgeVersion} ready on ${config.PUBLIC_URL} (executions: ${config.EXECUTIONS_MODE})`,
   );
   if (!config.editorDist) {
     app.log.info(

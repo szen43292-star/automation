@@ -174,7 +174,7 @@ export class LocalRuntime {
   async start(): Promise<string> {
     const { resourcesDir, dataDir, log } = this.options;
     if (process.platform !== 'win32' && process.getuid?.() === 0) {
-      throw new Error('PostgreSQL cannot run as root. Start FlowForge as a regular user.');
+      throw new Error('PostgreSQL cannot run as root. Start AutoForge as a regular user.');
     }
     checkResources(resourcesDir);
     const secrets = loadSecrets(dataDir);
@@ -204,7 +204,7 @@ export class LocalRuntime {
       log,
     });
     await this.server.start();
-    log(`FlowForge is running at ${this.server.url}`);
+    log(`AutoForge is running at ${this.server.url}`);
     return this.server.url;
   }
 

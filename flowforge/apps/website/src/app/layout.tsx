@@ -5,14 +5,14 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: {
-    default: 'FlowForge - workflow automation that runs on your PC',
-    template: '%s · FlowForge',
+    default: 'AutoForge - workflow automation that runs on your PC',
+    template: '%s · AutoForge',
   },
   description:
     'Visual workflow automation for Windows: webhooks, schedules, APIs and JavaScript, running privately on your own PC. No account and no API keys needed.',
   icons: { icon: '/favicon.svg' },
   openGraph: {
-    title: 'FlowForge',
+    title: 'AutoForge',
     description: 'Workflow automation that runs on your PC. Free download for Windows.',
   },
 };

@@ -84,7 +84,7 @@ export async function api<T>(
     if ((error as Error).name === 'AbortError') throw error;
     throw new ApiError(
       0,
-      `Cannot reach the FlowForge server${getServerUrl() ? ` at ${getServerUrl()}` : ''}. Check your connection.`,
+      `Cannot reach the AutoForge server${getServerUrl() ? ` at ${getServerUrl()}` : ''}. Check your connection.`,
     );
   }
 

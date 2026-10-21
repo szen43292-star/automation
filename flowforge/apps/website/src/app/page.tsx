@@ -81,7 +81,7 @@ export default async function HomePage() {
               Automate your work, <span className="text-accent">right on your PC</span>
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-relaxed text-pretty text-muted">
-              FlowForge is a visual workflow builder - webhooks, schedules, APIs and JavaScript -
+              AutoForge is a visual workflow builder - webhooks, schedules, APIs and JavaScript -
               that installs in one click and runs entirely on your Windows computer. Nothing to
               configure, nothing to sign up for.
             </p>
@@ -105,12 +105,12 @@ export default async function HomePage() {
               <span className="size-2.5 rounded-full bg-line" />
               <span className="size-2.5 rounded-full bg-line" />
               <span className="size-2.5 rounded-full bg-line" />
-              <span className="ml-3 text-xs text-muted">FlowForge</span>
+              <span className="ml-3 text-xs text-muted">AutoForge</span>
             </div>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/screens/editor-light.png"
-              alt="The FlowForge editor with a workflow that receives a webhook, routes it with a Switch node and calls an API"
+              alt="The AutoForge editor with a workflow that receives a webhook, routes it with a Switch node and calls an API"
               width={2560}
               height={1520}
               className="block h-auto w-full dark:hidden"
@@ -133,14 +133,14 @@ export default async function HomePage() {
           <SectionHeading
             eyebrow="Zero setup"
             title="No API keys. No accounts. No servers to rent."
-            text="Everything FlowForge needs - its database, server and editor - comes inside the installer and sets itself up the first time it starts. Keys are only needed later, for the services you choose to connect."
+            text="Everything AutoForge needs - its database, server and editor - comes inside the installer and sets itself up the first time it starts. Keys are only needed later, for the services you choose to connect."
           />
           <ol className="mt-12 grid gap-4 md:grid-cols-3">
             <Step n={1} icon={<Download size={20} />} title="Download">
               One installer for Windows 10 and 11. No sign-up form, no email.
             </Step>
             <Step n={2} icon={<MousePointerClick size={20} />} title="Install">
-              One click, about a minute. No administrator rights needed. FlowForge opens when
+              One click, about a minute. No administrator rights needed. AutoForge opens when
               it&apos;s done.
             </Step>
             <Step n={3} icon={<Zap size={20} />} title="Build">
@@ -178,7 +178,7 @@ export default async function HomePage() {
             <div>
               <h3 className="text-xl font-semibold tracking-tight">Runs 24/7, quietly</h3>
               <p className="mt-2 leading-relaxed text-muted">
-                Close the window and FlowForge keeps working from the system tray, so webhooks and
+                Close the window and AutoForge keeps working from the system tray, so webhooks and
                 schedules never miss a beat. It starts with Windows and updates itself when a new
                 version is out.
               </p>
@@ -206,7 +206,7 @@ export default async function HomePage() {
           <SectionHeading
             eyebrow="Roadmap"
             title="Next: your WhatsApp calls, answered by AI"
-            text="FlowForge is growing into a platform that answers WhatsApp Business calls with an AI voice agent, around the clock. These arrive as free updates."
+            text="AutoForge is growing into a platform that answers WhatsApp Business calls with an AI voice agent, around the clock. These arrive as free updates."
           />
           <div className="mt-12 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <RoadmapCard

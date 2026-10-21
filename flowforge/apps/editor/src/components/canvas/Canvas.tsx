@@ -273,7 +273,7 @@ export function Canvas() {
       e.preventDefault();
       const count = state.paste(parsed, pointer.current);
       if (count) toast.success(`Pasted ${count} node${count === 1 ? '' : 's'}`);
-      else toast.error('The clipboard does not contain FlowForge nodes');
+      else toast.error('The clipboard does not contain AutoForge nodes');
     };
 
     window.addEventListener('keydown', onKey);

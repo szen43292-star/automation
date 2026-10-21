@@ -74,7 +74,7 @@ if (!downloads.length) throw new Error(`No release files found in ${releaseDir}`
 
 const manifest = {
   schema: 1,
-  name: 'FlowForge',
+  name: 'AutoForge',
   version,
   tag,
   publishedAt: new Date().toISOString(),
