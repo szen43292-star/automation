@@ -37,7 +37,7 @@ export async function resetDb() {
   for (let attempt = 1; ; attempt++) {
     try {
       await prisma.$executeRawUnsafe(
-        'TRUNCATE "ExecutionData", "Execution", "WebhookEntity", "WorkflowVersion", "Workflow", "Credential", "Variable", "WhatsAppMessage", "Call", "CallPermission", "KnowledgeDocument", "Agent", "ApiKey", "Device", "WhatsAppAccount", "Setting", "User" RESTART IDENTITY CASCADE',
+        'TRUNCATE "ExecutionData", "Execution", "WebhookEntity", "WorkflowVersion", "Workflow", "Credential", "Variable", "WhatsAppMessage", "Call", "CallPermission", "KnowledgeDocument", "Agent", "ApiKey", "Device", "Approval", "WhatsAppAccount", "Setting", "User" RESTART IDENTITY CASCADE',
       );
       return;
     } catch (error) {

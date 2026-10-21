@@ -414,6 +414,12 @@ export const endpoints = {
   dashboard: (days: number, timezone: string) =>
     api<DashboardData>(`/api/dashboard?days=${days}&timezone=${encodeURIComponent(timezone)}`),
   templates: () => api<{ data: WorkflowTemplate[] }>('/api/templates'),
+  approvals: () => api<{ data: ApprovalItem[] }>('/api/approvals'),
+  decideApproval: (id: string, decision: 'approve' | 'reject') =>
+    api<{ ok: boolean; status: string; message: string }>(`/api/approvals/${id}/decision`, {
+      method: 'POST',
+      body: { decision },
+    }),
   useTemplate: (id: string) =>
     api<{ id: string; name: string; setup: string[]; missingCredentials?: string[] }>(
       `/api/templates/${id}/use`,
@@ -707,6 +713,20 @@ export interface DashboardData {
     startedAt: string;
     status: string;
   }>;
+}
+
+/** Something waiting for your OK (Ask for Approval node). */
+export interface ApprovalItem {
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  expired: boolean;
+  hasMedia: boolean;
+  mediaType: string | null;
+  createdAt: string;
+  expiresAt: string;
+  decidedAt: string | null;
 }
 
 export interface WorkflowTemplate {

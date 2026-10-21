@@ -59,6 +59,14 @@ const envSchema = z.object({
     .default('v23.0'),
   /** Folder for call recordings and greetings (default: ./data). */
   DATA_DIR: z.string().optional(),
+  /**
+   * "tunnel": links meant for a phone (approvals) open from anywhere through a Cloudflare quick
+   * tunnel while PUBLIC_URL is local (the Windows app). Only the approval pages are reachable
+   * that way.
+   */
+  REMOTE_ACCESS: z.enum(['off', 'tunnel']).default('off'),
+  /** cloudflared executable to use instead of downloading it once into DATA_DIR/bin. */
+  CLOUDFLARED_PATH: z.string().optional(),
   /** UDP ports for call audio, e.g. "40000-40199" - open them in the firewall. Default: any. */
   MEDIA_PORT_RANGE: z
     .string()

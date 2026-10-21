@@ -15,6 +15,8 @@ import type {
   IRunExecutionData,
   ITaskData,
   IWhatsAppHelper,
+  IApprovalCreated,
+  IApprovalRequest,
 } from '@flowforge/workflow';
 import type { CodeSandbox } from './sandbox/CodeSandbox';
 
@@ -73,6 +75,17 @@ export interface WorkflowExecuteAdditionalData {
   publicUrl?: string;
   /** Connected WhatsApp numbers (server and workers). */
   whatsapp?: IWhatsAppHelper;
+  /** Approvals, stored by the host for this execution (Ask for Approval node). */
+  approvals?: IApprovalService;
+}
+
+/** Host side of approvals: like IApprovalHelper, plus which execution asks. */
+export interface IApprovalService {
+  create(
+    owner: { executionId: string; workflowId?: string },
+    request: IApprovalRequest,
+  ): Promise<IApprovalCreated>;
+  media(approvalId: string): Promise<{ data: Buffer; mimeType: string; fileName?: string }>;
 }
 
 export interface WorkflowRunOptions {

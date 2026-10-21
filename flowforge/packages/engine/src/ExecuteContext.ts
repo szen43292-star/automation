@@ -23,6 +23,7 @@ import {
   type ITaskDataConnections,
   type IWaitOptions,
   type IWhatsAppHelper,
+  type IApprovalHelper,
   type NodeParameterValueType,
   type PairedItemResult,
   type Workflow,
@@ -116,6 +117,16 @@ export class ExecuteContext implements IExecuteFunctions {
       returnJsonArray: (data) => toItems(data),
       prepareBinaryData,
       whatsapp: additional.whatsapp ?? unavailableWhatsApp(node),
+      approvals: additional.approvals
+        ? {
+            create: (request) =>
+              additional.approvals!.create(
+                { executionId: additional.executionId, workflowId: opts.workflow.id },
+                request,
+              ),
+            media: (approvalId) => additional.approvals!.media(approvalId),
+          }
+        : unavailableApprovals(node),
     };
   }
 
@@ -267,6 +278,16 @@ export class ExecuteContext implements IExecuteFunctions {
   }
 }
 
+/** Stand-in when the host keeps no approvals (e.g. a plain engine in tests). */
+function unavailableApprovals(node: INode): IApprovalHelper {
+  const fail = async (): Promise<never> => {
+    throw new NodeOperationError(node, 'Approvals are not available here', {
+      description: 'Run this workflow in the AutoForge app or on an AutoForge server.',
+    });
+  };
+  return { create: fail, media: fail };
+}
+
 /** Stand-in when the host has no WhatsApp support (e.g. a plain engine in tests). */
 function unavailableWhatsApp(node: INode): IWhatsAppHelper {
   const fail = async (): Promise<never> => {
@@ -274,5 +295,11 @@ function unavailableWhatsApp(node: INode): IWhatsAppHelper {
       description: 'Run this workflow on a FlowForge server with a connected WhatsApp number.',
     });
   };
-  return { send: fail, markRead: fail, uploadMedia: fail, downloadMedia: fail, listTemplates: fail };
+  return {
+    send: fail,
+    markRead: fail,
+    uploadMedia: fail,
+    downloadMedia: fail,
+    listTemplates: fail,
+  };
 }

@@ -419,3 +419,24 @@ model CallPermission {
 
   @@unique([accountId, contact])
 }
+
+/// A decision asked from a person by the "Ask for Approval" node (e.g. "publish this video?").
+/// The id is a long random token: it is the secret in the approval link.
+model Approval {
+  id          String    @id
+  executionId String
+  workflowId  String?
+  title       String
+  description String    @default("")
+  /// Video/image shown on the approval page, saved under DATA_DIR/approvals.
+  mediaFile   String?
+  mediaType   String?
+  /// pending | approved | rejected
+  status      String    @default("pending")
+  decidedAt   DateTime?
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+
+  @@index([status, createdAt])
+  @@index([executionId])
+}

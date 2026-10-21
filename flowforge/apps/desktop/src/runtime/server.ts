@@ -52,6 +52,8 @@ export class ServerProcess {
       HOST: '127.0.0.1',
       PORT: String(this.port),
       EXECUTIONS_MODE: 'regular',
+      // Approval links ("publish this video?") open on a phone from anywhere via a quick tunnel.
+      REMOTE_ACCESS: 'tunnel',
       DEFAULT_TIMEZONE: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
       LOG_LEVEL: 'info',
       // Prisma CLI: no update checks or telemetry.
