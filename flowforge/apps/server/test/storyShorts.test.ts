@@ -112,25 +112,39 @@ describe('AI Story Shorts – Daily template', () => {
     expect(JSON.stringify(wf)).not.toContain('AIza-test');
   });
 
-  it('makes, uploads, logs and announces a Short (with the wait loop)', async () => {
-    const story = {
-      trend_used: 'Diwali 2026',
-      title: 'The Lamp That Remembered',
-      script: 'A small lamp wakes up every Diwali. '.repeat(10).trim(),
-      description:
-        'A lamp with a memory.\nOne night only.\nStory written and narrated with AI assistance.\n#shorts #diwali #story',
-      tags: ['story', 'diwali', 'shorts', 'lamp', 'india', 'festival', 'twist', 'ai'],
-      search_terms: ['diwali lamp', 'night city', 'old house', 'child smiling', 'fireworks'],
-    };
-    const review = {
-      hook: 8,
-      clarity: 9,
-      originality: 8,
-      safety: 10,
-      approve: true,
-      reason: 'Good',
-    };
+  const story = {
+    trend_used: 'Diwali 2026',
+    title: 'The Lamp That Remembered',
+    script: 'A small lamp wakes up every Diwali. '.repeat(10).trim(),
+    description:
+      'A lamp with a memory.\nOne night only.\nStory written and narrated with AI assistance.\n#shorts #diwali #story',
+    tags: ['story', 'diwali', 'shorts', 'lamp', 'india', 'festival', 'twist', 'ai'],
+    search_terms: ['diwali lamp', 'night city', 'old house', 'child smiling', 'fireworks'],
+  };
+  const approve = {
+    hook: 8,
+    clarity: 9,
+    originality: 8,
+    safety: 10,
+    approve: true,
+    reason: 'Good',
+  };
+  const reject = (reason: string) => ({
+    hook: 4,
+    clarity: 8,
+    originality: 5,
+    safety: 9,
+    approve: false,
+    reason,
+  });
+
+  /**
+   * Fake Google, Gemini and MoneyPrinterTurbo. The editor answers with `reviews` in order; the
+   * writer always answers with `story` (numbered by attempt, so the drafts can be told apart).
+   */
+  function fakeWorld(reviews: IDataObject[], { emptySheet = false } = {}) {
     let progress = 40;
+    let drafts = 0;
     const calls: IHttpRequestOptions[] = [];
     const ok = (body: unknown, extra: Partial<IHttpResponse> = {}): IHttpResponse => ({
       statusCode: 200,
@@ -151,9 +165,9 @@ describe('AI Story Shorts – Daily template', () => {
           items: [{ snippet: { title: 'Top song' } }, { snippet: { title: 'Funny cat' } }],
         });
       if (url.includes('sheets.googleapis.com') && r.method === 'GET' && url.includes('1%3A1'))
-        return ok({ values: [['title', 'trend_used', 'video_id', 'date']] });
+        return ok({ values: [['title', 'trend_used', 'video_id', 'date', 'attempt']] });
       if (url.includes('sheets.googleapis.com') && r.method === 'GET')
-        return ok({ values: [['title'], ['Old story 1'], ['Old story 2']] });
+        return ok(emptySheet ? {} : { values: [['title'], ['Old story 1'], ['Old story 2']] });
       if (url.includes(':append')) return ok({ updates: { updatedRows: 1 } });
       if (url.endsWith('/v1beta/models'))
         return ok({
@@ -163,7 +177,9 @@ describe('AI Story Shorts – Daily template', () => {
         });
       if (url.includes(':generateContent')) {
         const prompt = JSON.stringify((r.body as IDataObject).contents);
-        const answer = prompt.includes('strict YouTube Shorts editor') ? review : story;
+        const answer = prompt.includes('strict YouTube Shorts editor')
+          ? (reviews.shift() ?? approve)
+          : { ...story, title: ++drafts === 1 ? story.title : `${story.title} ${drafts}` };
         return ok({ candidates: [{ content: { parts: [{ text: JSON.stringify(answer) }] } }] });
       }
       if (url === 'http://127.0.0.1:8080/api/v1/videos')
@@ -187,8 +203,7 @@ describe('AI Story Shorts – Daily template', () => {
         });
       if (url === 'https://www.googleapis.com/upload/youtube/v3/videos')
         return ok(undefined, { headers: { location: 'https://upload.example/s/1' } });
-      if (url === 'https://upload.example/s/1')
-        return ok({ id: 'VID123', snippet: { title: story.title } });
+      if (url === 'https://upload.example/s/1') return ok({ id: 'VID123' });
       if (url.endsWith('/messages/send')) return ok({ id: 'mail-1' });
       return {
         statusCode: 404,
@@ -197,18 +212,38 @@ describe('AI Story Shorts – Daily template', () => {
         body: { error: `no fake for ${url}` },
       };
     };
-    const credentials: ICredentialsHelper = {
-      getDecrypted: async (_node, type) =>
-        type === 'googlePalmApi'
-          ? { host: 'https://generativelanguage.googleapis.com', apiKey: 'k' }
-          : {},
-      authenticateRequest: async (_node, type, options) => ({
-        ...options,
-        headers: { ...(options.headers ?? {}), authorization: `Bearer ${type}` },
-      }),
+    const prompts = () =>
+      calls
+        .filter((c) => c.url.includes(':generateContent'))
+        .map((c) => JSON.parse(JSON.stringify((c.body as IDataObject).contents))[0].parts[0].text)
+        .filter((text: string) => !text.includes('strict YouTube Shorts editor')) as string[];
+    const mailBody = () => {
+      const mail = calls.find((c) => c.url.endsWith('/messages/send'))!;
+      const message = Buffer.from((mail.body as { raw: string }).raw, 'base64url').toString();
+      const body = Buffer.from(
+        message.split('\r\n\r\n')[1]!.replace(/\r\n/g, ''),
+        'base64',
+      ).toString();
+      return { message, body };
     };
+    const loggedRow = () =>
+      (calls.find((c) => c.url.includes(':append'))!.body as { values: unknown[][] }).values[0]!;
+    return { calls, httpRequest, prompts, mailBody, loggedRow };
+  }
 
-    // Every credential type the template needs, as if the user had connected them all.
+  const credentials: ICredentialsHelper = {
+    getDecrypted: async (_node, type) =>
+      type === 'googlePalmApi'
+        ? { host: 'https://generativelanguage.googleapis.com', apiKey: 'k' }
+        : {},
+    authenticateRequest: async (_node, type, options) => ({
+      ...options,
+      headers: { ...(options.headers ?? {}), authorization: `Bearer ${type}` },
+    }),
+  };
+
+  /** Runs the template as if every credential were connected, resuming each Wait. */
+  async function runTemplate(httpRequest: (r: IHttpRequestOptions) => Promise<IHttpResponse>) {
     const nodes = template.nodes.map(({ credentialTypes, ...n }) => ({
       ...n,
       ...(credentialTypes
@@ -240,39 +275,49 @@ describe('AI Story Shorts – Daily template', () => {
           credentials,
         }),
       ).run(options);
-
-    let run: IRun = await execute({
-      startNode: 'Every day 18:00',
-      triggerItems: [{ json: {} }],
-    });
+    let run: IRun = await execute({ startNode: 'Every day 18:00', triggerItems: [{ json: {} }] });
     let waits = 0;
     while (run.status === 'waiting') {
       waits++;
       expect(run.data.waitingNode).toBe('Wait 5 Minutes');
-      const until = new Date(run.data.waitTill!).getTime() - Date.now();
-      expect(until).toBeGreaterThan(4 * 60_000);
+      expect(new Date(run.data.waitTill!).getTime() - Date.now()).toBeGreaterThan(4 * 60_000);
       run = await execute({ resumeFrom: run.data });
     }
+    const runData = run.data.resultData.runData;
+    const out = (name: string, i = -1) => runData[name]?.at(i)?.data?.main[0]?.map((x) => x.json);
+    return { run, waits, runData, out };
+  }
+
+  it('makes, uploads, logs and announces a Short (with the wait loop)', async () => {
+    const world = fakeWorld([approve]);
+    const { run, waits, runData, out } = await runTemplate(world.httpRequest);
     expect(run.data.resultData.error).toBeUndefined();
     expect(run.status).toBe('success');
     expect(waits).toBe(2); // not ready at the first check, ready at the second
 
-    const runData = run.data.resultData.runData;
-    const out = (name: string, i = -1) => runData[name]?.at(i)?.data?.main[0]?.map((x) => x.json);
     expect(out('Aggregate Trends')?.[0]).toEqual({
       trends: ['Diwali 2026', 'Cricket final', 'Top song', 'Funny cat'],
     });
     expect(out('Aggregate Past Titles')?.[0]).toEqual({
       past_titles: ['Old story 1', 'Old story 2'],
     });
+    expect(out('Set Attempt')?.[0]).toEqual({
+      past_titles: ['Old story 1', 'Old story 2'],
+      attempt: 1,
+      feedback: '',
+    });
+    expect(runData['Write Story']).toHaveLength(1);
+    expect(runData['Retry With Feedback']).toBeUndefined();
     expect(out('Count Tries')?.[0]).toMatchObject({ tries: 1 });
 
-    const writePrompt = calls.find((c) => c.url.includes(':generateContent'))!;
-    const promptText = JSON.stringify((writePrompt.body as IDataObject).contents);
-    expect(promptText).toContain('Diwali 2026 | Cricket final | Top song | Funny cat');
-    expect(promptText).toContain('Old story 1 | Old story 2');
+    const [prompt] = world.prompts();
+    expect(prompt).toContain('Diwali 2026 | Cricket final | Top song | Funny cat');
+    expect(prompt).toContain('Old story 1 | Old story 2');
+    // First pass: no feedback section at all.
+    expect(prompt!.endsWith('Output only the JSON.')).toBe(true);
+    expect(prompt).not.toContain('previous draft');
 
-    const make = calls.find((c) => c.url === 'http://127.0.0.1:8080/api/v1/videos')!;
+    const make = world.calls.find((c) => c.url === 'http://127.0.0.1:8080/api/v1/videos')!;
     expect(make.body).toEqual({
       video_subject: story.title,
       video_script: story.script,
@@ -289,7 +334,7 @@ describe('AI Story Shorts – Daily template', () => {
       subtitle_position: 'bottom',
     });
 
-    const upload = calls.find(
+    const upload = world.calls.find(
       (c) => c.url === 'https://www.googleapis.com/upload/youtube/v3/videos',
     )!;
     expect(upload.body).toEqual({
@@ -302,88 +347,71 @@ describe('AI Story Shorts – Daily template', () => {
       status: { privacyStatus: 'private', selfDeclaredMadeForKids: false },
     });
 
-    const append = calls.find((c) => c.url.includes(':append'))!;
-    const [row] = (append.body as { values: string[][] }).values;
-    expect(row!.slice(0, 3)).toEqual([story.title, story.trend_used, 'VID123']);
-    expect(row![3]).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    const row = world.loggedRow();
+    expect(row.slice(0, 3)).toEqual([story.title, story.trend_used, 'VID123']);
+    expect(row[3]).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(row[4]).toBe(1);
 
-    const mail = calls.find((c) => c.url.endsWith('/messages/send'))!;
-    const message = Buffer.from((mail.body as { raw: string }).raw, 'base64url').toString();
+    const { message, body } = world.mailBody();
     expect(message).toContain('Subject: New Short ready: The Lamp That Remembered');
-    const body = Buffer.from(
-      message.split('\r\n\r\n')[1]!.replace(/\r\n/g, ''),
-      'base64',
-    ).toString();
     expect(body).toContain('https://studio.youtube.com/video/VID123/edit');
+    expect(body).toContain('Attempt: 1 of 2');
+    expect(body).not.toContain('rejected');
   });
 
-  it('stops with the reason when the editor rejects the story', async () => {
-    const httpRequest = async (r: IHttpRequestOptions): Promise<IHttpResponse> => {
-      const ok = (body: unknown): IHttpResponse => ({
-        statusCode: 200,
-        statusMessage: 'OK',
-        headers: {},
-        body,
-      });
-      if (r.url.startsWith('https://trends.google.com/'))
-        return ok('<rss><channel><item><title>X</title></item></channel></rss>');
-      if (r.url.includes('youtube/v3/videos')) return ok({ items: [] });
-      if (r.url.includes('sheets.googleapis.com')) return ok({}); // empty sheet
-      if (r.url.endsWith('/v1beta/models')) return ok({ models: [] });
-      const prompt = JSON.stringify((r.body as IDataObject).contents);
-      const answer = prompt.includes('strict YouTube Shorts editor')
-        ? {
-            hook: 4,
-            clarity: 8,
-            originality: 5,
-            safety: 9,
-            approve: false,
-            reason: 'The hook is weak',
-          }
-        : {
-            trend_used: 'X',
-            title: 'T',
-            script: 'S',
-            description: 'D',
-            tags: ['a'],
-            search_terms: ['b'],
-          };
-      return ok({ candidates: [{ content: { parts: [{ text: JSON.stringify(answer) }] } }] });
-    };
-    const nodes = template.nodes.map(({ credentialTypes, ...n }) => ({
-      ...n,
-      ...(credentialTypes
-        ? { credentials: Object.fromEntries(credentialTypes.map((t) => [t, { id: t, name: t }])) }
-        : {}),
-      parameters: {
-        ...n.parameters,
-        ...(n.type === 'flowforge.googleSheets' ? { documentId: 'SHEET-ID' } : {}),
-      },
-    })) as INode[];
-    const run = await new WorkflowExecute(
-      new Workflow({
-        name: 't',
-        nodes,
-        connections: template.connections,
-        settings: template.settings,
-      }),
-      createAdditionalData({
-        executionId: 'rejected',
-        mode: 'trigger',
-        nodeTypes: createNodeTypes(),
-        codeSandbox: new CodeSandbox({ timeoutMs: 3_000 }),
-        httpRequest,
-        credentials: {
-          getDecrypted: async () => ({ apiKey: 'k' }),
-          authenticateRequest: async (_n, _t, o) => o,
-        },
-      }),
-    ).run({ startNode: 'Every day 18:00', triggerItems: [{ json: {} }] });
+  it('gives the writer one more try with the editor feedback', async () => {
+    const world = fakeWorld([reject('The hook is weak'), approve]);
+    const { run, runData, out } = await runTemplate(world.httpRequest);
+    expect(run.data.resultData.error).toBeUndefined();
+    expect(run.status).toBe('success');
+
+    expect(runData['Write Story']).toHaveLength(2);
+    expect(runData['Quality Check']).toHaveLength(2);
+    expect(out('Set Attempt')?.[0]).toEqual({
+      past_titles: ['Old story 1', 'Old story 2'],
+      attempt: 2,
+      feedback: 'The hook is weak',
+    });
+    // Trends and past titles are not fetched again.
+    for (const fetched of ['Google Trends RSS', 'YouTube Trending', 'Get Past Titles'])
+      expect(runData[fetched], fetched).toHaveLength(1);
+    expect(world.calls.filter((c) => c.url.startsWith('https://trends.google.com/'))).toHaveLength(
+      1,
+    );
+
+    const [first, second] = world.prompts();
+    expect(first).not.toContain('previous draft');
+    expect(second).toContain('Diwali 2026 | Cricket final | Top song | Funny cat');
+    expect(second).toContain('Old story 1 | Old story 2');
+    expect(
+      second!.endsWith(
+        'Output only the JSON.\n\nYour previous draft was rejected by the editor for this reason: The hook is weak\nWrite a completely new story that fixes this problem. You may choose a different trend.',
+      ),
+    ).toBe(true);
+
+    // The second draft is the one that is made, uploaded and logged.
+    const make = world.calls.find((c) => c.url === 'http://127.0.0.1:8080/api/v1/videos')!;
+    expect((make.body as IDataObject).video_subject).toBe(`${story.title} 2`);
+    const row = world.loggedRow();
+    expect(row[0]).toBe(`${story.title} 2`);
+    expect(row[4]).toBe(2);
+    const { body } = world.mailBody();
+    expect(body).toContain('Attempt: 2 of 2 (the first story was rejected: The hook is weak)');
+  });
+
+  it('stops with "Rejected twice" when the second draft is rejected too', async () => {
+    const world = fakeWorld([reject('The hook is weak'), reject('Still too slow')], {
+      emptySheet: true,
+    });
+    const { run, runData } = await runTemplate(world.httpRequest);
     expect(run.status).toBe('error');
-    expect(run.data.resultData.error?.message).toBe('Rejected: The hook is weak');
-    // An empty sheet still reaches the writer (Always Output Data).
-    const past =
-      run.data.resultData.runData['Aggregate Past Titles']?.[0]?.data?.main[0]?.[0]?.json;
-    expect(past).toEqual({ past_titles: [] });
+    expect(run.data.resultData.error?.message).toBe('Rejected twice: Still too slow');
+    expect(runData['Write Story']).toHaveLength(2);
+    expect(runData['Make Video']).toBeUndefined();
+    // An empty sheet still reaches the writer (Always Output Data), on both passes.
+    expect(runData['Aggregate Past Titles']?.[0]?.data?.main[0]?.[0]?.json).toEqual({
+      past_titles: [],
+    });
+    expect(world.prompts().every((p) => p.includes('none yet'))).toBe(true);
   });
 });

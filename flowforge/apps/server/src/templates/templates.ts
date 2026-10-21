@@ -347,10 +347,20 @@ export const TEMPLATES: WorkflowTemplate[] = [
         },
         { alwaysOutputData: true },
       ),
+      node('Set Attempt', 'flowforge.set', [2160, 0], {
+        mode: 'manual',
+        includeOtherFields: true,
+        assignments: {
+          assignments: [
+            { id: '1', name: 'attempt', value: '={{ $json.attempt ?? 1 }}', type: 'number' },
+            { id: '2', name: 'feedback', value: "={{ $json.feedback ?? '' }}", type: 'string' },
+          ],
+        },
+      }),
       node(
         'Write Story',
         'flowforge.chainLlm',
-        [2160, 0],
+        [2400, 0],
         {
           modelProvider: 'googleGemini',
           model: '',
@@ -364,14 +374,14 @@ Titles we already posted (never repeat these ideas): {{ ($json.past_titles ?? []
 2. Write an ORIGINAL story script of 120-140 words (45-55 seconds spoken).
 Script rules: first sentence is a hook under 12 words; never say "In this video", "Hey guys" or "Subscribe"; short spoken sentences, present tense, simple English; one twist near the end; last line ends on a question or loops back to the first line; no emojis, hashtags, scene directions or speaker names; if fiction, don't present it as real news; if based on a real event, use only facts from the headline and never invent quotes.
 Also write: title (under 60 characters, honest, no ALL CAPS); description (2 short lines, then "Story written and narrated with AI assistance.", then 3 hashtags including #shorts); tags (8); search_terms (5 short English stock-footage phrases matching the scenes in order).
-Output only the JSON.`,
+Output only the JSON.{{ $json.feedback ? "\\n\\nYour previous draft was rejected by the editor for this reason: " + $json.feedback + "\\nWrite a completely new story that fixes this problem. You may choose a different trend." : "" }}`,
         },
         { credentialTypes: ['googlePalmApi'] },
       ),
       node(
         'Quality Check',
         'flowforge.chainLlm',
-        [2400, 0],
+        [2640, 0],
         {
           modelProvider: 'googleGemini',
           model: '',
@@ -383,18 +393,43 @@ Output only the JSON.`,
         },
         { credentialTypes: ['googlePalmApi'] },
       ),
-      node('Approved?', 'flowforge.if', [2640, 0], {
+      node('Approved?', 'flowforge.if', [2880, 0], {
         conditions: condition('={{ $json.output.approve }}', 'boolean', 'true'),
         looseTypeValidation: true,
       }),
-      node('Rejected', 'flowforge.stopAndError', [2880, 200], {
+      node('First Attempt?', 'flowforge.if', [3120, 200], {
+        conditions: condition(
+          "={{ $('Set Attempt').first().json.attempt }}",
+          'number',
+          'equals',
+          1,
+        ),
+        looseTypeValidation: true,
+      }),
+      node('Retry With Feedback', 'flowforge.set', [3360, 200], {
+        mode: 'manual',
+        includeOtherFields: false,
+        assignments: {
+          assignments: [
+            { id: '1', name: 'attempt', value: '2', type: 'number' },
+            { id: '2', name: 'feedback', value: '={{ $json.output.reason }}', type: 'string' },
+            {
+              id: '3',
+              name: 'past_titles',
+              value: "={{ $('Set Attempt').first().json.past_titles }}",
+              type: 'array',
+            },
+          ],
+        },
+      }),
+      node('Rejected', 'flowforge.stopAndError', [3360, 400], {
         errorType: 'errorMessage',
-        errorMessage: '=Rejected: {{ $json.output.reason }}',
+        errorMessage: '=Rejected twice: {{ $json.output.reason }}',
       }),
       node(
         'MoneyPrinterTurbo fields',
         'flowforge.stickyNote',
-        [2840, -250],
+        [3080, -250],
         {
           content:
             'Check these field names at http://127.0.0.1:8080/docs under POST /api/v1/videos.',
@@ -402,7 +437,7 @@ Output only the JSON.`,
         },
         { width: 300, height: 120 },
       ),
-      node('Make Video', 'flowforge.httpRequest', [2880, 0], {
+      node('Make Video', 'flowforge.httpRequest', [3120, 0], {
         method: 'POST',
         url: 'http://127.0.0.1:8080/api/v1/videos',
         sendBody: true,
@@ -425,7 +460,7 @@ Output only the JSON.`,
 }`,
         options: { timeout: 120000 },
       }),
-      node('Save Task ID', 'flowforge.set', [3120, 0], {
+      node('Save Task ID', 'flowforge.set', [3360, 0], {
         mode: 'manual',
         includeOtherFields: false,
         assignments: {
@@ -439,16 +474,16 @@ Output only the JSON.`,
           ],
         },
       }),
-      node('Wait 5 Minutes', 'flowforge.wait', [3360, 0], {
+      node('Wait 5 Minutes', 'flowforge.wait', [3600, 0], {
         resume: 'timeInterval',
         amount: 5,
         unit: 'minutes',
       }),
-      node('Check Task', 'flowforge.httpRequest', [3600, 0], {
+      node('Check Task', 'flowforge.httpRequest', [3840, 0], {
         method: 'GET',
         url: "=http://127.0.0.1:8080/api/v1/tasks/{{ $('Save Task ID').first().json.task_id }}",
       }),
-      node('Done?', 'flowforge.if', [3840, 0], {
+      node('Done?', 'flowforge.if', [4080, 0], {
         conditions: condition(
           '={{ $json.data?.progress ?? $json.progress }}',
           'number',
@@ -457,23 +492,23 @@ Output only the JSON.`,
         ),
         looseTypeValidation: true,
       }),
-      node('Count Tries', 'flowforge.set', [4080, 200], {
+      node('Count Tries', 'flowforge.set', [4320, 200], {
         mode: 'manual',
         includeOtherFields: true,
         assignments: {
           assignments: [{ id: '1', name: 'tries', value: '={{ $runIndex + 1 }}', type: 'number' }],
         },
       }),
-      node('Too Many Tries?', 'flowforge.if', [4320, 200], {
+      node('Too Many Tries?', 'flowforge.if', [4560, 200], {
         conditions: condition('={{ $json.tries }}', 'number', 'gte', 6),
         looseTypeValidation: true,
       }),
-      node('Give Up', 'flowforge.stopAndError', [4560, 300], {
+      node('Give Up', 'flowforge.stopAndError', [4800, 300], {
         errorType: 'errorMessage',
         errorMessage:
           '=The video was not ready after {{ $json.tries }} checks (30 minutes). Check MoneyPrinterTurbo on your PC.',
       }),
-      node('Download Video', 'flowforge.httpRequest', [4080, 0], {
+      node('Download Video', 'flowforge.httpRequest', [4320, 0], {
         method: 'GET',
         url: '={{ ($json.data?.videos ?? $json.videos)[0] }}',
         options: { responseFormat: 'binary', timeout: 600000 },
@@ -481,7 +516,7 @@ Output only the JSON.`,
       node(
         'YouTube Upload',
         'flowforge.youTube',
-        [4320, 0],
+        [4560, 0],
         {
           resource: 'video',
           operation: 'upload',
@@ -501,7 +536,7 @@ Output only the JSON.`,
       node(
         'Log Post',
         'flowforge.googleSheets',
-        [4560, 0],
+        [4800, 0],
         {
           operation: 'append',
           documentId: '',
@@ -516,6 +551,7 @@ Output only the JSON.`,
               },
               { column: 'video_id', value: '={{ $json.id }}' },
               { column: 'date', value: "={{ $now.toFormat('yyyy-MM-dd') }}" },
+              { column: 'attempt', value: "={{ $('Set Attempt').first().json.attempt }}" },
             ],
           },
         },
@@ -524,7 +560,7 @@ Output only the JSON.`,
       node(
         'Notify Me',
         'flowforge.gmail',
-        [4800, 0],
+        [5040, 0],
         {
           resource: 'message',
           operation: 'send',
@@ -536,7 +572,8 @@ Output only the JSON.`,
 Review it and publish it in YouTube Studio:
 https://studio.youtube.com/video/{{ $('YouTube Upload').first().json.id }}/edit
 
-Trend used: {{ $('Write Story').first().json.output.trend_used }}`,
+Trend used: {{ $('Write Story').first().json.output.trend_used }}
+Attempt: {{ $('Set Attempt').first().json.attempt }} of 2{{ $('Set Attempt').first().json.attempt > 1 ? ' (the first story was rejected: ' + $('Set Attempt').first().json.feedback + ')' : '' }}`,
         },
         { credentialTypes: ['gmailOAuth2'] },
       ),
@@ -552,11 +589,15 @@ Trend used: {{ $('Write Story').first().json.output.trend_used }}`,
       link('Aggregate Trends', 'Get Past Titles'),
       link('Get Past Titles', 'Last 30 Titles'),
       link('Last 30 Titles', 'Aggregate Past Titles'),
-      link('Aggregate Past Titles', 'Write Story'),
+      link('Aggregate Past Titles', 'Set Attempt'),
+      link('Set Attempt', 'Write Story'),
       link('Write Story', 'Quality Check'),
       link('Quality Check', 'Approved?'),
       link('Approved?', 'Make Video', 0),
-      link('Approved?', 'Rejected', 1),
+      link('Approved?', 'First Attempt?', 1),
+      link('First Attempt?', 'Retry With Feedback', 0),
+      link('First Attempt?', 'Rejected', 1),
+      link('Retry With Feedback', 'Set Attempt'),
       link('Make Video', 'Save Task ID'),
       link('Save Task ID', 'Wait 5 Minutes'),
       link('Wait 5 Minutes', 'Check Task'),
