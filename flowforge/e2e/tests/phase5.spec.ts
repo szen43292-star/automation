@@ -102,6 +102,10 @@ test('a test number answered by the AI agent: call, hear it, call log has the tr
   await dialog.getByLabel('AI agent').selectOption(agent.id);
   await dialog.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByText('Call settings saved')).toBeVisible();
+  // The toast sits where the call bar's Hang up button appears; a pointer resting on it keeps it
+  // open. Move away and let it close first.
+  await page.mouse.move(0, 0);
+  await expect(page.getByText('Call settings saved')).toBeHidden({ timeout: 15_000 });
 
   await card.getByRole('button', { name: 'Open simulator' }).click();
   await page.getByRole('button', { name: 'Call', exact: true }).click();
