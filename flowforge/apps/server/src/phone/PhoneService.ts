@@ -7,6 +7,7 @@ import { toWorkflowDTO, type WorkflowService } from '../workflows/WorkflowServic
 import type { RemoteAccess } from '../remote/RemoteAccess';
 
 const KEY = 'phone';
+const APP_KEY = 'phoneAppAccess';
 
 interface PhoneSettings {
   token: string;
@@ -21,6 +22,13 @@ export interface PhoneInfo {
   url: string | null;
   localUrl: string | null;
   workflowIds: string[];
+}
+
+export interface AppAccessInfo {
+  /** The full AutoForge app may connect through the https address (sign-in still required). */
+  enabled: boolean;
+  /** The https address to enter in the phone app, when remote access works here. */
+  url: string | null;
 }
 
 export interface PhoneWorkflow {
@@ -107,6 +115,29 @@ export class PhoneService {
 
   async disable() {
     await this.deps.prisma.setting.deleteMany({ where: { key: KEY } });
+  }
+
+  /** Applies the saved "use the app from anywhere" choice (at start). */
+  async loadAppAccess() {
+    const row = await this.deps.prisma.setting.findUnique({ where: { key: APP_KEY } });
+    this.deps.remote?.setAppAccess((row?.value as { enabled?: boolean } | null)?.enabled === true);
+  }
+
+  async appAccess(): Promise<AppAccessInfo> {
+    const enabled = this.deps.remote?.appAccessEnabled ?? false;
+    const url = enabled ? await this.deps.remote?.url().catch(() => null) : null;
+    return { enabled, url: url ?? null };
+  }
+
+  async setAppAccess(enabled: boolean): Promise<AppAccessInfo> {
+    const value = { enabled } as Prisma.InputJsonValue;
+    await this.deps.prisma.setting.upsert({
+      where: { key: APP_KEY },
+      create: { key: APP_KEY, value },
+      update: { value },
+    });
+    this.deps.remote?.setAppAccess(enabled);
+    return this.appAccess();
   }
 
   /** The settings when the token is the current one. */

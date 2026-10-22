@@ -8,6 +8,7 @@ import type { PhoneService } from './PhoneService';
 const tokenParams = z.object({ token: z.string().min(1).max(100) });
 const runParams = tokenParams.extend({ workflowId: z.string().min(1).max(100) });
 const updateBody = z.object({ workflowIds: z.array(z.string().min(1).max(100)).max(200) });
+const appAccessBody = z.object({ enabled: z.boolean() });
 
 /** The phone page: the chosen workflows with a Run button, their last result, open approvals. */
 export function phonePage(): string {
@@ -130,5 +131,11 @@ export async function phoneApiRoutes(app: FastifyInstance, opts: { phone: PhoneS
   app.delete('/api/phone', admin, async (_request, reply) => {
     await phone.disable();
     return reply.status(204).send();
+  });
+  // The full AutoForge app (phone or browser) from anywhere, through the https address.
+  app.get('/api/phone/app-access', admin, async () => phone.appAccess());
+  app.put('/api/phone/app-access', admin, async (request) => {
+    const { enabled } = parse(appAccessBody, request.body);
+    return phone.setAppAccess(enabled);
   });
 }

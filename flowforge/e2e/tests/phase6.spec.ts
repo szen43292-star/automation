@@ -169,6 +169,12 @@ test('phone link: pick a workflow, scan the code, run it from the phone page', a
   const link = (await page.getByTestId('phone-link').textContent())!;
   expect(link).toMatch(/\/run\/[\w-]+$/);
 
+  // The full app through the https address: a switch, off by default.
+  const appAccess = page.getByTestId('app-access');
+  await appAccess.getByRole('checkbox').check();
+  await expect(appAccess).toContainText('No https address here');
+  await appAccess.getByRole('checkbox').uncheck();
+
   // The phone: no sign-in, just the link.
   const phone = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const phonePage = await phone.newPage();
