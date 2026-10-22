@@ -197,6 +197,7 @@ function Phone() {
           </div>
         )}
       </div>
+      <AppAccess />
       <h2 className="mb-2 text-[13px] font-semibold">Workflows on your phone</h2>
       <div className="divide-y divide-line rounded-lg border border-line">
         {(workflows.data?.data ?? []).map((w) => (
@@ -219,6 +220,99 @@ function Phone() {
         )}
       </div>
     </>
+  );
+}
+
+/** The full AutoForge app (phone app or any browser) through the https address. */
+function AppAccess() {
+  const queryClient = useQueryClient();
+  const access = useQuery({ queryKey: ['app-access'], queryFn: endpoints.appAccess });
+  const [busy, setBusy] = useState(false);
+  const [qr, setQr] = useState<string | null>(null);
+  // The tick shows right away; the server's answer replaces it.
+  const [enabled, setEnabled] = useState(false);
+  useEffect(() => setEnabled(access.data?.enabled ?? false), [access.data?.enabled]);
+  const url = access.data?.url ?? null;
+
+  useEffect(() => {
+    if (!url) return setQr(null);
+    let current = true;
+    QRCode.toDataURL(url, { margin: 1, width: 180 })
+      .then((data) => current && setQr(data))
+      .catch(() => current && setQr(null));
+    return () => {
+      current = false;
+    };
+  }, [url]);
+
+  const toggle = async (next: boolean) => {
+    setEnabled(next);
+    setBusy(true);
+    try {
+      queryClient.setQueryData(['app-access'], await endpoints.setAppAccess(next));
+    } catch (error) {
+      setEnabled(!next);
+      toast.error((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mb-6 rounded-lg border border-line p-4" data-testid="app-access">
+      <label className="flex cursor-pointer items-start gap-3">
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={enabled}
+          disabled={busy || access.isLoading}
+          onChange={(e) => void toggle(e.target.checked)}
+        />
+        <span>
+          <span className="block text-[13px] font-semibold">
+            Use the full AutoForge app from anywhere
+          </span>
+          <span className="block text-[12px] text-muted">
+            Build and run workflows in the phone app (or any browser) through a secure https
+            address. You sign in with your AutoForge email and password.
+          </span>
+        </span>
+      </label>
+      {enabled && access.data?.enabled && (
+        <div className="mt-3 flex flex-wrap items-start gap-4">
+          {qr && (
+            <img
+              src={qr}
+              alt="QR code for the https address"
+              width={180}
+              height={180}
+              className="rounded-lg border border-line bg-white"
+            />
+          )}
+          <div className="min-w-0 flex-1 space-y-2 text-[12px] text-muted">
+            {url ? (
+              <div className="flex items-center gap-2">
+                <code
+                  className="min-w-0 flex-1 truncate rounded bg-panel-2 px-2 py-1.5 text-fg"
+                  data-testid="app-address"
+                >
+                  {url}
+                </code>
+                <Button size="sm" icon={Copy} onClick={() => copy(url)}>
+                  Copy
+                </Button>
+              </div>
+            ) : (
+              <p>No https address here - remote access is off on this server.</p>
+            )}
+            <p>
+              In the AutoForge app tap <b>Connect to a different server</b>, enter this address and
+              sign in. The address changes when the PC restarts - copy it again then.
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -59,8 +59,18 @@ export class RemoteAccess {
   private waiters: Array<(url: string | null) => void> = [];
   private stopped = false;
   private restartDelay = 5_000;
+  /** "Use the AutoForge app from anywhere": the signed-in app and API also pass the tunnel. */
+  private appAccess = false;
 
   constructor(private readonly options: RemoteAccessOptions) {}
+
+  setAppAccess(enabled: boolean) {
+    this.appAccess = enabled;
+  }
+
+  get appAccessEnabled(): boolean {
+    return this.appAccess;
+  }
 
   /** True when links need the tunnel (local server with remote access switched on). */
   get usesTunnel(): boolean {
@@ -88,19 +98,22 @@ export class RemoteAccess {
 
   /**
    * Whether a request may be served: requests through the quick tunnel only reach the approval
-   * pages, everything else (editor, API, webhooks) stays on this computer.
+   * and phone pages; with app access on, also the app (sign-in still required), but never the
+   * first-time account setup.
    */
   allows(
     host: string | undefined,
     path: string,
     headers: Record<string, string | string[] | undefined> = {},
+    method = 'GET',
   ): boolean {
     if (!this.usesTunnel) return true;
     const name = (host ?? '').split(':')[0]!.toLowerCase();
     // Cloudflare marks every request it forwards; requests made on this computer have neither.
     const viaTunnel =
       name.endsWith('.trycloudflare.com') || headers['cf-connecting-ip'] !== undefined;
-    return !viaTunnel || REMOTE_PATH_PREFIXES.some((prefix) => path.startsWith(prefix));
+    if (!viaTunnel || REMOTE_PATH_PREFIXES.some((prefix) => path.startsWith(prefix))) return true;
+    return this.appAccess && !(method === 'POST' && path.startsWith('/api/auth/setup'));
   }
 
   stop() {

@@ -166,6 +166,49 @@ describe('run from your phone', () => {
     ).toBe(404);
   });
 
+  it('lets the full app through the https address only when switched on', async () => {
+    const off = await app.inject({ url: '/api/phone/app-access', headers: auth(token) });
+    expect(off.json()).toEqual({ enabled: false, url: null });
+    const on = await app.inject({
+      method: 'PUT',
+      url: '/api/phone/app-access',
+      headers: auth(token),
+      payload: { enabled: true },
+    });
+    expect(on.json()).toEqual({ enabled: true, url: null });
+    expect(app.remoteAccess.appAccessEnabled).toBe(true);
+
+    // The choice is kept when AutoForge starts again.
+    const restarted = await createTestApp({ DATA_DIR: dataDir });
+    expect(restarted.remoteAccess.appAccessEnabled).toBe(true);
+    await restarted.close();
+
+    await app.inject({
+      method: 'PUT',
+      url: '/api/phone/app-access',
+      headers: auth(token),
+      payload: { enabled: false },
+    });
+    expect(app.remoteAccess.appAccessEnabled).toBe(false);
+
+    const remote = new RemoteAccess({
+      publicUrl: 'http://localhost:5678',
+      port: 5678,
+      mode: 'tunnel',
+      dataDir,
+      logger: app.log,
+    });
+    const host = 'quiet-lamp-1234.trycloudflare.com';
+    remote.setAppAccess(true);
+    expect(remote.allows(host, '/api/workflows')).toBe(true);
+    expect(remote.allows(host, '/api/auth/login', {}, 'POST')).toBe(true);
+    expect(remote.allows(host, '/workflows')).toBe(true);
+    // Creating the first account stays on this computer.
+    expect(remote.allows(host, '/api/auth/setup', {}, 'POST')).toBe(false);
+    remote.setAppAccess(false);
+    expect(remote.allows(host, '/api/workflows')).toBe(false);
+  });
+
   it('lets the phone page through the tunnel, nothing else', () => {
     const remote = new RemoteAccess({
       publicUrl: 'http://localhost:5678',

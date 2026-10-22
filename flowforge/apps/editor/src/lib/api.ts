@@ -427,6 +427,9 @@ export const endpoints = {
     api<PhoneInfo>('/api/phone', { method: 'PUT', body: { workflowIds } }),
   resetPhone: () => api<PhoneInfo>('/api/phone/reset', { method: 'POST' }),
   disablePhone: () => api<void>('/api/phone', { method: 'DELETE' }),
+  appAccess: () => api<AppAccessInfo>('/api/phone/app-access'),
+  setAppAccess: (enabled: boolean) =>
+    api<AppAccessInfo>('/api/phone/app-access', { method: 'PUT', body: { enabled } }),
   decideApproval: (id: string, decision: 'approve' | 'reject') =>
     api<{ ok: boolean; status: string; message: string }>(`/api/approvals/${id}/decision`, {
       method: 'POST',
@@ -733,6 +736,12 @@ export interface PhoneInfo {
   url: string | null;
   localUrl: string | null;
   workflowIds: string[];
+}
+
+/** The full AutoForge app through the https address (sign-in still required). */
+export interface AppAccessInfo {
+  enabled: boolean;
+  url: string | null;
 }
 
 /** Something waiting for your OK (Ask for Approval node). */

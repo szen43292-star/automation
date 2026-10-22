@@ -180,6 +180,11 @@ export async function buildApp(
     publicUrl: config.PUBLIC_URL,
     remote: remoteAccess,
   });
+  await phone
+    .loadAppAccess()
+    .catch((error: Error) =>
+      app.log.warn({ err: error }, 'Could not read the phone app access setting'),
+    );
   const activeWorkflows = new ActiveWorkflowManager(
     prisma,
     nodeTypes,
@@ -259,7 +264,7 @@ export async function buildApp(
   app.decorate('remoteAccess', remoteAccess);
   // Through the quick tunnel only the approval and phone pages are reachable.
   app.addHook('onRequest', async (request, reply) => {
-    if (!remoteAccess.allows(request.headers.host, request.url, request.headers))
+    if (!remoteAccess.allows(request.headers.host, request.url, request.headers, request.method))
       return reply.status(404).send({ error: 'NotFound', message: 'Not available from here' });
   });
   app.decorate('startBackgroundServices', async () => {
