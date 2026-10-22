@@ -1,11 +1,11 @@
 {
   "schema": 1,
   "name": "AutoForge",
-  "version": "0.3.5",
-  "tag": "v0.3.5",
-  "publishedAt": "2026-10-22T05:10:51.861Z",
+  "version": "0.3.6",
+  "tag": "v0.3.6",
+  "publishedAt": "2026-10-22T05:56:00.326Z",
   "repo": "szen43292-star/automation",
-  "notes": "**AutoForge 0.3.5**\n\n- **Run workflows from your phone.** Settings → Phone: tick the workflows, scan the QR code with your phone and add the page to your home screen. Tap Run from anywhere while your PC is on - no sign-in, no app needed. The page also lists videos waiting for your approval. Use \"New link\" or \"Switch off\" if you share it by mistake; the address changes when the PC restarts (scan again).\n- **Local AI with Ollama.** Basic LLM Chain has an \"Ollama Chat Model (local)\" option and a new \"Ollama\" credential (http://127.0.0.1:11434). Install Ollama from ollama.com and run `ollama pull llama3.1` once. Free, no API key; clear messages when Ollama is not running or has no model yet.\n- **iPhone:** unsigned FlowForge.ipa for sideloading with AltStore or Sideloadly. Android APK and Windows installer included.\n\n### Install\n- **Windows:** FlowForge-Setup.exe\n- **Android:** FlowForge.apk (allow installing apps from your browser)\n- **iPhone:** FlowForge.ipa - unsigned, install with AltStore or Sideloadly",
+  "notes": "**AutoForge 0.3.6**\n\n- **Phone app no longer crashes** when it has no PC address yet: it now asks you to connect to your PC instead of showing \"Unexpected Application Error\".\n- If a screen ever fails, you get **Reload** and **Sign out / change server** buttons instead of an error page.\n- Tip: to run workflows and approve videos from anywhere, use **Settings → Phone** on the PC and scan the QR code - it opens in Safari, no app needed.\n- **iPhone:** unsigned FlowForge.ipa for sideloading with AltStore or Sideloadly. Android APK and Windows installer included.\n\n### Install\n- **Windows:** FlowForge-Setup.exe\n- **Android:** FlowForge.apk (allow installing apps from your browser)\n- **iPhone:** FlowForge.ipa - unsigned, install with AltStore or Sideloadly",
   "downloads": [
     {
       "file": "FlowForge-Setup.exe",
@@ -14,9 +14,9 @@
       "kind": "installer",
       "label": "Windows installer (.exe)",
       "requirements": "Windows 10 or 11, 64-bit",
-      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.5/FlowForge-Setup.exe",
-      "size": 236500058,
-      "sha256": "061accba5797187dedf6d7195721fc5a92f4ff7ae626a754ac12b6e580f43c09"
+      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.6/FlowForge-Setup.exe",
+      "size": 236495467,
+      "sha256": "d44d9f29d41beba0d4bfdd169193f699477cdd07568f80f64e9ff915cd2bb3d9"
     },
     {
       "file": "FlowForge.apk",
@@ -25,9 +25,9 @@
       "kind": "app",
       "label": "Android app (.apk)",
       "requirements": "Android 7 or newer - allow \"Install unknown apps\" for your browser",
-      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.5/FlowForge.apk",
-      "size": 4960162,
-      "sha256": "2293499b8000e51eeb09533eabd3c7fddd5124d21689f74c75368bcbf19ca555"
+      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.6/FlowForge.apk",
+      "size": 4960446,
+      "sha256": "fb8ec2c9678b00f8c3db300cb4fbf4a4261cb2f9dee4c96e8b124d48351fd379"
     },
     {
       "file": "FlowForge.ipa",
@@ -36,9 +36,9 @@
       "kind": "app",
       "label": "iPhone app (.ipa)",
       "requirements": "iOS 15 or newer - unsigned: install with AltStore or Sideloadly using your Apple ID",
-      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.5/FlowForge.ipa",
-      "size": 1159610,
-      "sha256": "9711c8850c59bcd780827d16e5e9d7afbd3dd243c7383795bda177755cc979ce"
+      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.6/FlowForge.ipa",
+      "size": 1159891,
+      "sha256": "355cc7df6c5ba991865efdab1eb923c2bfaf668e508680b573e5daa6db35b89c"
     }
   ]
 }
