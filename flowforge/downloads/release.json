@@ -1,11 +1,11 @@
 {
   "schema": 1,
   "name": "AutoForge",
-  "version": "0.3.4",
-  "tag": "v0.3.4",
-  "publishedAt": "2026-10-21T16:02:40.074Z",
+  "version": "0.3.5",
+  "tag": "v0.3.5",
+  "publishedAt": "2026-10-22T05:10:51.861Z",
   "repo": "szen43292-star/automation",
-  "notes": "**AutoForge 0.3.4**\n\n- **New name: AutoForge.** Your workflows and credentials stay where they are (`%APPDATA%\\FlowForge`), so installing over the old version keeps everything.\n- **Approve videos from your phone.** The AI Story Shorts workflow emails you a link to watch the new Short and tap Approve or Reject; it uploads only when you approve. The link works from anywhere while your PC is on. There is also a new Approvals tab in the app.\n- **Groq for AI steps.** Basic LLM Chain can use Groq (new \"Groq API\" credential); the AI Story Shorts template now writes and checks stories with Groq.\n- **Gemini:** retired models are skipped automatically.\n- **Make Video:** stock clips come from Coverr; a huge Timeout no longer fails; a clear message when MoneyPrinterTurbo is not running; 3 retries a minute apart.\n- **iPhone:** unsigned FlowForge.ipa for sideloading with AltStore or Sideloadly. Android APK and Windows installer included.\n\n### Install\n- **Windows:** FlowForge-Setup.exe\n- **Android:** FlowForge.apk (allow installing apps from your browser)\n- **iPhone:** FlowForge.ipa - unsigned, install with AltStore or Sideloadly",
+  "notes": "**AutoForge 0.3.5**\n\n- **Run workflows from your phone.** Settings → Phone: tick the workflows, scan the QR code with your phone and add the page to your home screen. Tap Run from anywhere while your PC is on - no sign-in, no app needed. The page also lists videos waiting for your approval. Use \"New link\" or \"Switch off\" if you share it by mistake; the address changes when the PC restarts (scan again).\n- **Local AI with Ollama.** Basic LLM Chain has an \"Ollama Chat Model (local)\" option and a new \"Ollama\" credential (http://127.0.0.1:11434). Install Ollama from ollama.com and run `ollama pull llama3.1` once. Free, no API key; clear messages when Ollama is not running or has no model yet.\n- **iPhone:** unsigned FlowForge.ipa for sideloading with AltStore or Sideloadly. Android APK and Windows installer included.\n\n### Install\n- **Windows:** FlowForge-Setup.exe\n- **Android:** FlowForge.apk (allow installing apps from your browser)\n- **iPhone:** FlowForge.ipa - unsigned, install with AltStore or Sideloadly",
   "downloads": [
     {
       "file": "FlowForge-Setup.exe",
@@ -14,9 +14,9 @@
       "kind": "installer",
       "label": "Windows installer (.exe)",
       "requirements": "Windows 10 or 11, 64-bit",
-      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.4/FlowForge-Setup.exe",
-      "size": 236486506,
-      "sha256": "61088caf588027ab6a8eb40e32dd3a750634e3c09aca2cdd9abd889f19e7e6c1"
+      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.5/FlowForge-Setup.exe",
+      "size": 236500058,
+      "sha256": "061accba5797187dedf6d7195721fc5a92f4ff7ae626a754ac12b6e580f43c09"
     },
     {
       "file": "FlowForge.apk",
@@ -25,9 +25,9 @@
       "kind": "app",
       "label": "Android app (.apk)",
       "requirements": "Android 7 or newer - allow \"Install unknown apps\" for your browser",
-      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.4/FlowForge.apk",
-      "size": 4949778,
-      "sha256": "38eef35604c88280e5e81abf4212fb3df520a11fe27ae700033faca5d5bd67de"
+      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.5/FlowForge.apk",
+      "size": 4960162,
+      "sha256": "2293499b8000e51eeb09533eabd3c7fddd5124d21689f74c75368bcbf19ca555"
     },
     {
       "file": "FlowForge.ipa",
@@ -36,9 +36,9 @@
       "kind": "app",
       "label": "iPhone app (.ipa)",
       "requirements": "iOS 15 or newer - unsigned: install with AltStore or Sideloadly using your Apple ID",
-      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.4/FlowForge.ipa",
-      "size": 1149324,
-      "sha256": "a6aacb9e50653ca694c1a9412f81a61a3aaa57d14adb55acff75ed479927c6fd"
+      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.5/FlowForge.ipa",
+      "size": 1159610,
+      "sha256": "9711c8850c59bcd780827d16e5e9d7afbd3dd243c7383795bda177755cc979ce"
     }
   ]
 }
