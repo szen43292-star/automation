@@ -36,7 +36,7 @@ function PendingCount({ dot }: { dot?: boolean }) {
     queryFn: endpoints.approvals,
     refetchInterval: 30_000,
   });
-  const count = approvals.data?.data.length ?? 0;
+  const count = approvals.data?.data?.length ?? 0;
   if (!count) return null;
   return dot ? (
     <span className="absolute -right-2 -top-1 min-w-4 rounded-full bg-danger px-1 text-center text-[10px] leading-4 text-white">

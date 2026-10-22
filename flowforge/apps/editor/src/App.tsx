@@ -13,6 +13,7 @@ import { setUnauthorizedHandler } from './lib/api';
 import { useTheme } from './lib/theme';
 import { useAuth } from './stores/auth';
 import { useNodeTypes } from './stores/nodeTypes';
+import { ErrorScreen } from './components/ErrorScreen';
 import { Layout } from './components/Layout';
 import { Spinner } from './components/ui';
 import { AuthPage } from './pages/AuthPage';
@@ -53,9 +54,10 @@ function AuthGate() {
 }
 
 const routes: RouteObject[] = [
-  { path: 'invite/:token', element: <InvitePage /> },
+  { path: 'invite/:token', element: <InvitePage />, errorElement: <ErrorScreen /> },
   {
     element: <AuthGate />,
+    errorElement: <ErrorScreen />,
     children: [
       {
         element: <Layout />,
