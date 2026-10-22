@@ -94,6 +94,13 @@ export async function api<T>(
   try {
     body = text ? JSON.parse(text) : undefined;
   } catch {
+    // A web page instead of data: the address is not an AutoForge server (or none is set in
+    // the phone app, which then gets its own page back).
+    if (response.ok)
+      throw new ApiError(
+        response.status,
+        `${getServerUrl() || 'This address'} is not an AutoForge server. Tap "Connect to a different server" and enter your PC's address.`,
+      );
     body = { message: text };
   }
   if (!response.ok) {

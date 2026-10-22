@@ -20,6 +20,7 @@ export const useAuth = create<AuthState>((set) => ({
     }
     try {
       const { user } = await endpoints.me();
+      if (!user) throw new Error('No user');
       set({ user, status: 'authenticated' });
       push.start();
     } catch {
