@@ -573,14 +573,19 @@ Output only the JSON.{{ $json.feedback ? "\\n\\nYour previous draft was rejected
           assignments: [{ id: '1', name: 'tries', value: '={{ $runIndex + 1 }}', type: 'number' }],
         },
       }),
+      // Stop at once when MoneyPrinterTurbo reports a failed task (state -1), else after 30 minutes.
       node('Too Many Tries?', 'flowforge.if', [6240, 200], {
-        conditions: condition('={{ $json.tries }}', 'number', 'gte', 6),
+        conditions: condition(
+          '={{ $json.tries >= 6 || ($json.data?.state ?? $json.state) === -1 }}',
+          'boolean',
+          'true',
+        ),
         looseTypeValidation: true,
       }),
       node('Give Up', 'flowforge.stopAndError', [6480, 300], {
         errorType: 'errorMessage',
         errorMessage:
-          '=The video was not ready after {{ $json.tries }} checks (30 minutes). Check MoneyPrinterTurbo on your PC.',
+          "={{ ($json.data?.state ?? $json.state) === -1 ? 'MoneyPrinterTurbo could not make the video: ' + ($json.data?.error ?? $json.error ?? 'unknown error') + '. Check its window and config.toml (for example the key of the video source in Make Video).' : 'The video was not ready after ' + $json.tries + ' checks (30 minutes). Check MoneyPrinterTurbo on your PC.' }}",
       }),
       node('Download Video', 'flowforge.httpRequest', [4800, 0], {
         method: 'GET',

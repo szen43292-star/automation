@@ -152,6 +152,8 @@ describe('AI Story Shorts – Daily template', () => {
     reviews: IDataObject[],
     {
       emptySheet = false,
+      /** MoneyPrinterTurbo fails the task with this error instead of making the video. */
+      videoError = '',
       videoStatus = (sent: IDataObject): IDataObject | null => ({
         uploadStatus: 'uploaded',
         privacyStatus: sent.privacyStatus,
@@ -209,6 +211,11 @@ describe('AI Story Shorts – Daily template', () => {
       if (url === 'http://127.0.0.1:8080/api/v1/tasks/task-42') {
         const now = progress;
         progress = 100;
+        if (videoError)
+          return ok({
+            status: 200,
+            data: { state: -1, progress: 30, failed_stage: 'materials', error: videoError },
+          });
         return ok({
           status: 200,
           data: {
@@ -633,6 +640,20 @@ describe('AI Story Shorts – Daily template', () => {
     expect(body).toContain('Problem: YouTube rejected the video: duplicate');
     expect(body).toContain('- Rejection reason: duplicate');
     expect(body).not.toContain('yt_api_form');
+  });
+
+  it("stops at once with MoneyPrinterTurbo's error when it cannot make the video", async () => {
+    const world = fakeWorld([approve], {
+      videoError: 'failed to download video materials from pexels',
+    });
+    const { run, runData } = await runTemplate(world.httpRequest);
+    expect(run.status).toBe('error');
+    expect(run.data.resultData.error?.message).toBe(
+      'MoneyPrinterTurbo could not make the video: failed to download video materials from pexels. Check its window and config.toml (for example the key of the video source in Make Video).',
+    );
+    // One check, no 30-minute wait, nothing uploaded.
+    expect(world.calls.filter((c) => c.url.endsWith('/api/v1/tasks/task-42'))).toHaveLength(1);
+    expect(runData['YouTube Upload']).toBeUndefined();
   });
 
   it('uploads nothing when you reject the video or do not answer', async () => {
