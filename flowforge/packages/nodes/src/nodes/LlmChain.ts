@@ -22,6 +22,11 @@ const GROQ_PREFERRED = [
   'llama-3.1-8b-instant',
 ];
 const GROQ_NOT_CHAT = /whisper|tts|playai|orpheus|guard|distil|compound/i;
+const OLLAMA_CREDENTIAL = 'ollamaApi';
+const OLLAMA_HOST = 'http://127.0.0.1:11434';
+/** Local models, best first for writing; any other installed model follows. */
+const OLLAMA_PREFERRED = ['llama3.1', 'qwen2.5', 'gemma3', 'llama3.2', 'mistral', 'phi4'];
+const OLLAMA_NOT_CHAT = /embed|minilm|bge-|nomic/i;
 /** Used when the model list cannot be read and no model is set. */
 const FALLBACK_MODEL = 'gemini-flash-latest';
 /** Models tried per answer before giving up (the list can name retired models). */
@@ -139,6 +144,25 @@ export function isModelUnavailable(statusCode: number, message: string): boolean
 }
 
 /**
+ * Installed Ollama models to try, best first: the one asked for ("llama3.1" also matches
+ * "llama3.1:latest"), then the preferred families, then any other chat model.
+ */
+export function rankOllamaModels(available: string[] | null, requested: string): string[] {
+  const wanted = requested.trim();
+  if (!available?.length) return wanted ? [wanted] : [];
+  const usable = available.filter((m) => !OLLAMA_NOT_CHAT.test(m));
+  const family = (m: string) => m.split(':')[0]!;
+  const asked = available.filter((m) => m === wanted || m === `${wanted}:latest`);
+  return [
+    ...new Set([
+      ...(wanted && !asked.length ? [wanted] : asked),
+      ...OLLAMA_PREFERRED.flatMap((f) => usable.filter((m) => family(m) === f)),
+      ...usable.sort(),
+    ]),
+  ];
+}
+
+/**
  * Groq models to try, best first: the one asked for (when the key has it), then the preferred
  * chat models, then any other chat model the key lists.
  */
@@ -175,13 +199,14 @@ export const LlmChain: INodeType = {
     iconColor: '#7c3aed',
     group: ['ai'],
     version: 1,
-    description: 'Ask a chat model (Google Gemini or Groq) and get its answer, optionally as JSON',
+    description:
+      'Ask a chat model (Google Gemini, Groq or a local Ollama model) and get its answer, optionally as JSON',
     subtitle:
-      '={{ $parameter.model || ($parameter.modelProvider === "groq" ? "Groq" : "Gemini") + " (automatic)" }}',
+      '={{ $parameter.model || ({ groq: "Groq", ollama: "Ollama" }[$parameter.modelProvider] ?? "Gemini") + " (automatic)" }}',
     defaults: { name: 'Basic LLM Chain' },
     inputs: [{ type: 'main' }],
     outputs: [{ type: 'main' }],
-    keywords: ['llm', 'ai', 'gemini', 'google', 'groq', 'llama', 'prompt', 'chat', 'gpt', 'json'],
+    keywords: ['llm', 'ai', 'gemini', 'groq', 'ollama', 'local', 'llama', 'prompt', 'chat', 'json'],
     credentials: [
       {
         name: CREDENTIAL,
@@ -192,6 +217,11 @@ export const LlmChain: INodeType = {
         name: GROQ_CREDENTIAL,
         required: true,
         displayOptions: { show: { modelProvider: ['groq'] } },
+      },
+      {
+        name: OLLAMA_CREDENTIAL,
+        required: true,
+        displayOptions: { show: { modelProvider: ['ollama'] } },
       },
     ],
     properties: [
@@ -204,6 +234,7 @@ export const LlmChain: INodeType = {
         options: [
           { name: 'Google Gemini Chat Model', value: 'googleGemini' },
           { name: 'Groq Chat Model', value: 'groq' },
+          { name: 'Ollama Chat Model (local)', value: 'ollama' },
         ],
       },
       {
@@ -211,7 +242,7 @@ export const LlmChain: INodeType = {
         name: 'model',
         type: 'string',
         default: '',
-        placeholder: 'Automatic (e.g. gemini-2.5-flash or llama-3.3-70b-versatile)',
+        placeholder: 'Automatic (e.g. gemini-2.5-flash, llama-3.3-70b-versatile or llama3.1)',
         description:
           'Leave empty to use the best model your API key can use. A model the key cannot use is replaced automatically.',
       },
@@ -275,11 +306,16 @@ export const LlmChain: INodeType = {
   async execute(this: IExecuteFunctions) {
     const items = this.getInputData();
     const output: INodeExecutionData[] = [];
-    const groq = this.getNodeParameter<string>('modelProvider', 0, 'googleGemini') === 'groq';
-    const credentialType = groq ? GROQ_CREDENTIAL : CREDENTIAL;
-    const provider = groq ? 'Groq' : 'Gemini';
+    const modelProvider = this.getNodeParameter<string>('modelProvider', 0, 'googleGemini');
+    const groq = modelProvider === 'groq';
+    const ollama = modelProvider === 'ollama';
+    const credentialType = groq ? GROQ_CREDENTIAL : ollama ? OLLAMA_CREDENTIAL : CREDENTIAL;
+    const provider = groq ? 'Groq' : ollama ? 'Ollama' : 'Gemini';
     const credentials = await this.getCredentials<IDataObject>(credentialType);
-    const host = String(credentials.host || (groq ? GROQ_HOST : DEFAULT_HOST)).replace(/\/+$/, '');
+    const host = String(
+      (ollama ? credentials.baseUrl : credentials.host) ||
+        (groq ? GROQ_HOST : ollama ? OLLAMA_HOST : DEFAULT_HOST),
+    ).replace(/\/+$/, '');
 
     let models: string[] | null | undefined;
     /** The model that answered, reused for the remaining items of this run. */
@@ -287,6 +323,20 @@ export const LlmChain: INodeType = {
     const availableModels = async () => {
       if (models !== undefined) return models;
       try {
+        if (ollama) {
+          const response = await this.helpers.httpRequest({
+            url: `${host}/api/tags`,
+            method: 'GET',
+            timeout: 30_000,
+            responseType: 'json',
+          });
+          const list = (response.body as { models?: IDataObject[] } | null)?.models;
+          models =
+            response.statusCode < 400 && Array.isArray(list)
+              ? list.map((m) => String(m.name ?? m.model ?? '')).filter(Boolean)
+              : null;
+          return models;
+        }
         if (groq) {
           const response = await this.helpers.httpRequestWithAuthentication(GROQ_CREDENTIAL, {
             url: `${host}/models`,
@@ -323,7 +373,14 @@ export const LlmChain: INodeType = {
                 .map((m) => String(m.name ?? '').replace(/^models\//, ''))
                 .filter(Boolean)
             : null;
-      } catch {
+      } catch (error) {
+        // A local server that is not running: say so instead of guessing a model.
+        if (ollama)
+          throw new NodeOperationError(
+            this.getNode(),
+            `Ollama is not running at ${host} - start Ollama on this computer`,
+            { description: (error as Error).message },
+          );
         models = null;
       }
       return models;
@@ -349,10 +406,16 @@ export const LlmChain: INodeType = {
           }
         }
         const requested = String(this.getNodeParameter('model', i, '') ?? '').trim();
-        const candidates = (groq ? rankGroqModels : rankGeminiModels)(
+        const candidates = (groq ? rankGroqModels : ollama ? rankOllamaModels : rankGeminiModels)(
           await availableModels(),
           requested,
         );
+        if (!candidates.length)
+          throw new NodeOperationError(this.getNode(), 'Ollama has no models installed yet', {
+            itemIndex: i,
+            description:
+              'Open a terminal on this computer and run "ollama pull llama3.1" (or another model), then try again.',
+          });
         if (working && candidates[0] !== working) {
           const at = candidates.indexOf(working);
           if (at > 0) candidates.splice(at, 1);
@@ -384,7 +447,9 @@ export const LlmChain: INodeType = {
           }
           throw new NodeApiError(
             this.getNode(),
-            `${provider}: none of the models this key can use answered (${refused.length} tried)`,
+            ollama
+              ? `Ollama: none of the installed models answered (${refused.length} tried)`
+              : `${provider}: none of the models this key can use answered (${refused.length} tried)`,
             { itemIndex: i, description: refused.join('\n') },
           );
         };
@@ -394,6 +459,7 @@ export const LlmChain: INodeType = {
           text: string,
         ): Promise<{ refused: string } | { text: string; finishReason?: string }> => {
           if (groq) return askGroq(model, text);
+          if (ollama) return askOllama(model, text);
           const response = await this.helpers.httpRequestWithAuthentication(CREDENTIAL, {
             url: `${host}/v1beta/models/${encodeURIComponent(model)}:generateContent`,
             method: 'POST',
@@ -495,6 +561,53 @@ export const LlmChain: INodeType = {
           return {
             text: String((choice?.message as IDataObject | undefined)?.content ?? ''),
             finishReason: choice?.finish_reason === 'length' ? 'MAX_TOKENS' : undefined,
+          };
+        };
+
+        const askOllama = async (
+          model: string,
+          text: string,
+        ): Promise<{ refused: string } | { text: string; finishReason?: string }> => {
+          const response = await this.helpers.httpRequest({
+            url: `${host}/api/chat`,
+            method: 'POST',
+            // Local models can be slow, above all on the first answer while the model loads.
+            timeout: 900_000,
+            responseType: 'json',
+            body: {
+              model,
+              stream: false,
+              messages: [
+                ...(options.systemMessage
+                  ? [{ role: 'system', content: String(options.systemMessage) }]
+                  : []),
+                {
+                  role: 'user',
+                  content: structured
+                    ? `${text}\n\nAnswer with JSON only, in this shape:\n${JSON.stringify(example)}`
+                    : text,
+                },
+              ],
+              ...(structured ? { format: 'json' } : {}),
+              options: {
+                temperature: Number(options.temperature ?? 0.7),
+                num_predict: Number(options.maxOutputTokens ?? 8192),
+              },
+            },
+          });
+          const body = (response.body ?? {}) as IDataObject;
+          if (response.statusCode >= 400) {
+            const message = String(body.error ?? `HTTP ${response.statusCode}`);
+            if (isModelUnavailable(response.statusCode, message)) return { refused: message };
+            throw new NodeApiError(this.getNode(), `Ollama (${model}): ${message}`, {
+              httpCode: response.statusCode,
+              responseBody: body,
+              itemIndex: i,
+            });
+          }
+          return {
+            text: String((body.message as IDataObject | undefined)?.content ?? ''),
+            finishReason: body.done_reason === 'length' ? 'MAX_TOKENS' : undefined,
           };
         };
 

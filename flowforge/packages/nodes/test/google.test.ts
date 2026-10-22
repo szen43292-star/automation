@@ -12,6 +12,7 @@ import {
   pickGeminiModel,
   rankGeminiModels,
   rankGroqModels,
+  rankOllamaModels,
   schemaFromExample,
 } from '../src/nodes/LlmChain';
 
@@ -844,6 +845,92 @@ describe('Basic LLM Chain with Groq', () => {
       );
       expect(errorOf(run)?.message).toContain(text);
     }
+  });
+});
+
+describe('Basic LLM Chain with Ollama (local)', () => {
+  const example = { title: '', tags: [''] };
+  const ollamaCredentials = { credentials: { ollamaApi: { id: 'o', name: 'Ollama' } } };
+  const tags = (names: string[]) => ({ body: { models: names.map((name) => ({ name })) } });
+
+  function ollama(
+    installed: string[],
+    answer: (body: IDataObject) => Partial<IHttpResponse> = () => ({
+      body: { message: { role: 'assistant', content: 'Hello' }, done: true },
+    }),
+  ) {
+    return fakeHttp(
+      (r) => (r.url === 'http://127.0.0.1:11434/api/tags' ? tags(installed) : undefined),
+      (r) =>
+        r.url === 'http://127.0.0.1:11434/api/chat' ? answer(r.body as IDataObject) : undefined,
+    );
+  }
+
+  it('ranks the asked model, then good writing models, and skips embedding models', () => {
+    const installed = ['nomic-embed-text:latest', 'phi3:mini', 'qwen2.5:7b', 'llama3.1:latest'];
+    expect(rankOllamaModels(installed, '')).toEqual(['llama3.1:latest', 'qwen2.5:7b', 'phi3:mini']);
+    expect(rankOllamaModels(installed, 'phi3:mini')[0]).toBe('phi3:mini');
+    expect(rankOllamaModels(installed, 'llama3.1')[0]).toBe('llama3.1:latest');
+    expect(rankOllamaModels([], '')).toEqual([]);
+  });
+
+  it('answers with JSON from the local model', async () => {
+    const http = ollama(['llama3.1:latest'], () => ({
+      body: { message: { content: '{"title":"T","tags":["a"]}' }, done: true },
+    }));
+    const { output, run } = await runNode(
+      'flowforge.chainLlm',
+      {
+        modelProvider: 'ollama',
+        text: 'Write',
+        hasOutputParser: true,
+        jsonSchemaExample: JSON.stringify(example),
+      },
+      [{}],
+      ollamaCredentials,
+      { httpRequest: http.httpRequest, credentials },
+    );
+    expect(errorOf(run)).toBeUndefined();
+    expect(output()).toEqual([{ output: { title: 'T', tags: ['a'] } }]);
+    const call = http.calls.find((c) => c.url.endsWith('/api/chat'))!;
+    expect(call.body).toMatchObject({
+      model: 'llama3.1:latest',
+      stream: false,
+      format: 'json',
+      options: { temperature: 0.7 },
+    });
+    expect(call.headers?.authorization).toBeUndefined();
+  });
+
+  it('says how to get a model when none is installed', async () => {
+    const http = ollama([]);
+    const { run } = await runNode(
+      'flowforge.chainLlm',
+      { modelProvider: 'ollama', text: 'Hi' },
+      [{}],
+      ollamaCredentials,
+      { httpRequest: http.httpRequest, credentials },
+    );
+    expect(errorOf(run)?.message).toBe('Ollama has no models installed yet');
+    expect(errorOf(run)?.description).toContain('ollama pull llama3.1');
+  });
+
+  it('says when Ollama is not running', async () => {
+    const { run } = await runNode(
+      'flowforge.chainLlm',
+      { modelProvider: 'ollama', text: 'Hi' },
+      [{}],
+      ollamaCredentials,
+      {
+        httpRequest: async () => {
+          throw new Error('connect ECONNREFUSED 127.0.0.1:11434');
+        },
+        credentials,
+      },
+    );
+    expect(errorOf(run)?.message).toBe(
+      'Ollama is not running at http://127.0.0.1:11434 - start Ollama on this computer',
+    );
   });
 });
 

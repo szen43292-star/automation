@@ -415,6 +415,11 @@ export const endpoints = {
     api<DashboardData>(`/api/dashboard?days=${days}&timezone=${encodeURIComponent(timezone)}`),
   templates: () => api<{ data: WorkflowTemplate[] }>('/api/templates'),
   approvals: () => api<{ data: ApprovalItem[] }>('/api/approvals'),
+  phone: () => api<PhoneInfo>('/api/phone'),
+  updatePhone: (workflowIds: string[]) =>
+    api<PhoneInfo>('/api/phone', { method: 'PUT', body: { workflowIds } }),
+  resetPhone: () => api<PhoneInfo>('/api/phone/reset', { method: 'POST' }),
+  disablePhone: () => api<void>('/api/phone', { method: 'DELETE' }),
   decideApproval: (id: string, decision: 'approve' | 'reject') =>
     api<{ ok: boolean; status: string; message: string }>(`/api/approvals/${id}/decision`, {
       method: 'POST',
@@ -713,6 +718,14 @@ export interface DashboardData {
     startedAt: string;
     status: string;
   }>;
+}
+
+/** "Run from your phone": the secret link and the workflows it shows. */
+export interface PhoneInfo {
+  enabled: boolean;
+  url: string | null;
+  localUrl: string | null;
+  workflowIds: string[];
 }
 
 /** Something waiting for your OK (Ask for Approval node). */

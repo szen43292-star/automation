@@ -3,8 +3,8 @@ import { chmodSync, existsSync, mkdirSync, renameSync, rmSync, writeFileSync } f
 import { join } from 'node:path';
 import type { FastifyBaseLogger } from 'fastify';
 
-/** Paths a request from the internet may open through the tunnel. */
-export const REMOTE_PATH_PREFIX = '/approve/';
+/** Paths a request from the internet may open through the tunnel (approvals, phone page). */
+export const REMOTE_PATH_PREFIXES = ['/approve/', '/run/'];
 
 const TUNNEL_URL = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/;
 const RELEASES = 'https://github.com/cloudflare/cloudflared/releases/latest/download';
@@ -50,7 +50,7 @@ export interface RemoteAccessOptions {
  *
  * A server with a public PUBLIC_URL already has one. The Windows app runs on localhost, so it
  * opens a Cloudflare quick tunnel (free, no account) the first time a link is needed. Requests
- * that come through the tunnel may only open the approval pages (see allows()).
+ * that come through the tunnel may only open the approval and phone pages (see allows()).
  */
 export class RemoteAccess {
   private child: ChildProcess | null = null;
@@ -100,7 +100,7 @@ export class RemoteAccess {
     // Cloudflare marks every request it forwards; requests made on this computer have neither.
     const viaTunnel =
       name.endsWith('.trycloudflare.com') || headers['cf-connecting-ip'] !== undefined;
-    return !viaTunnel || path.startsWith(REMOTE_PATH_PREFIX);
+    return !viaTunnel || REMOTE_PATH_PREFIXES.some((prefix) => path.startsWith(prefix));
   }
 
   stop() {

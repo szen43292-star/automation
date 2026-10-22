@@ -135,3 +135,48 @@ test('call a customer: ask permission, they allow it, you call them and they ans
   await business.close();
   await customerContext.close();
 });
+
+test('phone link: pick a workflow, scan the code, run it from the phone page', async ({
+  page,
+  browser,
+  request,
+}) => {
+  const name = `Phone run ${Date.now()}`;
+  const created = await request.post('/api/workflows', {
+    headers: H(),
+    data: {
+      name,
+      nodes: [
+        {
+          id: 'trigger',
+          name: 'When clicking "Test workflow"',
+          type: 'flowforge.manualTrigger',
+          typeVersion: 1,
+          position: [0, 0],
+          parameters: {},
+        },
+      ],
+      connections: [],
+    },
+  });
+  expect(created.ok()).toBe(true);
+
+  await signIn(page, token);
+  await page.goto('/settings');
+  await page.getByRole('tab', { name: 'Phone' }).click();
+  await page.getByRole('checkbox', { name }).check();
+  await expect(page.getByAltText('QR code for the phone page')).toBeVisible();
+  const link = (await page.getByTestId('phone-link').textContent())!;
+  expect(link).toMatch(/\/run\/[\w-]+$/);
+
+  // The phone: no sign-in, just the link.
+  const phone = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const phonePage = await phone.newPage();
+  await phonePage.goto(new URL(link).pathname);
+  const card = phonePage.locator('.card').filter({ hasText: name });
+  await expect(card).toContainText('Not run yet');
+  await card.getByRole('button', { name: 'Run' }).click();
+  await expect(phonePage.locator('#toast')).toContainText(`Started "${name}".`);
+  await expect(card).toContainText('Finished', { timeout: 15_000 });
+  await phone.close();
+});

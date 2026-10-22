@@ -26,6 +26,8 @@ import { TestWebhooks, webhookRoutes } from './webhooks/webhooks';
 import { ApprovalService } from './approvals/ApprovalService';
 import { approvalApiRoutes, approvalPublicRoutes } from './approvals/routes';
 import { RemoteAccess } from './remote/RemoteAccess';
+import { PhoneService } from './phone/PhoneService';
+import { phoneApiRoutes, phonePublicRoutes } from './phone/routes';
 import { WorkflowService } from './workflows/WorkflowService';
 import { workflowRoutes } from './workflows/routes';
 import { GraphClient } from './whatsapp/graph';
@@ -171,6 +173,13 @@ export async function buildApp(
     ...(queue ? { queue } : {}),
   });
   approvals.resume = (executionId, data) => executions.resume(executionId, data);
+  const phone = new PhoneService({
+    prisma,
+    workflows,
+    executions,
+    publicUrl: config.PUBLIC_URL,
+    remote: remoteAccess,
+  });
   const activeWorkflows = new ActiveWorkflowManager(
     prisma,
     nodeTypes,
@@ -248,7 +257,7 @@ export async function buildApp(
   app.decorate('agents', agents);
   app.decorate('approvals', approvals);
   app.decorate('remoteAccess', remoteAccess);
-  // Through the quick tunnel only the approval pages are reachable.
+  // Through the quick tunnel only the approval and phone pages are reachable.
   app.addHook('onRequest', async (request, reply) => {
     if (!remoteAccess.allows(request.headers.host, request.url, request.headers))
       return reply.status(404).send({ error: 'NotFound', message: 'Not available from here' });
@@ -333,6 +342,7 @@ export async function buildApp(
   await app.register(webhookRoutes, { config });
   await app.register(whatsappWebhookRoutes);
   await app.register(approvalPublicRoutes, { approvals });
+  await app.register(phonePublicRoutes, { phone, approvals });
 
   // --- Authenticated API -----------------------------------------------------
   await app.register(async (api) => {
@@ -358,6 +368,7 @@ export async function buildApp(
     await api.register(dashboardRoutes, { defaultTimezone: config.DEFAULT_TIMEZONE });
     await api.register(deviceRoutes, { notifications: phones });
     await api.register(approvalApiRoutes, { approvals });
+    await api.register(phoneApiRoutes, { phone });
   });
 
   // --- Editor (single page app) ---------------------------------------------

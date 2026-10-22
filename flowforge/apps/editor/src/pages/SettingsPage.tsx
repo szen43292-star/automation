@@ -1,14 +1,25 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { clsx } from 'clsx';
-import { Copy, KeyRound, Link2, Plus, Trash2, UserRound, Users } from 'lucide-react';
-import { useState } from 'react';
+import {
+  Copy,
+  KeyRound,
+  Link2,
+  Plus,
+  RefreshCw,
+  Smartphone,
+  Trash2,
+  UserRound,
+  Users,
+} from 'lucide-react';
+import QRCode from 'qrcode';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Badge, Button, Field, Modal, Spinner } from '../components/ui';
 import { endpoints, getServerUrl, type TeamMember, type User } from '../lib/api';
 import { formatDateTime, timeAgo } from '../lib/format';
 import { useAuth } from '../stores/auth';
 
-type Tab = 'team' | 'api' | 'account';
+type Tab = 'team' | 'phone' | 'api' | 'account';
 
 const ROLES: Array<{ value: User['role']; label: string; text: string }> = [
   { value: 'owner', label: 'Owner', text: 'Everything, incl. AI keys and the Meta app' },
@@ -31,6 +42,7 @@ export function SettingsPage() {
           {(
             [
               ['team', 'Team', Users],
+              ['phone', 'Phone', Smartphone],
               ['api', 'API keys', KeyRound],
               ['account', 'Your account', UserRound],
             ] as const
@@ -52,10 +64,161 @@ export function SettingsPage() {
           ))}
         </div>
         {tab === 'team' && <Team />}
+        {tab === 'phone' && <Phone />}
         {tab === 'api' && <ApiKeys />}
         {tab === 'account' && <Account />}
       </div>
     </div>
+  );
+}
+
+// ---- Phone ----------------------------------------------------------------------------------------
+
+/** One secret link (QR code) that runs the chosen workflows from any phone browser. */
+function Phone() {
+  const queryClient = useQueryClient();
+  const me = useAuth((s) => s.user);
+  const canManage = me?.role !== 'member';
+  const phone = useQuery({ queryKey: ['phone'], queryFn: endpoints.phone, enabled: canManage });
+  const workflows = useQuery({
+    queryKey: ['workflows', 'phone-picker'],
+    queryFn: () => endpoints.workflows({ limit: 200 }),
+    enabled: canManage,
+  });
+  const [qr, setQr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const info = phone.data;
+  // Ticks show right away; the server's answer replaces them.
+  const [chosen, setChosen] = useState<Set<string>>(new Set());
+  useEffect(() => setChosen(new Set(info?.workflowIds ?? [])), [info?.workflowIds]);
+
+  useEffect(() => {
+    if (!info?.url) return setQr(null);
+    let current = true;
+    QRCode.toDataURL(info.url, { margin: 1, width: 240 })
+      .then((url) => current && setQr(url))
+      .catch(() => current && setQr(null));
+    return () => {
+      current = false;
+    };
+  }, [info?.url]);
+
+  const save = async (action: () => Promise<unknown>) => {
+    setBusy(true);
+    try {
+      await action();
+      await queryClient.invalidateQueries({ queryKey: ['phone'] });
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const toggle = (id: string) => {
+    const next = new Set(chosen);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setChosen(next);
+    return save(() => endpoints.updatePhone([...next]));
+  };
+
+  if (!canManage)
+    return (
+      <p className="text-[13px] text-muted">Ask an owner or admin to set up the phone link.</p>
+    );
+  if (phone.isLoading || workflows.isLoading)
+    return (
+      <div className="flex justify-center py-12">
+        <Spinner />
+      </div>
+    );
+  const local = info?.url && info.url === info.localUrl;
+
+  return (
+    <>
+      <p className="mb-4 text-[13px] text-muted">
+        Run workflows from your phone: scan the QR code, then add the page to your home screen. It
+        works from anywhere while this PC is on, and also shows videos waiting for your approval.
+        Anyone with the link can run the workflows you tick, so keep it to yourself.
+      </p>
+      <div className="mb-6 flex flex-wrap items-start gap-6">
+        <div className="flex h-[240px] w-[240px] items-center justify-center rounded-xl border border-line bg-white">
+          {qr ? (
+            <img src={qr} alt="QR code for the phone page" width={240} height={240} />
+          ) : (
+            <span className="px-6 text-center text-[13px] text-muted">
+              Tick a workflow below to create your phone link
+            </span>
+          )}
+        </div>
+        {info?.enabled && info.url && (
+          <div className="min-w-0 flex-1 space-y-3">
+            <div className="flex items-center gap-2">
+              <code
+                className="min-w-0 flex-1 truncate rounded bg-panel-2 px-2 py-1.5 text-[12px]"
+                data-testid="phone-link"
+              >
+                {info.url}
+              </code>
+              <Button size="sm" icon={Copy} onClick={() => copy(info.url!)}>
+                Copy
+              </Button>
+            </div>
+            {local && (
+              <p className="text-[12px] text-muted">
+                This link only works on the same Wi-Fi as this PC (remote access is off here).
+              </p>
+            )}
+            <p className="text-[12px] text-muted">
+              The address changes when the PC restarts - scan the code again then.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                icon={RefreshCw}
+                disabled={busy}
+                onClick={() => save(endpoints.resetPhone)}
+              >
+                New link
+              </Button>
+              <Button
+                size="sm"
+                variant="danger"
+                icon={Trash2}
+                disabled={busy}
+                onClick={() => {
+                  if (window.confirm('Switch the phone link off? It stops working right away.'))
+                    void save(endpoints.disablePhone);
+                }}
+              >
+                Switch off
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+      <h2 className="mb-2 text-[13px] font-semibold">Workflows on your phone</h2>
+      <div className="divide-y divide-line rounded-lg border border-line">
+        {(workflows.data?.data ?? []).map((w) => (
+          <label
+            key={w.id}
+            className="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-[13px] hover:bg-panel-2"
+          >
+            <input
+              type="checkbox"
+              checked={chosen.has(w.id)}
+              disabled={busy}
+              onChange={() => void toggle(w.id)}
+            />
+            <span className="min-w-0 flex-1 truncate">{w.name}</span>
+            {w.active && <Badge tone="success">Active</Badge>}
+          </label>
+        ))}
+        {!workflows.data?.data.length && (
+          <p className="px-3 py-4 text-[13px] text-muted">No workflows yet.</p>
+        )}
+      </div>
+    </>
   );
 }
 
