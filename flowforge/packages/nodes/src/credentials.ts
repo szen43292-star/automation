@@ -268,6 +268,24 @@ export const groqApi: ICredentialType = {
   test: { request: { url: 'https://api.groq.com/openai/v1/models', method: 'GET' } },
 };
 
+export const ollamaApi: ICredentialType = {
+  name: 'ollamaApi',
+  displayName: 'Ollama',
+  icon: 'sparkles',
+  documentationUrl: 'https://ollama.com/download',
+  properties: [
+    {
+      displayName: 'Base URL',
+      name: 'baseUrl',
+      type: 'string',
+      default: 'http://127.0.0.1:11434',
+      required: true,
+      description:
+        'Where Ollama runs. On this computer it is http://127.0.0.1:11434 - install it from https://ollama.com and run "ollama pull llama3.1" once.',
+    },
+  ],
+};
+
 export const builtinCredentialTypes: ICredentialType[] = [
   httpHeaderAuth,
   httpBasicAuth,
@@ -279,6 +297,7 @@ export const builtinCredentialTypes: ICredentialType[] = [
   gmailOAuth2,
   googlePalmApi,
   groqApi,
+  ollamaApi,
 ];
 
 export class CredentialTypeRegistry implements ICredentialTypes {
