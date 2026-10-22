@@ -1,11 +1,11 @@
 {
   "schema": 1,
   "name": "AutoForge",
-  "version": "0.3.6",
-  "tag": "v0.3.6",
-  "publishedAt": "2026-10-22T05:56:00.326Z",
+  "version": "0.3.7",
+  "tag": "v0.3.7",
+  "publishedAt": "2026-10-22T09:04:52.309Z",
   "repo": "szen43292-star/automation",
-  "notes": "**AutoForge 0.3.6**\n\n- **Phone app no longer crashes** when it has no PC address yet: it now asks you to connect to your PC instead of showing \"Unexpected Application Error\".\n- If a screen ever fails, you get **Reload** and **Sign out / change server** buttons instead of an error page.\n- Tip: to run workflows and approve videos from anywhere, use **Settings → Phone** on the PC and scan the QR code - it opens in Safari, no app needed.\n- **iPhone:** unsigned FlowForge.ipa for sideloading with AltStore or Sideloadly. Android APK and Windows installer included.\n\n### Install\n- **Windows:** FlowForge-Setup.exe\n- **Android:** FlowForge.apk (allow installing apps from your browser)\n- **iPhone:** FlowForge.ipa - unsigned, install with AltStore or Sideloadly",
+  "notes": "**AutoForge 0.3.7**\n\n- **Use the full AutoForge app from anywhere.** On the PC: Settings → Phone → tick \"Use the full AutoForge app from anywhere\". Copy the https address (or scan its QR code), then in the phone app tap \"Connect to a different server\", enter it and sign in with your AutoForge email and password. Build, edit and run workflows on your phone; it also works in Safari. Off by default; the address changes when the PC restarts.\n- **iPhone:** unsigned FlowForge.ipa for sideloading with AltStore or Sideloadly. Android APK and Windows installer included.\n\n### Install\n- **Windows:** FlowForge-Setup.exe\n- **Android:** FlowForge.apk (allow installing apps from your browser)\n- **iPhone:** FlowForge.ipa - unsigned, install with AltStore or Sideloadly",
   "downloads": [
     {
       "file": "FlowForge-Setup.exe",
@@ -14,9 +14,9 @@
       "kind": "installer",
       "label": "Windows installer (.exe)",
       "requirements": "Windows 10 or 11, 64-bit",
-      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.6/FlowForge-Setup.exe",
-      "size": 236495467,
-      "sha256": "d44d9f29d41beba0d4bfdd169193f699477cdd07568f80f64e9ff915cd2bb3d9"
+      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.7/FlowForge-Setup.exe",
+      "size": 236498214,
+      "sha256": "7c9172c018b81503f1ecd9b8502ac315c6aa76b118f46f6c0d8993d69f178735"
     },
     {
       "file": "FlowForge.apk",
@@ -25,9 +25,9 @@
       "kind": "app",
       "label": "Android app (.apk)",
       "requirements": "Android 7 or newer - allow \"Install unknown apps\" for your browser",
-      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.6/FlowForge.apk",
-      "size": 4960446,
-      "sha256": "fb8ec2c9678b00f8c3db300cb4fbf4a4261cb2f9dee4c96e8b124d48351fd379"
+      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.7/FlowForge.apk",
+      "size": 4960930,
+      "sha256": "2a82f6d80ca3741b5a234fa96bb50979a7d4b64a6a248c8aac877dc5b6c5760c"
     },
     {
       "file": "FlowForge.ipa",
@@ -36,9 +36,9 @@
       "kind": "app",
       "label": "iPhone app (.ipa)",
       "requirements": "iOS 15 or newer - unsigned: install with AltStore or Sideloadly using your Apple ID",
-      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.6/FlowForge.ipa",
-      "size": 1159891,
-      "sha256": "355cc7df6c5ba991865efdab1eb923c2bfaf668e508680b573e5daa6db35b89c"
+      "url": "https://github.com/szen43292-star/automation/releases/download/v0.3.7/FlowForge.ipa",
+      "size": 1160418,
+      "sha256": "f244027d6c4879873cd991662fc07696c7ba277ef355629e9918966e817e83cd"
     }
   ]
 }
